@@ -36,7 +36,6 @@ export function SimulationScreen() {
   // Poll task status if there's an active task
   useEffect(() => {
     if (!state || !state.active_tasks || Object.keys(state.active_tasks).length === 0) {
-      setActiveTask(null);
       setProgress({ value: 0, label: '' });
       setIsBusy(false);
       return;
