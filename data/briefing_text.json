@@ -1,0 +1,40 @@
+{
+  "header": "LINEAGE PROTOCOL — FIELD BRIEFING",
+  "subheader": "Prototype simulation of clone and character progression in EVE Frontier.",
+  "body": [
+    "Gather enough resources to build your first Womb.",
+    "The Womb is the organ that grows new clones.",
+    "",
+    "Once the Womb is built, gather enough resources to grow clones.",
+    "Different materials and rare Shilajit samples are required for each type.",
+    "",
+    "Each clone consumes a portion of the SELF.",
+    "Growing new clones weakens you temporarily but enables field operations.",
+    "",
+    "Undertake expeditions — Mining, Combat, or Exploration.",
+    "Different clones are suited for different missions, earning more XP when well-matched.",
+    "",
+    "Risk and reward.",
+    "Every venture strengthens the clone but risks annihilation and loss.",
+    "",
+    "Loss is permanent.",
+    "If a clone dies, no progress is saved to the SELF.",
+    "",
+    "Upload to SELF.",
+    "Returning clones can be uploaded, preserving a part of their accumulated memory.",
+    "",
+    "Advance LINEAGE Practices.",
+    "Kinetic, Cognitive, and Constructive disciplines evolve with continued use. The more experienced the uploaded clones, the stronger the SELF becomes."
+  ],
+  "bold_lines": [
+    "Gather enough resources to build your first Womb.",
+    "Once the Womb is built, gather enough resources to grow clones.",
+    "Each clone consumes a portion of the SELF.",
+    "Undertake expeditions — Mining, Combat, or Exploration.",
+    "Risk and reward.",
+    "Loss is permanent.",
+    "Upload to SELF.",
+    "Advance LINEAGE Practices."
+  ]
+}
+

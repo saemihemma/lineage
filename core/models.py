@@ -1,0 +1,96 @@
+"""Game data models"""
+from dataclasses import dataclass, field
+from typing import Dict, Optional
+import random
+from .config import CONFIG
+
+
+@dataclass
+class Trait:
+    """Trait definition for clones"""
+    code: str
+    name: str
+    min_val: int = 1
+    max_val: int = 10
+    value: int = 0
+
+
+@dataclass
+class CloneType:
+    """Clone type definition"""
+    code: str
+    display: str
+
+
+CLONE_TYPES = {
+    "BASIC": CloneType("BASIC", "Basic Clone"),
+    "MINER": CloneType("MINER", "Mining Clone"),
+    "VOLATILE": CloneType("VOLATILE", "Volatile Clone"),
+}
+
+TRAIT_LIST = [
+    Trait("PWC", "Pilot‑Wave Coupling"),
+    Trait("SSC", "Static Shear Cohesion"),
+    Trait("MGC", "Morphogenetic Cohesion"),
+    Trait("DLT", "Differential‑Drift Tolerance"),
+    Trait("ENF", "Exotronic Noise Floor"),
+    Trait("ELK", "Entropic Luck"),
+    Trait("FRK", "Feralization Risk"),
+]
+
+
+@dataclass
+class Clone:
+    """Clone data model"""
+    id: str
+    kind: str
+    traits: Dict[str, int]
+    xp: Dict[str, int]
+    survived_runs: int = 0
+    alive: bool = True
+    uploaded: bool = False
+
+    def total_xp(self) -> int:
+        """Calculate total XP across all types"""
+        return sum(self.xp.values())
+
+
+@dataclass
+class PlayerState:
+    """Player game state"""
+    version: int = 1  # Schema version for migrations
+    rng_seed: int = None  # RNG seed for reproducible behavior
+    soul_percent: float = CONFIG["SOUL_START"]
+    soul_xp: int = 0
+    assembler_built: bool = False
+    resources: Dict[str, int] = field(default_factory=lambda: {
+        "Tritanium": 60,
+        "Metal Ore": 40,
+        "Biomass": 8,
+        "Synthetic": 8,
+        "Organic": 8,
+        "Shilajit": 0
+    })
+    clones: Dict[str, Clone] = field(default_factory=dict)
+    applied_clone_id: str = ""
+    practices_xp: Dict[str, int] = field(default_factory=lambda: {
+        k: 0 for k in CONFIG["PRACTICE_TRACKS"]
+    })
+    last_saved_ts: float = 0.0
+    self_name: str = ""
+
+    def soul_level(self) -> int:
+        """Calculate current SELF level"""
+        return 1 + (self.soul_xp // CONFIG["SOUL_LEVEL_STEP"])
+
+    def practice_level(self, track: str) -> int:
+        """Calculate practice level for a track"""
+        return self.practices_xp.get(track, 0) // CONFIG["PRACTICE_XP_PER_LEVEL"]
+    
+    def get_rng(self) -> random.Random:
+        """Get RNG instance for this state. Creates seed if missing."""
+        if self.rng_seed is None:
+            # Generate random seed if not set
+            self.rng_seed = random.randint(0, 2**31 - 1)
+        return random.Random(self.rng_seed)
+

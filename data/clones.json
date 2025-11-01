@@ -1,0 +1,35 @@
+{
+  "clone_types": {
+    "BASIC": {
+      "display": "Basic Clone",
+      "costs": {
+        "Synthetic": 6,
+        "Organic": 4,
+        "Shilajit": 1
+      },
+      "time_range": [30, 45]
+    },
+    "MINER": {
+      "display": "Mining Clone",
+      "costs": {
+        "Synthetic": 8,
+        "Metal Ore": 8,
+        "Organic": 5,
+        "Shilajit": 1
+      },
+      "time_range": [45, 60],
+      "xp_multiplier": 1.25
+    },
+    "VOLATILE": {
+      "display": "Volatile Clone",
+      "costs": {
+        "Synthetic": 10,
+        "Biomass": 8,
+        "Organic": 6,
+        "Shilajit": 3
+      },
+      "time_range": [60, 90]
+    }
+  }
+}
+

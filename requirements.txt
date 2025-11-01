@@ -1,0 +1,9 @@
+# LINEAGE Game Dependencies
+# Core game logic (no external dependencies beyond standard library)
+
+# API Client (for leaderboard and telemetry)
+requests>=2.31.0
+
+# Optional: For future enhancements
+# httpx>=0.24.0  # Alternative async HTTP client
+

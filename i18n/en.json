@@ -1,0 +1,56 @@
+{
+  "ui": {
+    "buttons": {
+      "build_womb": "Build Womb",
+      "grow_basic_clone": "Grow Basic Clone",
+      "grow_mining_clone": "Grow Mining Clone",
+      "grow_volatile_clone": "Grow Volatile Clone",
+      "apply_clone": "Apply Clone to Spaceship",
+      "mining_expedition": "Do a Mining Expedition",
+      "combat_expedition": "Do a Combat Expedition",
+      "exploration_expedition": "Do an Exploration Expedition",
+      "upload_clone": "Upload Clone to SELF",
+      "leaderboard": "Leaderboard (coming soon)"
+    },
+    "labels": {
+      "resources": "Resources",
+      "clones": "Clones",
+      "costs": "Costs (Current Level)",
+      "gather_resources": "Gather Resources:",
+      "clone_details": "Clone Details",
+      "progress": "Progress",
+      "terminal": "Terminal / Tutorial",
+      "practices": "LINEAGE Practices",
+      "practices_subtitle": "Persistent growth of the SELF through vessels."
+    },
+    "gather": {
+      "tritanium": "Gather Tritanium",
+      "metal_ore": "Gather Metal Ore",
+      "biomass": "Gather Biomass",
+      "synthetic": "Gather Synthetic",
+      "organic": "Gather Organic",
+      "shilajit": "Gather Shilajit"
+    },
+    "messages": {
+      "womb_already_built": "Womb already built.",
+      "select_clone_first": "Select a clone in the list first.",
+      "select_living_clone": "Select a living clone to upload.",
+      "already_busy": "Already busy. Cannot gather {resource} right now.",
+      "no_clone_applied": "No clone applied to the spaceship. Apply one first."
+    },
+    "tutorial": {
+      "welcome": "Welcome. Build your base and field clones into expeditions.",
+      "step1": "STEP 1 — Build Womb (consumes Tritanium, Metal Ore, Biomass).",
+      "step2": "STEP 2 — Grow a clone (costs a slice of your SELF + materials).",
+      "step3": "STEP 3 — Apply the clone to your spaceship, then run an expedition.",
+      "step4": "STEP 4 — Upload the clone to your SELF to bank progress; future clones begin stronger and costlier."
+    }
+  },
+  "game": {
+    "status": {
+      "assembler_built": "Built",
+      "assembler_missing": "Missing"
+    }
+  }
+}
+
