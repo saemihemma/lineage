@@ -89,6 +89,22 @@ class Database:
             ON telemetry_events(session_id, timestamp)
         """)
         
+        # Game states table (for web version - stores game state per session)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_states (
+                session_id TEXT PRIMARY KEY,
+                state_data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Create index on updated_at for cleanup queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at 
+            ON game_states(updated_at)
+        """)
+        
         conn.commit()
     
     def __enter__(self):

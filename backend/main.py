@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 import os
 import logging
 
-from backend.routers import leaderboard, telemetry
+from backend.routers import leaderboard, telemetry, game
 from backend.database import get_db
 
 # Setup logging
@@ -39,8 +39,10 @@ def get_allowed_origins() -> list:
         logger.info("Development mode: allowing common localhost origins")
         return [
             "http://localhost:3000",
+            "http://localhost:5173",  # Vite default
             "http://localhost:8080",
             "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
             "http://127.0.0.1:8080",
         ]
 
@@ -59,6 +61,7 @@ app.add_middleware(
 # Include routers
 app.include_router(leaderboard.router)
 app.include_router(telemetry.router)
+app.include_router(game.router)
 
 
 @app.get("/")

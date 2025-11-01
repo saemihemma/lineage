@@ -58,7 +58,7 @@
 
 .briefing-next-button {
   position: fixed;
-  bottom: 180px;
+  bottom: 140px;
   left: 50%;
   transform: translateX(-50%);
   background-color: #ff7a00;
