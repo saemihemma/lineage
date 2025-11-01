@@ -6,6 +6,7 @@ import './CloneDetailsPanel.css';
 
 interface CloneDetailsPanelProps {
   clone: Clone | null;
+  appliedCloneId: string | null;
   onApply: () => void;
   onRunExpedition: (kind: string) => void;
   onUpload: () => void;
