@@ -25,6 +25,10 @@ export function SimulationScreen() {
   const [pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
+  const addTerminalMessage = (message: string) => {
+    setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
+  };
+
   // Load game state when component mounts (only once)
   useEffect(() => {
     if (state && !hasShownWelcome) {
@@ -64,16 +68,17 @@ export function SimulationScreen() {
           
           // Show pending message if any (e.g., "Womb built successfully")
           // This ensures message only appears after progress bar completes
-          const taskId = state.active_tasks ? Object.keys(state.active_tasks)[0] : null;
-          if (taskId && pendingMessages.has(taskId)) {
-            const message = pendingMessages.get(taskId)!;
-            addTerminalMessage(message);
-            setPendingMessages((prev) => {
+          setPendingMessages((prev) => {
+            const taskId = state.active_tasks ? Object.keys(state.active_tasks)[0] : null;
+            if (taskId && prev.has(taskId)) {
+              const message = prev.get(taskId)!;
+              addTerminalMessage(message);
               const newMap = new Map(prev);
               newMap.delete(taskId);
               return newMap;
-            });
-          }
+            }
+            return prev;
+          });
           
           // Reload state to get updates
           gameAPI.getState().then((updatedState) => {
@@ -91,11 +96,7 @@ export function SimulationScreen() {
     }, 1000); // Poll every second
 
     return () => clearInterval(pollInterval);
-  }, [state?.active_tasks, updateState, pendingMessages]);
-
-  const addTerminalMessage = (message: string) => {
-    setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
-  };
+  }, [state?.active_tasks, updateState]);
 
   const handleAction = async (action: () => Promise<any>, actionName: string) => {
     if (isBusy || !state) return;
