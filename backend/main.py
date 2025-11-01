@@ -1,12 +1,22 @@
 """FastAPI application for LINEAGE backend"""
+import sys
+from pathlib import Path
+
+# Add project root to Python path when running from backend/ directory (Railway)
+# This allows imports from game/, core/, etc. to work
+backend_dir = Path(__file__).parent
+project_root = backend_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
 import logging
 
-from backend.routers import leaderboard, telemetry, game
-from backend.database import get_db
+from routers import leaderboard, telemetry, game
+from database import get_db
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

@@ -5,8 +5,8 @@ import sqlite3
 from datetime import datetime
 import time
 
-from backend.models import LeaderboardEntry, LeaderboardSubmission
-from backend.database import get_db
+from models import LeaderboardEntry, LeaderboardSubmission
+from database import get_db
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 

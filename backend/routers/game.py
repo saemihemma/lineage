@@ -1,6 +1,16 @@
 """
 Game API endpoints - handles game actions and state management
 """
+import sys
+from pathlib import Path
+
+# Add project root to path (needed when running from backend/ directory)
+# This is already done in backend/main.py, but doing it here too for safety
+_backend_dir = Path(__file__).parent.parent
+_project_root = _backend_dir.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import json
 import uuid
 import time
@@ -9,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Cookie, Request
 from fastapi.responses import JSONResponse
 import sqlite3
 
-from backend.database import get_db
+from database import get_db
 from game.state import GameState
 from game.rules import (
     build_womb, grow_clone, apply_clone, run_expedition,

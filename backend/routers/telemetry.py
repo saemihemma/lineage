@@ -5,8 +5,8 @@ import sqlite3
 import json
 import time
 
-from backend.models import TelemetryEvent
-from backend.database import get_db
+from models import TelemetryEvent
+from database import get_db
 
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
 
