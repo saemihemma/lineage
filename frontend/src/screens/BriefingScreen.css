@@ -1,0 +1,89 @@
+.briefing-screen {
+  width: 100vw;
+  height: 100vh;
+  background-color: #000000;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  position: relative;
+  overflow-y: auto;
+}
+
+.briefing-content {
+  max-width: 1200px;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.briefing-header {
+  color: #ff7a00;
+  font-size: 32px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.briefing-subheader {
+  font-size: 18px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.briefing-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.briefing-text {
+  font-size: 14px;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.briefing-bold {
+  font-size: 16px;
+  font-weight: bold;
+  color: #ff7a00;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.briefing-next-button {
+  position: fixed;
+  bottom: 180px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ff7a00;
+  color: #111111;
+  border: none;
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.briefing-next-button:hover {
+  background-color: #ff9933;
+}
+
+.briefing-next-button:active {
+  background-color: #ff6600;
+}
+
+.briefing-screen.loading {
+  justify-content: center;
+  align-items: center;
+  font-size: 18px;
+  color: #ffffff;
+}
+

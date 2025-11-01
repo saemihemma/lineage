@@ -1,0 +1,36 @@
+.simulation-screen {
+  width: 100vw;
+  height: 100vh;
+  background-color: #0a0a0a;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.simulation-header {
+  background-color: #1a1a1a;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #333333;
+}
+
+.simulation-header h1 {
+  margin: 0;
+  font-size: 24px;
+  color: #ffffff;
+}
+
+.simulation-stats {
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.simulation-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
