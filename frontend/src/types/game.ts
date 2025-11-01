@@ -2,6 +2,16 @@
  * Type definitions for LINEAGE game state and models
  */
 
+export interface Clone {
+  id: string;
+  kind: string;
+  traits: string[];
+  xp: Record<string, number>;
+  survived_runs: number;
+  alive: boolean;
+  uploaded: boolean;
+}
+
 export interface GameState {
   version: number;
   rng_seed: number | null;
@@ -16,16 +26,6 @@ export interface GameState {
   clones: Record<string, Clone>;
   active_tasks?: Record<string, any>;
   ui_layout?: Record<string, any>;
-}
-
-export interface Clone {
-  id: string;
-  kind: string;
-  traits: string[];
-  xp: Record<string, number>;
-  survived_runs: number;
-  alive: boolean;
-  uploaded: boolean;
 }
 
 export interface ResourceCost {
