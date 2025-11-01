@@ -86,6 +86,22 @@ export class GameAPI {
       method: 'POST',
     });
   }
+
+  async getTaskStatus(): Promise<{
+    active: boolean;
+    task: {
+      id: string;
+      type: string;
+      progress: number;
+      elapsed: number;
+      remaining: number;
+      duration: number;
+      label: string;
+    } | null;
+    completed?: boolean;
+  }> {
+    return this.makeRequest('/api/game/tasks/status');
+  }
 }
 
 export const gameAPI = new GameAPI();

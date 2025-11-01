@@ -18,6 +18,7 @@ from game.rules import (
 from core.models import Clone
 from core.config import CONFIG
 from core.state_manager import get_latest_version
+from core.game_logic import perk_constructive_craft_time_mult
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
@@ -27,6 +28,97 @@ def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
     if not session_id:
         session_id = str(uuid.uuid4())
     return session_id
+
+
+def check_and_complete_tasks(state: GameState) -> GameState:
+    """
+    Check for completed tasks and auto-complete them.
+    Returns updated state if any tasks completed, otherwise original state.
+    """
+    if not state.active_tasks:
+        return state
+    
+    current_time = time.time()
+    new_state = state.copy()
+    completed_tasks = []
+    
+    for task_id, task_data in list(new_state.active_tasks.items()):
+        start_time = task_data.get('start_time', 0)
+        duration = task_data.get('duration', 0)
+        
+        if current_time >= start_time + duration:
+            # Task is complete
+            task_type = task_data.get('type')
+            completed_tasks.append((task_id, task_type, task_data))
+            del new_state.active_tasks[task_id]
+    
+    # Auto-complete tasks (currently just remove them, actual completion happens immediately on start)
+    # For gather/build/grow, the action happens immediately, timer is just UI feedback
+    # But we mark them as complete here
+    
+    return new_state
+
+
+def calculate_task_duration(task_type: str, state: GameState) -> int:
+    """Calculate task duration in seconds"""
+    if task_type == "build_womb":
+        t_min, t_max = CONFIG["ASSEMBLER_TIME"]
+        base_seconds = state.rng.randint(t_min, t_max)
+        time_mult = perk_constructive_craft_time_mult(state)
+        return int(round(base_seconds * time_mult))
+    elif task_type == "grow_clone":
+        kind = state.active_tasks.get(list(state.active_tasks.keys())[0] if state.active_tasks else None, {}).get('clone_kind', 'BASIC')
+        t_min, t_max = CONFIG["CLONE_TIME"].get(kind, (30, 45))
+        base_seconds = state.rng.randint(t_min, t_max)
+        time_mult = perk_constructive_craft_time_mult(state)
+        return int(round(base_seconds * time_mult))
+    elif task_type == "gather_resource":
+        resource = state.active_tasks.get(list(state.active_tasks.keys())[0] if state.active_tasks else None, {}).get('resource', 'Tritanium')
+        t_min, t_max = CONFIG["GATHER_TIME"].get(resource, (12, 20))
+        return state.rng.randint(t_min, t_max)
+    return 30  # Default fallback
+
+
+def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameState, str]:
+    """
+    Start a timed task. Returns (new_state, task_id).
+    Task is stored in active_tasks with start_time and duration.
+    """
+    new_state = state.copy()
+    
+    # Check if already busy
+    if new_state.active_tasks:
+        raise RuntimeError("A task is already in progress. Please wait.")
+    
+    # Calculate duration
+    if task_type == "build_womb":
+        t_min, t_max = CONFIG["ASSEMBLER_TIME"]
+        base_seconds = new_state.rng.randint(t_min, t_max)
+        time_mult = perk_constructive_craft_time_mult(new_state)
+        duration = int(round(base_seconds * time_mult))
+    elif task_type == "grow_clone":
+        kind = task_params.get('clone_kind', 'BASIC')
+        t_min, t_max = CONFIG["CLONE_TIME"].get(kind, (30, 45))
+        base_seconds = new_state.rng.randint(t_min, t_max)
+        time_mult = perk_constructive_craft_time_mult(new_state)
+        duration = int(round(base_seconds * time_mult))
+    elif task_type == "gather_resource":
+        resource = task_params.get('resource', 'Tritanium')
+        t_min, t_max = CONFIG["GATHER_TIME"].get(resource, (12, 20))
+        duration = new_state.rng.randint(t_min, t_max)
+    else:
+        duration = 30
+    
+    # Create task
+    task_id = str(uuid.uuid4())
+    new_state.active_tasks[task_id] = {
+        'type': task_type,
+        'start_time': time.time(),
+        'duration': duration,
+        **task_params
+    }
+    
+    return new_state, task_id
 
 
 def game_state_to_dict(state: GameState) -> Dict[str, Any]:
@@ -84,7 +176,7 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
         state.clones[cid] = Clone(
             id=c_data["id"],
             kind=c_data["kind"],
-            traits=c_data.get("traits", []),
+            traits=c_data.get("traits", {}),
             xp=c_data.get("xp", {}),
             survived_runs=c_data.get("survived_runs", 0),
             alive=c_data.get("alive", True),
@@ -106,7 +198,15 @@ def load_game_state(db: sqlite3.Connection, session_id: str) -> Optional[GameSta
         return None
     
     data = json.loads(row[0])
-    return dict_to_game_state(data)
+    state = dict_to_game_state(data)
+    
+    # Check and complete any finished tasks
+    state = check_and_complete_tasks(state)
+    if state.active_tasks != data.get("active_tasks", {}):
+        # Tasks were completed, save updated state
+        save_game_state(db, session_id, state)
+    
+    return state
 
 
 def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState):
@@ -146,9 +246,61 @@ async def get_game_state(
         state.last_saved_ts = time.time()
         save_game_state(db, sid, state)
     
+    # Check for completed tasks
+    state = check_and_complete_tasks(state)
+    if state.active_tasks != (state.active_tasks if True else {}):
+        save_game_state(db, sid, state)
+    
     response = JSONResponse(content=game_state_to_dict(state))
     response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
     return response
+
+
+@router.get("/tasks/status")
+async def get_task_status(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+    session_id: Optional[str] = Cookie(None)
+):
+    """Get current task status (for polling)"""
+    sid = get_session_id(session_id)
+    state = load_game_state(db, sid)
+    
+    if state is None or not state.active_tasks:
+        return JSONResponse(content={"active": False, "task": None})
+    
+    # Get first (and should be only) active task
+    task_id = list(state.active_tasks.keys())[0]
+    task_data = state.active_tasks[task_id]
+    
+    current_time = time.time()
+    start_time = task_data.get('start_time', 0)
+    duration = task_data.get('duration', 0)
+    elapsed = current_time - start_time
+    remaining = max(0, duration - elapsed)
+    progress = min(100, int((elapsed / duration * 100)) if duration > 0 else 0)
+    
+    # Check if complete
+    is_complete = current_time >= start_time + duration
+    
+    if is_complete:
+        # Auto-complete
+        state = check_and_complete_tasks(state)
+        save_game_state(db, sid, state)
+        return JSONResponse(content={"active": False, "task": None, "completed": True})
+    
+    return JSONResponse(content={
+        "active": True,
+        "task": {
+            "id": task_id,
+            "type": task_data.get('type'),
+            "progress": progress,
+            "elapsed": int(elapsed),
+            "remaining": int(remaining),
+            "duration": duration,
+            "label": task_data.get('type', 'task').replace('_', ' ').title()
+        }
+    })
 
 
 @router.post("/state")
@@ -180,21 +332,33 @@ async def gather_resource_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Gather a resource"""
+    """Gather a resource (starts timer, completes immediately but UI waits)"""
     sid = get_session_id(session_id)
     state = load_game_state(db, sid)
     
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
     
+    # Check for active tasks
+    if state.active_tasks:
+        raise HTTPException(status_code=400, detail="A task is already in progress")
+    
     try:
-        new_state, amount, message = gather_resource(state, resource)
-        save_game_state(db, sid, new_state)
+        # Start task timer
+        new_state, task_id = start_task(state, "gather_resource", resource=resource)
+        
+        # Actually perform the gather (happens immediately)
+        final_state, amount, message = gather_resource(new_state, resource)
+        
+        # Remove task since it's instant (just for consistency, we could keep it for UI feedback)
+        # Actually, let's keep it so frontend can show progress
+        save_game_state(db, sid, final_state)
         
         response = JSONResponse(content={
-            "state": game_state_to_dict(new_state),
+            "state": game_state_to_dict(final_state),
             "message": message,
-            "amount": amount
+            "amount": amount,
+            "task_id": task_id
         })
         response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
         return response
@@ -208,20 +372,30 @@ async def build_womb_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Build the Womb (assembler)"""
+    """Build the Womb (assembler) - starts timer"""
     sid = get_session_id(session_id)
     state = load_game_state(db, sid)
     
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
     
+    # Check for active tasks
+    if state.active_tasks:
+        raise HTTPException(status_code=400, detail="A task is already in progress")
+    
     try:
+        # Actually build (happens immediately)
         new_state, message = build_womb(state)
-        save_game_state(db, sid, new_state)
+        
+        # Start timer task
+        final_state, task_id = start_task(new_state, "build_womb")
+        
+        save_game_state(db, sid, final_state)
         
         response = JSONResponse(content={
-            "state": game_state_to_dict(new_state),
-            "message": message
+            "state": game_state_to_dict(final_state),
+            "message": message,
+            "task_id": task_id
         })
         response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
         return response
@@ -236,19 +410,28 @@ async def grow_clone_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Grow a new clone"""
+    """Grow a new clone - starts timer"""
     sid = get_session_id(session_id)
     state = load_game_state(db, sid)
     
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
     
+    # Check for active tasks
+    if state.active_tasks:
+        raise HTTPException(status_code=400, detail="A task is already in progress")
+    
     try:
+        # Actually grow (happens immediately)
         new_state, clone, soul_split, message = grow_clone(state, kind)
-        save_game_state(db, sid, new_state)
+        
+        # Start timer task
+        final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind)
+        
+        save_game_state(db, sid, final_state)
         
         response = JSONResponse(content={
-            "state": game_state_to_dict(new_state),
+            "state": game_state_to_dict(final_state),
             "clone": {
                 "id": clone.id,
                 "kind": clone.kind,
@@ -259,7 +442,8 @@ async def grow_clone_endpoint(
                 "uploaded": clone.uploaded
             },
             "soul_split": soul_split,
-            "message": message
+            "message": message,
+            "task_id": task_id
         })
         response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
         return response
@@ -349,4 +533,3 @@ async def upload_clone_endpoint(
         return response
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-

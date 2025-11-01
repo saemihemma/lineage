@@ -33,6 +33,43 @@ export function SimulationScreen() {
     }
   }, [state]);
 
+  // Poll task status if there's an active task
+  useEffect(() => {
+    if (!state || !state.active_tasks || Object.keys(state.active_tasks).length === 0) {
+      setActiveTask(null);
+      setProgress({ value: 0, label: '' });
+      setIsBusy(false);
+      return;
+    }
+
+    // Start polling
+    setIsBusy(true);
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await gameAPI.getTaskStatus();
+        if (status.active && status.task) {
+          setProgress({
+            value: status.task.progress,
+            label: `${status.task.label}… ${status.task.remaining}s remaining`
+          });
+        } else {
+          // Task completed
+          setProgress({ value: 0, label: '' });
+          setIsBusy(false);
+          clearInterval(pollInterval);
+          // Reload state to get updates
+          gameAPI.getState().then((updatedState) => {
+            updateState(updatedState);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to poll task status:', err);
+      }
+    }, 1000); // Poll every second
+
+    return () => clearInterval(pollInterval);
+  }, [state?.active_tasks, updateState]);
+
   const addTerminalMessage = (message: string) => {
     setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
   };
