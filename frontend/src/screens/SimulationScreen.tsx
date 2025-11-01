@@ -13,6 +13,7 @@ import { CloneDetailsPanel } from '../components/CloneDetailsPanel';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { TerminalPanel } from '../components/TerminalPanel';
 import { PracticesPanel } from '../components/PracticesPanel';
+import { GrowCloneDialog } from '../components/GrowCloneDialog';
 
 export function SimulationScreen() {
   const { state, loading, error, updateState } = useGameState();
@@ -20,6 +21,7 @@ export function SimulationScreen() {
   const [terminalMessages, setTerminalMessages] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState({ value: 0, label: '' });
+  const [showGrowDialog, setShowGrowDialog] = useState(false);
 
   // Load game state when component mounts
   useEffect(() => {
@@ -63,6 +65,14 @@ export function SimulationScreen() {
 
   const handleGrowClone = (kind: string) => {
     handleAction(() => gameAPI.growClone(kind), `grow ${kind} clone`);
+  };
+
+  const handleGrowCloneClick = () => {
+    if (!state?.assembler_built) {
+      addTerminalMessage('ERROR: Build the Womb first before growing clones.');
+      return;
+    }
+    setShowGrowDialog(true);
   };
 
   const handleGatherResource = (resource: string) => {
@@ -120,7 +130,7 @@ export function SimulationScreen() {
           </button>
           <button 
             className="action-btn" 
-            onClick={() => handleGrowClone('BASIC')}
+            onClick={handleGrowCloneClick}
             disabled={isBusy || !state.assembler_built}
           >
             Grow Clone
@@ -161,6 +171,7 @@ export function SimulationScreen() {
           <div className="col-3">
             <CloneDetailsPanel 
               clone={selectedCloneId ? state.clones[selectedCloneId] : null}
+              appliedCloneId={state.applied_clone_id || null}
               onApply={() => selectedCloneId && handleApplyClone(selectedCloneId)}
               onRunExpedition={handleRunExpedition}
               onUpload={() => selectedCloneId && handleUploadClone(selectedCloneId)}
@@ -176,6 +187,14 @@ export function SimulationScreen() {
           <PracticesPanel practicesXp={state.practices_xp} />
         </div>
       </div>
+
+      {/* Grow Clone Dialog */}
+      <GrowCloneDialog
+        isOpen={showGrowDialog}
+        onClose={() => setShowGrowDialog(false)}
+        onGrow={handleGrowClone}
+        disabled={isBusy}
+      />
     </div>
   );
 }

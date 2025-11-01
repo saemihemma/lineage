@@ -1,0 +1,106 @@
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background-color: #11161a;
+  border: 1px solid #151a1f;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.dialog-title {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: #ff7a00;
+}
+
+.dialog-subtitle {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.clone-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.clone-type-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: #151a1f;
+  border: 1px solid #333333;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clone-type-option:hover {
+  border-color: #ff7a00;
+  background-color: #1a1f24;
+}
+
+.clone-type-option input[type="radio"] {
+  cursor: pointer;
+}
+
+.clone-type-option span {
+  color: #e7e7e7;
+  font-size: 14px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.dialog-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dialog-btn.cancel {
+  background-color: #333333;
+  color: #ffffff;
+}
+
+.dialog-btn.cancel:hover {
+  background-color: #444444;
+}
+
+.dialog-btn.grow {
+  background-color: #ff7a00;
+  color: #111111;
+}
+
+.dialog-btn.grow:hover:not(:disabled) {
+  background-color: #ff9933;
+}
+
+.dialog-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+

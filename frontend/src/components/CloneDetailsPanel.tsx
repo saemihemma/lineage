@@ -14,6 +14,7 @@ interface CloneDetailsPanelProps {
 
 export function CloneDetailsPanel({
   clone,
+  appliedCloneId,
   onApply,
   onRunExpedition,
   onUpload,
@@ -74,43 +75,62 @@ export function CloneDetailsPanel({
 
         {clone.alive && !clone.uploaded && (
           <div className="clone-actions">
-            <button
-              className="action-button"
-              onClick={onApply}
-              disabled={disabled}
-            >
-              Apply Clone
-            </button>
-            <div className="expedition-buttons">
+            <div className="action-section">
+              <div className="section-title">Setup:</div>
               <button
-                className="action-button expedition-btn"
-                onClick={() => onRunExpedition('MINING')}
+                className="action-button"
+                onClick={onApply}
                 disabled={disabled}
               >
-                Mining Expedition
+                Apply Clone (Required for Expeditions)
               </button>
+              <div className="action-note">
+                Apply this clone to use it for expeditions
+              </div>
+            </div>
+            
+            <div className="action-section">
+              <div className="section-title">Expeditions:</div>
+              <div className="action-note">
+                Apply clone first, then run expeditions
+              </div>
+              <div className="expedition-buttons">
+                <button
+                  className="action-button expedition-btn"
+                  onClick={() => onRunExpedition('MINING')}
+                  disabled={disabled || !appliedCloneId || appliedCloneId !== clone.id}
+                  title={appliedCloneId !== clone.id ? "Apply this clone first to run expeditions" : "Mining expeditions earn Tritanium and Metal Ore"}
+                >
+                  Mining Expedition
+                </button>
+                <button
+                  className="action-button expedition-btn"
+                  onClick={() => onRunExpedition('COMBAT')}
+                  disabled={disabled || !appliedCloneId || appliedCloneId !== clone.id}
+                  title={appliedCloneId !== clone.id ? "Apply this clone first to run expeditions" : "Combat expeditions earn Biomass and Synthetic materials"}
+                >
+                  Combat Expedition
+                </button>
+                <button
+                  className="action-button expedition-btn"
+                  onClick={() => onRunExpedition('EXPLORATION')}
+                  disabled={disabled || !appliedCloneId || appliedCloneId !== clone.id}
+                  title={appliedCloneId !== clone.id ? "Apply this clone first to run expeditions" : "Exploration expeditions earn mixed resources"}
+                >
+                  Exploration Expedition
+                </button>
+              </div>
+            </div>
+
+            <div className="action-section">
               <button
-                className="action-button expedition-btn"
-                onClick={() => onRunExpedition('COMBAT')}
+                className="action-button upload-btn"
+                onClick={onUpload}
                 disabled={disabled}
               >
-                Combat Expedition
-              </button>
-              <button
-                className="action-button expedition-btn"
-                onClick={() => onRunExpedition('EXPLORATION')}
-                disabled={disabled}
-              >
-                Exploration Expedition
+                Upload to SELF (Save Progress)
               </button>
             </div>
-            <button
-              className="action-button upload-btn"
-              onClick={onUpload}
-              disabled={disabled}
-            >
-              Upload to SELF
-            </button>
           </div>
         )}
       </div>
