@@ -3,6 +3,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { gameAPI } from '../api/game';
 import './LoadingScreen.css';
 
 export function LoadingScreen() {
@@ -10,6 +11,7 @@ export function LoadingScreen() {
   const [name, setName] = useState('');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingComplete, setLoadingComplete] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [loadingMessages] = useState([
     'Initializing systems...',
     'Calibrating clone matrices...',
@@ -45,10 +47,28 @@ export function LoadingScreen() {
     return () => clearInterval(interval);
   }, [loadingMessages]);
 
-  const handleEnter = () => {
-    if (name.trim() && loadingComplete) {
-      // TODO: Save name and navigate to simulation
-      navigate('/simulation');
+  const handleEnter = async () => {
+    if (name.trim() && loadingComplete && !saving) {
+      setSaving(true);
+      try {
+        // Load current state
+        const currentState = await gameAPI.getState();
+        // Update self_name
+        const updatedState = {
+          ...currentState,
+          self_name: name.trim(),
+        };
+        // Save to backend
+        await gameAPI.saveState(updatedState);
+        // Navigate to simulation
+        navigate('/simulation');
+      } catch (err) {
+        console.error('Failed to save name:', err);
+        // Still navigate even if save fails (name will be lost)
+        navigate('/simulation');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 

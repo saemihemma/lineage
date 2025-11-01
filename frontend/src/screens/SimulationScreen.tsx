@@ -22,16 +22,21 @@ export function SimulationScreen() {
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState({ value: 0, label: '' });
   const [showGrowDialog, setShowGrowDialog] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
+  const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
-  // Load game state when component mounts
+  // Load game state when component mounts (only once)
   useEffect(() => {
-    if (state && !state.self_name) {
-      addTerminalMessage('Welcome to LINEAGE Simulation.');
-      addTerminalMessage('Enter your SELF name to begin.');
-    } else if (state) {
-      addTerminalMessage(`Welcome back, ${state.self_name}.`);
+    if (state && !hasShownWelcome) {
+      setHasShownWelcome(true);
+      if (!state.self_name) {
+        addTerminalMessage('Welcome to LINEAGE Simulation.');
+        addTerminalMessage('Enter your SELF name to begin.');
+      } else {
+        addTerminalMessage(`Welcome back, ${state.self_name}.`);
+      }
     }
-  }, [state]);
+  }, [state, hasShownWelcome]);
 
   // Poll task status if there's an active task
   useEffect(() => {
@@ -51,15 +56,34 @@ export function SimulationScreen() {
             value: status.task.progress,
             label: `${status.task.label}… ${status.task.remaining}s remaining`
           });
-        } else {
-          // Task completed
+        } else if (status.completed) {
+          // Task completed - progress bar reached 100%
           setProgress({ value: 0, label: '' });
           setIsBusy(false);
           clearInterval(pollInterval);
+          
+          // Show pending message if any (e.g., "Womb built successfully")
+          // This ensures message only appears after progress bar completes
+          const taskId = state.active_tasks ? Object.keys(state.active_tasks)[0] : null;
+          if (taskId && pendingMessages.has(taskId)) {
+            const message = pendingMessages.get(taskId)!;
+            addTerminalMessage(message);
+            setPendingMessages((prev) => {
+              const newMap = new Map(prev);
+              newMap.delete(taskId);
+              return newMap;
+            });
+          }
+          
           // Reload state to get updates
           gameAPI.getState().then((updatedState) => {
             updateState(updatedState);
           });
+        } else {
+          // No active task
+          setProgress({ value: 0, label: '' });
+          setIsBusy(false);
+          clearInterval(pollInterval);
         }
       } catch (err) {
         console.error('Failed to poll task status:', err);
@@ -67,7 +91,7 @@ export function SimulationScreen() {
     }, 1000); // Poll every second
 
     return () => clearInterval(pollInterval);
-  }, [state?.active_tasks, updateState]);
+  }, [state?.active_tasks, updateState, pendingMessages]);
 
   const addTerminalMessage = (message: string) => {
     setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
@@ -81,7 +105,19 @@ export function SimulationScreen() {
       const result = await action();
       if (result.state) {
         updateState(result.state);
-        if (result.message) {
+        
+        // For timed actions (build womb, gather, grow clone), don't show message immediately
+        // Store it to show when progress bar completes
+        if (result.message && result.state.active_tasks && Object.keys(result.state.active_tasks).length > 0) {
+          // This is a timed action - store message for later
+          const taskId = Object.keys(result.state.active_tasks)[0];
+          setPendingMessages((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(taskId, result.message);
+            return newMap;
+          });
+        } else if (result.message) {
+          // Immediate action (no timer) - show message right away
           addTerminalMessage(result.message);
         }
       }
@@ -89,10 +125,10 @@ export function SimulationScreen() {
       const errorMsg = err instanceof Error ? err.message : `Failed to ${actionName}`;
       addTerminalMessage(`ERROR: ${errorMsg}`);
       console.error(`Action failed: ${actionName}`, err);
-    } finally {
       setIsBusy(false);
       setProgress({ value: 0, label: '' });
     }
+    // Note: Don't set isBusy to false here - let the polling effect handle it when task completes
   };
 
   const handleBuildWomb = () => {
