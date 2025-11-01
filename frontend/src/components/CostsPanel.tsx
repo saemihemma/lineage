@@ -1,0 +1,95 @@
+/**
+ * Costs Panel - displays costs for current actions
+ */
+import type { GameState } from '../types/game';
+import './CostsPanel.css';
+
+interface CostsPanelProps {
+  state: GameState;
+}
+
+export function CostsPanel({ state }: CostsPanelProps) {
+  // TODO: Calculate actual costs based on soul level and perks
+  // For now, show placeholder costs
+  const soulLevel = calculateSoulLevel(state.soul_xp);
+  
+  const wombCost = calculateWombCost(soulLevel);
+  const cloneCosts = calculateCloneCosts(soulLevel);
+
+  return (
+    <div className="panel costs-panel">
+      <div className="panel-header">Costs (Current Level {soulLevel})</div>
+      <div className="panel-content">
+        {!state.assembler_built && (
+          <div className="cost-section">
+            <div className="cost-title">Build Womb:</div>
+            <div className="cost-items">
+              {Object.entries(wombCost).map(([resource, amount]) => (
+                <div key={resource} className="cost-item">
+                  {resource}: <span className="cost-amount">{amount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {state.assembler_built && (
+          <div className="cost-section">
+            <div className="cost-title">Grow Clones:</div>
+            {Object.entries(cloneCosts).map(([kind, costs]) => (
+              <div key={kind} className="clone-cost-group">
+                <div className="clone-cost-kind">{kind}:</div>
+                <div className="cost-items">
+                  {Object.entries(costs).map(([resource, amount]) => (
+                    <div key={resource} className="cost-item">
+                      {resource}: <span className="cost-amount">{amount}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function calculateSoulLevel(soulXp: number): number {
+  let level = 1;
+  let xpNeeded = 0;
+  while (soulXp >= xpNeeded) {
+    level++;
+    xpNeeded += 100 * (level - 1);
+  }
+  return level - 1;
+}
+
+function calculateWombCost(level: number): Record<string, number> {
+  const baseCost = { Tritanium: 30, 'Metal Ore': 20, Biomass: 5 };
+  if (level <= 1) return baseCost;
+  const mult = Math.pow(1.05, level - 1);
+  return Object.fromEntries(
+    Object.entries(baseCost).map(([k, v]) => [k, Math.max(1, Math.round(v * mult))])
+  );
+}
+
+function calculateCloneCosts(level: number): Record<string, Record<string, number>> {
+  const baseCosts = {
+    BASIC: { Synthetic: 6, Organic: 4, Shilajit: 1 },
+    MINER: { Synthetic: 8, 'Metal Ore': 8, Organic: 5, Shilajit: 1 },
+    VOLATILE: { Synthetic: 10, Biomass: 8, Organic: 6, Shilajit: 3 },
+  };
+  
+  const mult = level <= 1 ? 1 : Math.pow(1.05, level - 1);
+  
+  return Object.fromEntries(
+    Object.entries(baseCosts).map(([kind, costs]) => [
+      kind,
+      Object.fromEntries(
+        Object.entries(costs).map(([k, v]) => [k, Math.max(1, Math.round(v * mult))])
+      ),
+    ])
+  );
+}
+

@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { gameAPI } from '../api/game';
-import { GameState } from '../types/game';
+import type { GameState } from '../types/game';
 
 export function useGameState() {
   const [state, setState] = useState<GameState | null>(null);

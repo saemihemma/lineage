@@ -1,0 +1,26 @@
+/* Shared panel styles */
+
+.panel {
+  background-color: #11161a;
+  border: 1px solid #151a1f;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  background-color: #151a1f;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #e7e7e7;
+  border-bottom: 1px solid #151a1f;
+}
+
+.panel-content {
+  flex: 1;
+  color: #e7e7e7;
+  min-height: 0;
+}
+

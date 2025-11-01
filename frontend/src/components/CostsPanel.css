@@ -1,0 +1,50 @@
+.costs-panel {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.costs-panel .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cost-section {
+  margin-bottom: 16px;
+}
+
+.cost-title {
+  font-weight: bold;
+  color: #ff7a00;
+  margin-bottom: 8px;
+}
+
+.clone-cost-group {
+  margin-bottom: 12px;
+}
+
+.clone-cost-kind {
+  font-weight: bold;
+  color: #e7e7e7;
+  margin-bottom: 4px;
+}
+
+.cost-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+}
+
+.cost-item {
+  font-size: 13px;
+  color: #cccccc;
+}
+
+.cost-amount {
+  color: #ff7a00;
+  font-weight: bold;
+}
+

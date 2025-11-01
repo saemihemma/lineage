@@ -1,8 +1,7 @@
 /**
  * Game API client - handles game state and actions
  */
-import { apiClient } from './client';
-import { GameState } from '../types/game';
+import type { GameState } from '../types/game';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
