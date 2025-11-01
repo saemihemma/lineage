@@ -3,9 +3,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
+import logging
 
 from backend.routers import leaderboard, telemetry
 from backend.database import get_db
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -14,14 +19,41 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware - allow requests from game client
-# In production, restrict origins to your game's domain
+# CORS configuration - environment-based for security
+def get_allowed_origins() -> list:
+    """Get allowed CORS origins from environment"""
+    env = os.getenv("ENVIRONMENT", "development").lower()
+
+    if env == "production":
+        # In production, only allow specific domains
+        origins_str = os.getenv("ALLOWED_ORIGINS", "")
+        if origins_str:
+            origins = [origin.strip() for origin in origins_str.split(",")]
+            logger.info(f"Production CORS origins: {origins}")
+            return origins
+        else:
+            logger.warning("Production mode but no ALLOWED_ORIGINS set!")
+            return []
+    else:
+        # Development: allow localhost and common dev ports
+        logger.info("Development mode: allowing common localhost origins")
+        return [
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080",
+        ]
+
+allowed_origins = get_allowed_origins()
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For MVP, allow all. Restrict in production.
+    allow_origins=allowed_origins if allowed_origins else ["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],  # Restrict to needed methods
     allow_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Include routers
