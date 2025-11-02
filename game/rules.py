@@ -16,6 +16,8 @@ from core.game_logic import (
 def build_womb(state: GameState) -> Tuple[GameState, str]:
     """
     Build the Womb (assembler).
+    Note: assembler_built is now set when task completes (see check_and_complete_tasks).
+    This function only deducts costs.
     
     Returns:
         Tuple of (new_state, message)
@@ -30,7 +32,7 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
     
     # Create new state with immutable updates
     new_state = state.copy()
-    new_state.assembler_built = True
+    # Don't set assembler_built yet - it will be set when task completes
     
     # Deduct resources
     for k, v in cost.items():
@@ -39,7 +41,7 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
     # Award practice XP (modifies practices_xp in place, but on copy)
     award_practice_xp(new_state, "Constructive", 10)
     
-    return new_state, "Womb built successfully."
+    return new_state, "Building Womb..."
 
 
 def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, str, Dict]:

@@ -276,6 +276,11 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                     else:
                         task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_state.resources[resource]}"
             
+            # Complete build_womb if this was a build task
+            if task_type == "build_womb":
+                new_state.assembler_built = True
+                task_data['completion_message'] = "Womb built successfully. You can now grow clones."
+            
             # Create clone if this was a grow_clone task
             if task_type == "grow_clone":
                 from core.models import Clone
@@ -645,7 +650,9 @@ async def get_task_status(
         else:
             task_type = task_data.get('type', 'unknown')
             label = task_type.replace('_', ' ').title()
-            if task_type == "gather_resource":
+            if task_type == "build_womb":
+                label = "Building Womb"
+            elif task_type == "gather_resource":
                 resource = task_data.get('resource', 'Resource')
                 label = f"Gathering {resource}"
             elif task_type == "grow_clone":
