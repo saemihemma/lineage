@@ -8,7 +8,6 @@ interface CloneDetailsPanelProps {
   clone: Clone | null;
   appliedCloneId: string | null;
   onApply: () => void;
-  onRunExpedition: (kind: string) => void;
   onUpload: () => void;
   disabled: boolean;
 }
@@ -17,7 +16,6 @@ export function CloneDetailsPanel({
   clone,
   appliedCloneId,
   onApply,
-  onRunExpedition,
   onUpload,
   disabled,
 }: CloneDetailsPanelProps) {

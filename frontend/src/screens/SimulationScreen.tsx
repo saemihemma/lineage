@@ -310,7 +310,6 @@ export function SimulationScreen() {
               clone={selectedCloneId ? state.clones[selectedCloneId] : null}
               appliedCloneId={state.applied_clone_id || null}
               onApply={() => selectedCloneId && handleApplyClone(selectedCloneId)}
-              onRunExpedition={handleRunExpedition}
               onUpload={() => selectedCloneId && handleUploadClone(selectedCloneId)}
               disabled={isBusy}
             />
