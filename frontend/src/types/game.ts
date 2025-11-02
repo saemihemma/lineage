@@ -34,6 +34,13 @@ export interface GameState {
   clones: Record<string, Clone>;
   active_tasks?: Record<string, any>;
   ui_layout?: Record<string, any>;
+  ftue?: {
+    step_gather_10_tritanium?: boolean;
+    step_build_womb?: boolean;
+    step_grow_clone?: boolean;
+    step_first_expedition?: boolean;
+    step_upload_clone?: boolean;
+  };
 }
 
 export interface ResourceCost {
