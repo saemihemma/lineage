@@ -10,6 +10,8 @@ export interface Clone {
   survived_runs: number;
   alive: boolean;
   uploaded: boolean;
+  created_at?: number;  // Unix timestamp
+  biological_days?: number;  // Calculated biological days (8 sim days per real day)
 }
 
 export interface GameState {

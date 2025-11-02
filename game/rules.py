@@ -42,7 +42,7 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
     return new_state, "Womb built successfully."
 
 
-def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, str]:
+def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, str, Dict]:
     """
     Grow a new clone.
     
@@ -72,21 +72,33 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     for k, v in cost.items():
         new_state.resources[k] = new_state.resources.get(k, 0) - v
     
-    # Create clone
+    # Prepare clone data (but don't add to state yet - will be added when task completes)
+    import time
     traits = random_traits(level, state.rng)
-    clone = Clone(
-        id=str(uuid.uuid4())[:8],
-        kind=kind,
-        traits=traits,
-        xp={"MINING": 0, "COMBAT": 0, "EXPLORATION": 0}
-    )
-    new_state.clones[clone.id] = clone
+    clone_data = {
+        "id": str(uuid.uuid4())[:8],
+        "kind": kind,
+        "traits": traits,
+        "xp": {"MINING": 0, "COMBAT": 0, "EXPLORATION": 0},
+        "survived_runs": 0,
+        "alive": True,
+        "uploaded": False,
+        "created_at": 0.0  # Will be set when task completes
+    }
     
     # Award practice XP
     award_practice_xp(new_state, "Constructive", 6)
     
-    msg = f"{CLONE_TYPES[kind].display} grown. SELF now {new_state.soul_percent:.1f}% (consumed ~{int(split * 100)}%). id={clone.id}"
-    return new_state, clone, split, msg
+    msg = f"{CLONE_TYPES[kind].display} growing... SELF now {new_state.soul_percent:.1f}% (consumed ~{int(split * 100)}%)."
+    # Create a Clone object for return (but don't add to state yet)
+    clone = Clone(
+        id=clone_data["id"],
+        kind=clone_data["kind"],
+        traits=clone_data["traits"],
+        xp=clone_data["xp"],
+        created_at=0.0
+    )
+    return new_state, clone, split, msg, clone_data
 
 
 def apply_clone(state: GameState, cid: str) -> Tuple[GameState, str]:

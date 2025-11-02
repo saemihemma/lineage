@@ -276,6 +276,29 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                     else:
                         task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_state.resources[resource]}"
             
+            # Create clone if this was a grow_clone task
+            if task_type == "grow_clone":
+                from core.models import Clone
+                import time
+                clone_data = task_data.get('pending_clone_data')
+                if clone_data:
+                    # Set creation timestamp
+                    clone_data['created_at'] = current_time
+                    # Create clone and add to state
+                    clone = Clone(
+                        id=clone_data["id"],
+                        kind=clone_data["kind"],
+                        traits=clone_data["traits"],
+                        xp=clone_data["xp"],
+                        survived_runs=clone_data.get("survived_runs", 0),
+                        alive=clone_data.get("alive", True),
+                        uploaded=clone_data.get("uploaded", False),
+                        created_at=clone_data["created_at"]
+                    )
+                    new_state.clones[clone.id] = clone
+                    # Store completion message
+                    task_data['completion_message'] = f"{clone_data['kind']} clone grown successfully. id={clone.id}"
+            
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
     
@@ -391,7 +414,9 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
                 "xp": c.xp,
                 "survived_runs": c.survived_runs,
                 "alive": c.alive,
-                "uploaded": c.uploaded
+                "uploaded": c.uploaded,
+                "created_at": getattr(c, "created_at", 0.0),
+                "biological_days": c.biological_days(time.time()) if hasattr(c, "biological_days") else 0.0
             }
             for cid, c in state.clones.items()
         }
@@ -427,7 +452,8 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
             xp=c_data.get("xp", {}),
             survived_runs=c_data.get("survived_runs", 0),
             alive=c_data.get("alive", True),
-            uploaded=c_data.get("uploaded", False)
+            uploaded=c_data.get("uploaded", False),
+            created_at=c_data.get("created_at", 0.0)
         )
     
     return state
@@ -854,25 +880,18 @@ async def grow_clone_endpoint(
         raise HTTPException(status_code=400, detail="A task is already in progress")
 
     try:
-        # Actually grow (happens immediately)
-        new_state, clone, soul_split, message = grow_clone(state, kind)
+        # Prepare clone data (but don't create clone yet - will be created when task completes)
+        new_state, clone, soul_split, message, clone_data = grow_clone(state, kind)
 
-        # Start timer task
-        final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind)
+        # Start timer task with clone data stored
+        final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind, pending_clone_data=clone_data)
 
+        # Don't add clone to state yet - it will be added when task completes
         save_game_state(db, sid, final_state)
 
         response = JSONResponse(content={
-            "state": game_state_to_dict(final_state),
-            "clone": {
-                "id": clone.id,
-                "kind": clone.kind,
-                "traits": clone.traits,
-                "xp": clone.xp,
-                "survived_runs": clone.survived_runs,
-                "alive": clone.alive,
-                "uploaded": clone.uploaded
-            },
+            "state": game_state_to_dict(final_state),  # Return state WITHOUT clone added yet
+            "clone": None,  # Clone not created yet - will appear when task completes
             "soul_split": soul_split,
             "message": message,
             "task_id": task_id

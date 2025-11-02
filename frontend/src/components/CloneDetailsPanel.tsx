@@ -95,6 +95,12 @@ export function CloneDetailsPanel({
             <span className="label">Total XP:</span>
             <span className="value">{totalXp}</span>
           </div>
+          {clone.biological_days !== undefined && (
+            <div className="clone-info-row">
+              <span className="label">Biological Days:</span>
+              <span className="value">{clone.biological_days.toFixed(2)}</span>
+            </div>
+          )}
           <div className="xp-breakdown">
             <div className="xp-item">Mining: {clone.xp.MINING || 0}</div>
             <div className="xp-item">Combat: {clone.xp.COMBAT || 0}</div>

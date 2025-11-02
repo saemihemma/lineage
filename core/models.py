@@ -49,10 +49,22 @@ class Clone:
     survived_runs: int = 0
     alive: bool = True
     uploaded: bool = False
+    created_at: float = 0.0  # Unix timestamp when clone was created
 
     def total_xp(self) -> int:
         """Calculate total XP across all types"""
         return sum(self.xp.values())
+    
+    def biological_days(self, current_time: float = None) -> float:
+        """Calculate biological days (8 simulation days per real day)"""
+        import time
+        if current_time is None:
+            current_time = time.time()
+        if self.created_at == 0.0:
+            return 0.0
+        # 8 simulation days per real day = 8/86400 per second
+        elapsed_seconds = current_time - self.created_at
+        return elapsed_seconds * (8.0 / 86400.0)
 
 
 @dataclass
