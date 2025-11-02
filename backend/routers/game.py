@@ -19,9 +19,7 @@ import os
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Cookie, Request
 from fastapi.responses import JSONResponse
-import sqlite3
-
-from database import get_db
+from database import get_db, DatabaseConnection, execute_query
 from game.state import GameState
 from game.rules import (
     build_womb, grow_clone, apply_clone, run_expedition,
@@ -201,10 +199,10 @@ def sanitize_error_message(error: Exception) -> str:
         return error_str
 
 
-def check_session_expiry(db: sqlite3.Connection, session_id: str) -> bool:
+def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
     """Check if session has expired. Returns True if valid, False if expired."""
-    cursor = db.cursor()
-    cursor.execute(
+    cursor = execute_query(
+        db,
         "SELECT updated_at FROM game_states WHERE session_id = ?",
         (session_id,)
     )
@@ -223,7 +221,7 @@ def check_session_expiry(db: sqlite3.Connection, session_id: str) -> bool:
 
         if age_seconds > SESSION_EXPIRY:
             # Session expired, clean it up
-            cursor.execute("DELETE FROM game_states WHERE session_id = ?", (session_id,))
+            execute_query(db, "DELETE FROM game_states WHERE session_id = ?", (session_id,))
             db.commit()
             logger.info(f"Cleaned up expired session {session_id[:8]}...")
             return False
@@ -284,7 +282,6 @@ def check_and_complete_tasks(state: GameState) -> GameState:
             # Create clone if this was a grow_clone task
             if task_type == "grow_clone":
                 from core.models import Clone
-                import time
                 clone_data = task_data.get('pending_clone_data')
                 if clone_data:
                     # Set creation timestamp
@@ -464,7 +461,7 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
     return state
 
 
-def load_game_state(db: sqlite3.Connection, session_id: str, create_if_missing: bool = False) -> Optional[GameState]:
+def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: bool = False) -> Optional[GameState]:
     """
     Load game state from database.
     
@@ -476,8 +473,8 @@ def load_game_state(db: sqlite3.Connection, session_id: str, create_if_missing: 
     Returns:
         GameState if found or created, None otherwise
     """
-    cursor = db.cursor()
-    cursor.execute(
+    cursor = execute_query(
+        db,
         "SELECT state_data FROM game_states WHERE session_id = ?",
         (session_id,)
     )
@@ -518,7 +515,7 @@ def load_game_state(db: sqlite3.Connection, session_id: str, create_if_missing: 
         return None
 
 
-def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState, check_version: bool = False):
+def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, check_version: bool = False):
     """
     Save game state to database with optional optimistic locking.
 
@@ -531,11 +528,10 @@ def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState, c
     Raises:
         RuntimeError: If check_version is True and state version doesn't match database
     """
-    cursor = db.cursor()
-
     if check_version:
         # Optimistic locking: check if version matches
-        cursor.execute(
+        cursor = execute_query(
+            db,
             "SELECT state_data FROM game_states WHERE session_id = ?",
             (session_id,)
         )
@@ -558,7 +554,7 @@ def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState, c
     state_dict = game_state_to_dict(state)
     state_json = json.dumps(state_dict)
 
-    cursor.execute("""
+    execute_query(db, """
         INSERT INTO game_states (session_id, state_data, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(session_id) DO UPDATE SET
@@ -571,7 +567,7 @@ def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState, c
 @router.get("/state")
 async def get_game_state(
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -616,7 +612,7 @@ async def get_game_state(
 @router.get("/tasks/status")
 async def get_task_status(
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -689,7 +685,7 @@ async def get_task_status(
 async def save_game_state_endpoint(
     state_data: Dict[str, Any],
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -725,7 +721,7 @@ async def save_game_state_endpoint(
 async def gather_resource_endpoint(
     resource: str,
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -801,7 +797,7 @@ async def gather_resource_endpoint(
 @router.post("/build-womb")
 async def build_womb_endpoint(
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -857,7 +853,7 @@ async def build_womb_endpoint(
 async def grow_clone_endpoint(
     kind: str,
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -922,7 +918,7 @@ async def grow_clone_endpoint(
 async def apply_clone_endpoint(
     clone_id: str,
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -974,7 +970,7 @@ async def apply_clone_endpoint(
 async def run_expedition_endpoint(
     kind: str,
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
@@ -1026,7 +1022,7 @@ async def run_expedition_endpoint(
 async def upload_clone_endpoint(
     clone_id: str,
     request: Request,
-    db: sqlite3.Connection = Depends(get_db),
+    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """

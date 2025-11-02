@@ -170,8 +170,9 @@ async def health_check():
     """Health check endpoint"""
     try:
         # Test database connection
+        from database import execute_query
         db = get_db()
-        db.execute("SELECT 1")
+        execute_query(db, "SELECT 1")
         db_status = "connected"
     except Exception as e:
         db_status = f"error: {str(e)}"

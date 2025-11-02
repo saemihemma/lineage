@@ -1,12 +1,11 @@
 """Telemetry API endpoints"""
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Dict, Any
-import sqlite3
 import json
 import time
 
 from models import TelemetryEvent
-from database import get_db
+from database import get_db, DatabaseConnection, execute_query
 
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
 
@@ -47,7 +46,7 @@ def check_rate_limit(ip: str) -> bool:
 async def upload_telemetry(
     events: List[Dict[str, Any]],
     request: Request,
-    db: sqlite3.Connection = Depends(get_db)
+    db: DatabaseConnection = Depends(get_db)
 ):
     """
     Upload telemetry events.
@@ -75,7 +74,6 @@ async def upload_telemetry(
             detail="Too many events in one batch (max 100)"
         )
     
-    cursor = db.cursor()
     inserted_count = 0
     
     for event_data in events:
@@ -97,7 +95,7 @@ async def upload_telemetry(
                     event.timestamp = datetime.fromisoformat(timestamp)
             
             # Insert into database
-            cursor.execute("""
+            execute_query(db, """
                 INSERT INTO telemetry_events (id, session_id, event_type, data, timestamp)
                 VALUES (?, ?, ?, ?, ?)
             """, (
@@ -124,13 +122,12 @@ async def upload_telemetry(
 
 
 @router.get("/stats")
-async def get_telemetry_stats(db: sqlite3.Connection = Depends(get_db)):
+async def get_telemetry_stats(db: DatabaseConnection = Depends(get_db)):
     """Get telemetry statistics"""
-    cursor = db.cursor()
-    cursor.execute("SELECT COUNT(*) as total FROM telemetry_events")
+    cursor = execute_query(db, "SELECT COUNT(*) as total FROM telemetry_events")
     total = cursor.fetchone()['total']
     
-    cursor.execute("""
+    cursor = execute_query(db, """
         SELECT event_type, COUNT(*) as count
         FROM telemetry_events
         GROUP BY event_type

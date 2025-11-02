@@ -1,12 +1,11 @@
 """Leaderboard API endpoints"""
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
-import sqlite3
 from datetime import datetime
 import time
 
 from models import LeaderboardEntry, LeaderboardSubmission
-from database import get_db
+from database import get_db, DatabaseConnection, execute_query
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
@@ -52,7 +51,7 @@ def check_rate_limit(ip: str) -> bool:
 async def get_leaderboard(
     limit: int = 100,
     offset: int = 0,
-    db: sqlite3.Connection = Depends(get_db)
+    db: DatabaseConnection = Depends(get_db)
 ):
     """
     Retrieve leaderboard entries.
@@ -66,8 +65,7 @@ async def get_leaderboard(
     if offset < 0:
         offset = 0
     
-    cursor = db.cursor()
-    cursor.execute("""
+    cursor = execute_query(db, """
         SELECT * FROM leaderboard
         ORDER BY soul_level DESC, soul_xp DESC
         LIMIT ? OFFSET ?
@@ -90,7 +88,7 @@ async def get_leaderboard(
 async def submit_to_leaderboard(
     submission: LeaderboardSubmission,
     request: Request,
-    db: sqlite3.Connection = Depends(get_db)
+    db: DatabaseConnection = Depends(get_db)
 ):
     """
     Submit SELF stats to leaderboard.
@@ -111,8 +109,7 @@ async def submit_to_leaderboard(
         )
     
     # Check if entry exists for this self_name
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM leaderboard WHERE self_name = ?", (submission.self_name,))
+    cursor = execute_query(db, "SELECT * FROM leaderboard WHERE self_name = ?", (submission.self_name,))
     existing = cursor.fetchone()
     
     now = datetime.utcnow()
@@ -126,7 +123,7 @@ async def submit_to_leaderboard(
         )
         
         if should_update:
-            cursor.execute("""
+            execute_query(db, """
                 UPDATE leaderboard
                 SET soul_level = ?, soul_xp = ?, clones_uploaded = ?, 
                     total_expeditions = ?, updated_at = ?
@@ -146,7 +143,7 @@ async def submit_to_leaderboard(
     else:
         # Insert new entry
         entry = submission.to_leaderboard_entry()
-        cursor.execute("""
+        execute_query(db, """
             INSERT INTO leaderboard (id, self_name, soul_level, soul_xp, 
                                    clones_uploaded, total_expeditions, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -165,14 +162,13 @@ async def submit_to_leaderboard(
 
 
 @router.get("/stats")
-async def get_leaderboard_stats(db: sqlite3.Connection = Depends(get_db)):
+async def get_leaderboard_stats(db: DatabaseConnection = Depends(get_db)):
     """Get leaderboard statistics (total entries, etc.)"""
-    cursor = db.cursor()
-    cursor.execute("SELECT COUNT(*) as total FROM leaderboard")
+    cursor = execute_query(db, "SELECT COUNT(*) as total FROM leaderboard")
     total_row = cursor.fetchone()
     total = total_row['total'] if total_row else 0
     
-    cursor.execute("""
+    cursor = execute_query(db, """
         SELECT MAX(soul_level) as max_level, MAX(soul_xp) as max_xp
         FROM leaderboard
     """)

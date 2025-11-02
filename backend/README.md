@@ -20,12 +20,23 @@ pip install -r requirements.txt
 
 ### 2. Configure Database
 
-By default, the backend uses SQLite with a local file `lineage.db`.
+The backend supports both **SQLite** (default) and **PostgreSQL** (recommended for production).
 
-To use a different database:
+**SQLite (Default - Development):**
+- Uses local file `lineage.db`
+- No additional setup needed
+- Perfect for local development
+
+**PostgreSQL (Production):**
 - Set `DATABASE_URL` environment variable
-- For PostgreSQL: `DATABASE_URL=postgresql://user:pass@host/dbname`
-- For SQLite: `DATABASE_URL=sqlite:///path/to/db.db`
+- Format: `postgresql://user:pass@host/dbname`
+- Railway PostgreSQL: Auto-configured when you add PostgreSQL service
+- Better performance, concurrent access, and persistence
+
+**Database Auto-Detection:**
+- Automatically detects database type from `DATABASE_URL`
+- Uses correct SQL syntax and placeholders
+- No code changes needed to switch databases!
 
 ### 3. Run Server
 
