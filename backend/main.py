@@ -186,6 +186,50 @@ async def health_check():
     }
 
 
+# SPA fallback route - must be last to catch all non-API routes
+# This allows React Router to handle client-side routing (e.g., /simulation)
+@app.get("/{full_path:path}")
+async def serve_spa(request: Request, full_path: str):
+    """
+    SPA fallback route - serves index.html for non-API routes.
+    This allows React Router to handle client-side routing.
+    
+    FastAPI will match this route only if:
+    - No other route matched (including /api/* routes from routers)
+    - Path doesn't start with /api/
+    """
+    # Skip API routes (should never reach here, but safety check)
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    
+    # Try to serve index.html from frontend/dist if it exists
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    
+    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
+    
+    if frontend_dist.exists():
+        return FileResponse(frontend_dist)
+    else:
+        # Fallback: return a simple HTML that loads the SPA
+        # In production with separate static hosting (Vercel/Netlify), this won't be hit
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse("""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>LINEAGE</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body>
+            <div id="root"></div>
+            <p>If you see this, the frontend build is missing. Deploy frontend separately or serve static files.</p>
+        </body>
+        </html>
+        """)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """
