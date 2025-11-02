@@ -24,7 +24,13 @@ class Database:
             elif db_path.startswith("sqlite://"):
                 db_path = db_path.replace("sqlite://", "")
         
-        self.db_path = db_path
+        # Ensure directory exists for the database file (needed for Railway volumes)
+        db_file = Path(db_path)
+        db_dir = db_file.parent
+        if db_dir and not db_dir.exists():
+            db_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.db_path = str(db_path)
         self.conn: Optional[sqlite3.Connection] = None
         self._init_schema()
     
