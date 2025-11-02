@@ -22,7 +22,10 @@ export function SimulationScreen() {
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState({ value: 0, label: '' });
   const [showGrowDialog, setShowGrowDialog] = useState(false);
-  const [pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
+  // Store pending success messages until tasks complete (progress bar reaches 100%)
+  // Using underscore prefix to indicate intentionally unused (we only need the setter)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
   const addTerminalMessage = (message: string) => {

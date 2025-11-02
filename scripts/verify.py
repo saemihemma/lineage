@@ -79,6 +79,78 @@ def run_tests():
         return False
 
 
+def run_frontend_build_check():
+    """Verify frontend TypeScript compilation and build succeeds"""
+    project_root = Path(__file__).parent.parent
+    frontend_dir = project_root / "frontend"
+    
+    if not frontend_dir.exists():
+        colored_print("✗ frontend/ directory not found!", Colors.RED + Colors.BOLD)
+        return False
+    
+    colored_print("\n" + "="*60, Colors.BLUE)
+    colored_print("Checking Frontend Build", Colors.BOLD + Colors.BLUE)
+    colored_print("="*60 + "\n", Colors.BLUE)
+    
+    # Check if node_modules exists (dependencies installed)
+    node_modules = frontend_dir / "node_modules"
+    if not node_modules.exists():
+        colored_print("⚠ node_modules not found. Installing dependencies...", Colors.YELLOW)
+        try:
+            result = subprocess.run(
+                ["npm", "install"],
+                cwd=frontend_dir,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            if result.returncode != 0:
+                colored_print(f"✗ npm install failed: {result.stderr}", Colors.RED + Colors.BOLD)
+                return False
+        except subprocess.TimeoutExpired:
+            colored_print("✗ npm install timed out", Colors.RED + Colors.BOLD)
+            return False
+        except FileNotFoundError:
+            colored_print("✗ npm not found. Install Node.js to check frontend build.", Colors.RED + Colors.BOLD)
+            return False
+    
+    # Run TypeScript type check only (faster than full build)
+    colored_print("Running TypeScript type check...", Colors.YELLOW)
+    try:
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=frontend_dir,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minute timeout
+        )
+        
+        if result.returncode == 0:
+            colored_print("✓ Frontend build succeeded!", Colors.GREEN + Colors.BOLD)
+            return True
+        else:
+            colored_print("✗ Frontend build failed!", Colors.RED + Colors.BOLD)
+            # Print relevant error output
+            if result.stderr:
+                # Show last 50 lines of stderr to see the actual error
+                lines = result.stderr.split('\n')
+                error_lines = lines[-50:] if len(lines) > 50 else lines
+                colored_print("\nError output:", Colors.RED)
+                print('\n'.join(error_lines))
+            return False
+            
+    except subprocess.TimeoutExpired:
+        colored_print("✗ Frontend build timed out", Colors.RED + Colors.BOLD)
+        return False
+    except FileNotFoundError:
+        colored_print("✗ npm not found. Skipping frontend build check.", Colors.YELLOW)
+        colored_print("  Install Node.js to enable frontend build verification.", Colors.YELLOW)
+        return True  # Don't fail if npm is not available
+    except Exception as e:
+        colored_print(f"✗ Error checking frontend build: {e}", Colors.RED + Colors.BOLD)
+        return False
+
+
 def verify_app_launch(timeout=10):
     """Verify that the application can launch without errors"""
     project_root = Path(__file__).parent.parent
@@ -162,13 +234,23 @@ def main():
     colored_print("LINEAGE Verification", Colors.BOLD)
     colored_print("="*60, Colors.BOLD)
     
-    # Step 1: Run tests
+    # Step 1: Run backend tests
     tests_passed = run_tests()
     
     if not tests_passed:
         colored_print("\n" + "="*60, Colors.RED)
-        colored_print("VERIFICATION FAILED: Tests failed", Colors.RED + Colors.BOLD)
+        colored_print("VERIFICATION FAILED: Backend tests failed", Colors.RED + Colors.BOLD)
         colored_print("="*60 + "\n", Colors.RED)
+        sys.exit(1)
+    
+    # Step 1.5: Check frontend build (TypeScript compilation)
+    frontend_build_ok = run_frontend_build_check()
+    
+    if not frontend_build_ok:
+        colored_print("\n" + "="*60, Colors.RED)
+        colored_print("VERIFICATION FAILED: Frontend build failed", Colors.RED + Colors.BOLD)
+        colored_print("="*60 + "\n", Colors.RED)
+        colored_print("Fix TypeScript errors before pushing!", Colors.RED + Colors.BOLD)
         sys.exit(1)
     
     # Step 2: App verification (if requested)

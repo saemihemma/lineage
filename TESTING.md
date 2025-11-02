@@ -10,9 +10,15 @@ python3 scripts/verify.py
 ```
 
 This command:
-- Runs all unit tests
-- Verifies tests pass
+- Runs all backend unit tests
+- Verifies frontend TypeScript compilation and build
+- Catches unused variables, type errors, and build failures
 - Should exit with code 0 (success) before pushing
+
+**What it checks:**
+1. ✅ Backend Python unit tests (`test_*.py`)
+2. ✅ Frontend TypeScript compilation (`npm run build`)
+3. ✅ No unused variables or type errors
 
 ### Test Requirements
 
