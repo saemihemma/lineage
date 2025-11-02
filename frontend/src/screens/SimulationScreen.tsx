@@ -1,8 +1,9 @@
 /**
  * Simulation Screen - Main game interface
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameState } from '../hooks/useGameState';
+import { useEventFeed } from '../hooks/useEventFeed';
 import { gameAPI } from '../api/game';
 import './SimulationScreen.css';
 import { ResourcesPanel } from '../components/ResourcesPanel';
@@ -15,9 +16,11 @@ import { TerminalPanel } from '../components/TerminalPanel';
 import { PracticesPanel } from '../components/PracticesPanel';
 import { GrowCloneDialog } from '../components/GrowCloneDialog';
 import { LeaderboardDialog } from '../components/LeaderboardDialog';
+import type { GameState } from '../types/game';
 
 export function SimulationScreen() {
   const { state, loading, error, updateState } = useGameState();
+  const stateRef = useRef<GameState | null>(state);
   const [selectedCloneId, setSelectedCloneId] = useState<string | null>(null);
   const [terminalMessages, setTerminalMessages] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
@@ -30,9 +33,63 @@ export function SimulationScreen() {
   const [_pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
+  // Keep state ref in sync
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   const addTerminalMessage = (message: string) => {
     setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
   };
+
+  // Event feed hook for live state sync
+  const {
+    startPolling,
+    stopPolling,
+    resumePolling,
+    reset: resetEventFeed,
+  } = useEventFeed({
+    interval: 1200, // 1.2 seconds
+    currentState: state,
+    onTerminalMessage: addTerminalMessage,
+    onStatePatch: (patchedState) => {
+      if (patchedState) {
+        updateState(patchedState);
+      }
+    },
+    enabled: !!state && !loading, // Only poll when state is loaded
+  });
+
+  // Start/stop event feed polling based on state availability
+  useEffect(() => {
+    if (!state || loading) {
+      stopPolling();
+      return;
+    }
+
+    // Start polling when state is available
+    startPolling();
+
+    return () => {
+      stopPolling();
+    };
+  }, [state, loading, startPolling, stopPolling]);
+
+  // Reset event feed on reconnection or after long idle
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Reset and resume when tab becomes visible again
+        resetEventFeed();
+        if (state && !loading) {
+          resumePolling();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [state, loading, resetEventFeed, resumePolling]);
 
   // Load game state when component mounts (only once)
   useEffect(() => {
