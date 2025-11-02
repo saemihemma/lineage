@@ -25,7 +25,9 @@ export function TerminalPanel({ messages }: TerminalPanelProps) {
           <div className="terminal-messages">
             {messages.map((message, index) => (
               <div key={index} className="terminal-message">
-                {message}
+                {message.split('\n').map((line, lineIndex) => (
+                  <div key={lineIndex}>{line}</div>
+                ))}
               </div>
             ))}
             <div ref={messagesEndRef} />
