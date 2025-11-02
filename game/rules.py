@@ -1,7 +1,7 @@
 """Pure game rules functions - immutable state updates"""
 import random
 import uuid
-from typing import Tuple
+from typing import Tuple, Dict
 from game.state import GameState
 from core.models import Clone, CLONE_TYPES, TRAIT_LIST
 from core.config import CONFIG
