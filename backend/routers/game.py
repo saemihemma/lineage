@@ -260,12 +260,19 @@ def check_and_complete_tasks(state: GameState) -> GameState:
         if current_time >= start_time + duration:
             # Task is complete
             task_type = task_data.get('type')
+            
+            # Apply resource gathering if this was a gather task
+            if task_type == "gather_resource":
+                resource = task_data.get('resource')
+                pending_amount = task_data.get('pending_amount', 0)
+                if resource and pending_amount > 0:
+                    new_state.resources[resource] = new_state.resources.get(resource, 0) + pending_amount
+                    # Award practice XP
+                    from core.game_logic import award_practice_xp
+                    award_practice_xp(new_state, "Kinetic", 2)
+            
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
-    
-    # Auto-complete tasks (currently just remove them, actual completion happens immediately on start)
-    # For gather/build/grow, the action happens immediately, timer is just UI feedback
-    # But we mark them as complete here
     
     return new_state
 
@@ -674,16 +681,31 @@ async def gather_resource_endpoint(
     # Gathering can run alongside expeditions, but blocks on build/grow tasks
 
     try:
-        # Start task timer (start_task will check for conflicts)
-        new_state, task_id = start_task(state, "gather_resource", resource=resource)
+        # Calculate gather amount now (but don't apply until task completes)
+        # Use a deterministic RNG state to calculate amount
+        amount = state.rng.randint(
+            CONFIG["GATHER_AMOUNT"][resource][0],
+            CONFIG["GATHER_AMOUNT"][resource][1]
+        )
+        if resource == "Shilajit":
+            amount = 1
+        
+        # Start task timer with pending resource amount stored
+        new_state, task_id = start_task(state, "gather_resource", resource=resource, pending_amount=amount)
 
-        # Actually perform the gather (happens immediately)
-        final_state, amount, message = gather_resource(new_state, resource)
+        # Don't add resources yet - they'll be added when task completes
+        # Just save state with the active task
+        save_game_state(db, sid, new_state)
 
-        save_game_state(db, sid, final_state)
-
+        # Create message for when task completes (but don't show yet)
+        if resource == "Shilajit":
+            message = "Shilajit sample extracted. Resource +1."
+        else:
+            # We'll update the total when task completes
+            message = f"Gathered {amount} {resource}."
+        
         response = JSONResponse(content={
-            "state": game_state_to_dict(final_state),
+            "state": game_state_to_dict(new_state),  # Return state WITHOUT resources added yet
             "message": message,
             "amount": amount,
             "task_id": task_id
