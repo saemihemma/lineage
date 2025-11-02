@@ -1050,7 +1050,7 @@ async def run_expedition_endpoint(
 
         # Calculate loot (resource diff)
         loot = {}
-        for res in CONFIG["RESOURCE_TYPES"]:
+        for res in RESOURCE_TYPES:
             before = state.resources.get(res, 0)
             after = new_state.resources.get(res, 0)
             if after > before:
