@@ -270,6 +270,11 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                     # Award practice XP
                     from core.game_logic import award_practice_xp
                     award_practice_xp(new_state, "Kinetic", 2)
+                    # Store completion message in task data for frontend to retrieve
+                    if resource == "Shilajit":
+                        task_data['completion_message'] = f"Shilajit sample extracted. Resource +1. Total: {new_state.resources[resource]}"
+                    else:
+                        task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_state.resources[resource]}"
             
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
