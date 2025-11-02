@@ -579,8 +579,11 @@ async def get_game_state(
     """
     Get current game state.
     Creates new state if none exists.
+    Includes CSRF token for state-changing requests.
     Rate limit: 60 requests/minute
     """
+    from core.csrf import generate_csrf_cookie_value
+
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "get_state")
 
@@ -603,7 +606,12 @@ async def get_game_state(
     if state.active_tasks != (state.active_tasks if True else {}):
         save_game_state(db, sid, state)
 
+    # Generate CSRF token for this session
+    csrf_token = generate_csrf_cookie_value(sid)
+
     response = JSONResponse(content=game_state_to_dict(state))
+
+    # Set session cookie
     response.set_cookie(
         key="session_id",
         value=sid,
@@ -612,6 +620,17 @@ async def get_game_state(
         secure=IS_PRODUCTION,
         max_age=SESSION_EXPIRY
     )
+
+    # Set CSRF token cookie (NOT HttpOnly, so client can read it for headers)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,  # Client needs to read this for X-CSRF-Token header
+        samesite="lax",
+        secure=IS_PRODUCTION,
+        max_age=SESSION_EXPIRY
+    )
+
     return response
 
 

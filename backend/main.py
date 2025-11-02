@@ -20,6 +20,7 @@ import time
 
 from routers import leaderboard, telemetry, game
 from database import get_db
+from middleware.csrf import CSRFMiddleware
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -137,6 +138,7 @@ allowed_origins = get_allowed_origins()
 
 # Add security middleware (order matters - security headers should be last in chain)
 app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(CSRFMiddleware)  # CSRF protection for state-changing requests
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS middleware
@@ -145,7 +147,8 @@ app.add_middleware(
     allow_origins=allowed_origins if allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],  # Restrict to needed methods
-    allow_headers=["*"],
+    allow_headers=["*", "X-CSRF-Token"],  # Allow CSRF token header
+    expose_headers=["X-CSRF-Token"],  # Expose CSRF token to client
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
