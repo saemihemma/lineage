@@ -11,7 +11,8 @@ if str(project_root) not in sys.path:
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.datastructures import Headers
 import os
@@ -157,6 +158,20 @@ app.include_router(leaderboard.router)
 app.include_router(telemetry.router)
 app.include_router(game.router)
 
+# Mount static files for SPA (frontend build)
+# This serves JS, CSS, images, and other static assets from frontend/dist
+frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+if frontend_dist.exists():
+    logger.info(f"Mounting static files from: {frontend_dist}")
+    # Mount /assets for JS/CSS bundles
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
+    # Mount /data for game data
+    if (frontend_dist / "data").exists():
+        app.mount("/data", StaticFiles(directory=frontend_dist / "data"), name="data")
+    logger.info("Static files mounted successfully")
+else:
+    logger.warning(f"Frontend dist directory not found at: {frontend_dist}")
+
 
 @app.get("/")
 async def root():
@@ -191,25 +206,37 @@ async def health_check():
 @app.get("/{full_path:path}")
 async def serve_spa(request: Request, full_path: str):
     """
-    SPA fallback route - serves index.html for non-API routes.
+    SPA fallback route - serves static files or index.html for non-API routes.
     This allows React Router to handle client-side routing.
-    
+
+    Order of resolution:
+    1. API routes (already handled by routers)
+    2. /assets/* (already handled by StaticFiles mount)
+    3. /data/* (already handled by StaticFiles mount)
+    4. Static files in root (vite.svg, etc.)
+    5. SPA routing (returns index.html for all other paths)
+
     FastAPI will match this route only if:
     - No other route matched (including /api/* routes from routers)
-    - Path doesn't start with /api/
+    - Path doesn't match mounted static directories
     """
     # Skip API routes (should never reach here, but safety check)
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
-    
-    # Try to serve index.html from frontend/dist if it exists
-    from pathlib import Path
-    from fastapi.responses import FileResponse
-    
-    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
-    
-    if frontend_dist.exists():
-        return FileResponse(frontend_dist)
+
+    # Try to serve static files from frontend/dist root (e.g., vite.svg, favicon.ico)
+    dist_dir = Path(__file__).parent.parent / "frontend" / "dist"
+    static_file = dist_dir / full_path
+
+    # Serve static file if it exists and is a file (not directory)
+    if static_file.exists() and static_file.is_file():
+        return FileResponse(static_file)
+
+    # Otherwise, serve index.html for SPA routing (e.g., /simulation)
+    index_html = dist_dir / "index.html"
+
+    if index_html.exists():
+        return FileResponse(index_html)
     else:
         # Fallback: return a simple HTML that loads the SPA
         # In production with separate static hosting (Vercel/Netlify), this won't be hit
