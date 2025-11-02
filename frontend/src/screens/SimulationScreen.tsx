@@ -226,7 +226,17 @@ export function SimulationScreen() {
       <div className="simulation-screen">
         <div className="error-overlay">
           <div>Failed to load game state</div>
-          <div className="error-detail">{error}</div>
+          <div className="error-detail">{error || 'Unknown error'}</div>
+          <button 
+            className="action-btn"
+            onClick={() => window.location.reload()}
+            style={{ marginTop: '20px' }}
+          >
+            Refresh Page
+          </button>
+          <div style={{ marginTop: '10px', fontSize: '12px', color: '#999' }}>
+            If this persists, your session may have been lost during a backend update.
+          </div>
         </div>
       </div>
     );

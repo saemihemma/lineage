@@ -433,8 +433,18 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
     return state
 
 
-def load_game_state(db: sqlite3.Connection, session_id: str) -> Optional[GameState]:
-    """Load game state from database"""
+def load_game_state(db: sqlite3.Connection, session_id: str, create_if_missing: bool = False) -> Optional[GameState]:
+    """
+    Load game state from database.
+    
+    Args:
+        db: Database connection
+        session_id: Session identifier
+        create_if_missing: If True, create new state if not found (for recovery after redeploy)
+    
+    Returns:
+        GameState if found or created, None otherwise
+    """
     cursor = db.cursor()
     cursor.execute(
         "SELECT state_data FROM game_states WHERE session_id = ?",
@@ -442,18 +452,39 @@ def load_game_state(db: sqlite3.Connection, session_id: str) -> Optional[GameSta
     )
     row = cursor.fetchone()
     if row is None:
+        if create_if_missing:
+            # Auto-recover: create new state after redeploy/database wipe
+            logger.info(f"Auto-recovering: creating new state for session {session_id[:8]}... (likely after redeploy)")
+            state = GameState()
+            state.version = get_latest_version()
+            state.assembler_built = False
+            state.last_saved_ts = time.time()
+            save_game_state(db, session_id, state)
+            return state
         return None
     
-    data = json.loads(row[0])
-    state = dict_to_game_state(data)
-    
-    # Check and complete any finished tasks
-    state = check_and_complete_tasks(state)
-    if state.active_tasks != data.get("active_tasks", {}):
-        # Tasks were completed, save updated state
-        save_game_state(db, session_id, state)
-    
-    return state
+    try:
+        data = json.loads(row[0])
+        state = dict_to_game_state(data)
+        
+        # Check and complete any finished tasks
+        state = check_and_complete_tasks(state)
+        if state.active_tasks != data.get("active_tasks", {}):
+            # Tasks were completed, save updated state
+            save_game_state(db, session_id, state)
+        
+        return state
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        # Corrupted state - auto-recover
+        logger.error(f"Corrupted state for session {session_id[:8]}..., recovering: {e}")
+        if create_if_missing:
+            state = GameState()
+            state.version = get_latest_version()
+            state.assembler_built = False
+            state.last_saved_ts = time.time()
+            save_game_state(db, session_id, state)
+            return state
+        return None
 
 
 def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState, check_version: bool = False):
@@ -565,7 +596,7 @@ async def get_task_status(
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "task_status")
 
-    state = load_game_state(db, sid)
+    state = load_game_state(db, sid, create_if_missing=True)
 
     if state is None or not state.active_tasks:
         return JSONResponse(content={"active": False, "task": None, "tasks": []})
@@ -677,10 +708,14 @@ async def gather_resource_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid)
-
+    state = load_game_state(db, sid, create_if_missing=True)
+    
     if state is None:
-        raise HTTPException(status_code=404, detail="Game state not found")
+        # This should rarely happen now (auto-recovery), but handle it gracefully
+        raise HTTPException(
+            status_code=404, 
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
 
     # Note: Task conflict checking is now done in start_task()
     # Gathering can run alongside expeditions, but blocks on build/grow tasks
@@ -743,10 +778,14 @@ async def build_womb_endpoint(
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "build_womb")
 
-    state = load_game_state(db, sid)
-
+    state = load_game_state(db, sid, create_if_missing=True)
+    
     if state is None:
-        raise HTTPException(status_code=404, detail="Game state not found")
+        # This should rarely happen now (auto-recovery), but handle it gracefully
+        raise HTTPException(
+            status_code=404, 
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
 
     # Check for active tasks
     if state.active_tasks:
@@ -801,10 +840,14 @@ async def grow_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid)
-
+    state = load_game_state(db, sid, create_if_missing=True)
+    
     if state is None:
-        raise HTTPException(status_code=404, detail="Game state not found")
+        # This should rarely happen now (auto-recovery), but handle it gracefully
+        raise HTTPException(
+            status_code=404, 
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
 
     # Check for active tasks
     if state.active_tasks:
@@ -869,10 +912,14 @@ async def apply_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid)
-
+    state = load_game_state(db, sid, create_if_missing=True)
+    
     if state is None:
-        raise HTTPException(status_code=404, detail="Game state not found")
+        # This should rarely happen now (auto-recovery), but handle it gracefully
+        raise HTTPException(
+            status_code=404, 
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
 
     try:
         new_state, message = apply_clone(state, clone_id)
@@ -917,10 +964,14 @@ async def run_expedition_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid)
-
+    state = load_game_state(db, sid, create_if_missing=True)
+    
     if state is None:
-        raise HTTPException(status_code=404, detail="Game state not found")
+        # This should rarely happen now (auto-recovery), but handle it gracefully
+        raise HTTPException(
+            status_code=404, 
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
 
     try:
         new_state, message = run_expedition(state, kind)
@@ -965,10 +1016,14 @@ async def upload_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid)
-
+    state = load_game_state(db, sid, create_if_missing=True)
+    
     if state is None:
-        raise HTTPException(status_code=404, detail="Game state not found")
+        # This should rarely happen now (auto-recovery), but handle it gracefully
+        raise HTTPException(
+            status_code=404, 
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
 
     try:
         new_state, message = upload_clone(state, clone_id)

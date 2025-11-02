@@ -10,17 +10,24 @@ export function useGameState() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load initial state
+  // Load initial state with retry logic
   useEffect(() => {
-    async function load() {
+    async function load(retries = 3) {
       try {
         setLoading(true);
         setError(null);
         const gameState = await gameAPI.getState();
         setState(gameState);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load game state');
-        console.error('Failed to load game state:', err);
+        if (retries > 0) {
+          // Retry on transient errors (network, server restart, etc.)
+          console.warn(`Failed to load game state, retrying... (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          return load(retries - 1);
+        }
+        const errorMsg = err instanceof Error ? err.message : 'Failed to load game state';
+        setError(errorMsg);
+        console.error('Failed to load game state after retries:', err);
       } finally {
         setLoading(false);
       }
