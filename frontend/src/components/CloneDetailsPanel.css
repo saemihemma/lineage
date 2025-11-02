@@ -55,6 +55,15 @@
   padding: 2px 0;
 }
 
+.clone-actions-top {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #333333;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .clone-actions {
   margin-top: 16px;
   padding-top: 16px;
@@ -134,7 +143,7 @@
 }
 
 .upload-btn {
-  margin-top: 8px;
+  /* Removed margin-top since buttons are in a flex column with gap */
 }
 
 .empty-state {

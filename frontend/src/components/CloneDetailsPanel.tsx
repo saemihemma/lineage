@@ -36,6 +36,36 @@ export function CloneDetailsPanel({
     <div className="panel clone-details-panel">
       <div className="panel-header">Clone Details</div>
       <div className="panel-content">
+        {/* Action buttons at the top for visibility */}
+        {clone.alive && !clone.uploaded && (
+          <div className="clone-actions-top">
+            <button
+              className="action-button"
+              onClick={onApply}
+              disabled={disabled}
+            >
+              Apply Clone (Required for Expeditions)
+            </button>
+            <button
+              className="action-button upload-btn"
+              onClick={onUpload}
+              disabled={disabled}
+            >
+              Upload to SELF (Save Progress)
+            </button>
+            {!appliedCloneId || appliedCloneId !== clone.id ? (
+              <div className="action-note warning-note">
+                ⚠ Apply this clone first to enable expeditions (shown in top bar)
+              </div>
+            ) : (
+              <div className="action-note success-note">
+                ✓ Clone applied - Expeditions available in top bar
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Clone info details below */}
         <div className="clone-info">
           <div className="clone-info-row">
             <span className="label">Kind:</span>
@@ -71,47 +101,6 @@ export function CloneDetailsPanel({
             <div className="xp-item">Exploration: {clone.xp.EXPLORATION || 0}</div>
           </div>
         </div>
-
-        {clone.alive && !clone.uploaded && (
-          <div className="clone-actions">
-            <div className="action-section">
-              <div className="section-title">Setup:</div>
-              <button
-                className="action-button"
-                onClick={onApply}
-                disabled={disabled}
-              >
-                Apply Clone (Required for Expeditions)
-              </button>
-              <div className="action-note">
-                Apply this clone to use it for expeditions
-              </div>
-            </div>
-            
-            <div className="action-section">
-              <div className="section-title">Expeditions:</div>
-              {!appliedCloneId || appliedCloneId !== clone.id ? (
-                <div className="action-note warning-note">
-                  ⚠ Apply this clone first to enable expeditions (shown in top bar)
-                </div>
-              ) : (
-                <div className="action-note success-note">
-                  ✓ Clone applied - Expeditions available in top bar
-                </div>
-              )}
-            </div>
-
-            <div className="action-section">
-              <button
-                className="action-button upload-btn"
-                onClick={onUpload}
-                disabled={disabled}
-              >
-                Upload to SELF (Save Progress)
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
