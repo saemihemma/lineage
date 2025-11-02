@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/backend/routers/telemetry.py
+# hypothesis_version: 6.144.0
+
+[100, 400, 429, ',', '/api/telemetry', '/stats', 'X-Forwarded-For', 'count', 'data', 'event_type', 'session_id', 'status', 'success', 'telemetry', 'timestamp', 'top_event_types', 'total', 'total_events', 'total_received', 'unknown']

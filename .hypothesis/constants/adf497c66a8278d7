@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/core/anticheat.py
+# hypothesis_version: 6.144.0
+
+[0.0, 0.95, 1.0, 150, 400, 600, 3600, '1', '; ', 'ENVIRONMENT', 'HMAC_KEY_VERSION', 'big', 'clone_id', 'development', 'expedition', 'expedition_kind', 'gather', 'grow_clone', 'loot', 'production', 'result', 'success_rate', 'survived', 'unknown', 'xp_gained', '|']

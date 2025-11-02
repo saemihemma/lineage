@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/game/migrations/migrate.py
+# hypothesis_version: 6.144.0
+
+['*_migration.py', '_', 'migrate', 'version']

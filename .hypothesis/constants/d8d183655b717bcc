@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/core/state_manager.py
+# hypothesis_version: 6.144.0
+
+[0.0, 3600.0, 'PASSIVE_XP_PER_HOUR', 'PRACTICE_TRACKS', 'SOUL_START', 'active_tasks', 'alive', 'applied_clone_id', 'assembler_built', 'clones', 'frontier_save.json', 'id', 'kind', 'last_saved_ts', 'practices_xp', 'r', 'resources', 'rng_seed', 'self_name', 'soul_percent', 'soul_xp', 'survived_runs', 'traits', 'ui_layout', 'uploaded', 'utf-8', 'version', 'w', 'xp']

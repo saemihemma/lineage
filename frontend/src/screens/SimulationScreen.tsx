@@ -17,6 +17,7 @@ import { PracticesPanel } from '../components/PracticesPanel';
 import { GrowCloneDialog } from '../components/GrowCloneDialog';
 import { LeaderboardDialog } from '../components/LeaderboardDialog';
 import { FuelBar } from '../components/FuelBar';
+import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import type { GameState } from '../types/game';
 
 export function SimulationScreen() {
@@ -443,6 +444,7 @@ export function SimulationScreen() {
         <div className="top-row">
           {/* Column 1: Resources and Clones */}
           <div className="col-1">
+            <OnboardingChecklist state={state} />
             <ResourcesPanel resources={state.resources} />
             <ClonesPanel 
               clones={state.clones}

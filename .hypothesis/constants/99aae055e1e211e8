@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/backend/models.py
+# hypothesis_version: 6.144.0
+
+[100, '+00:00', 'LeaderboardEntry', 'TelemetryEvent', 'Z', '__getitem__', 'clones_uploaded', 'created_at', 'data', 'event_type', 'id', 'keys', 'self_name', 'session_id', 'soul_level', 'soul_xp', 'timestamp', 'total_expeditions', 'updated_at']

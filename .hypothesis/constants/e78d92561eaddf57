@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/backend/routers/leaderboard.py
+# hypothesis_version: 6.144.0
+
+[100, 400, 429, 1000, ',', '/api/leaderboard', '/stats', '/submit', 'X-Forwarded-For', 'created', 'id', 'leaderboard', 'max_level', 'max_soul_level', 'max_soul_xp', 'max_xp', 'reason', 'skipped', 'status', 'total', 'total_entries', 'unknown', 'updated']

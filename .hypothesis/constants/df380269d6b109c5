@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/backend/database.py
+# hypothesis_version: 6.144.0
+
+['%s', '?', 'DATABASE_URL', 'postgres://', 'postgresql', 'postgresql://', 'sqlite', 'sqlite://', 'sqlite:///', 'sqlite:///lineage.db']

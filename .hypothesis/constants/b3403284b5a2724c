@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/backend/main.py
+# hypothesis_version: 6.144.0
+
+[413, 500, 1024, 3600, 8000, '*', ',', '/', '/api/game/state', '/api/health', '0.0.0.0', '1.0.0', '1; mode=block', 'ALLOWED_ORIGINS', 'DENY', 'ENVIRONMENT', 'GET', 'HOST', 'LINEAGE API', 'OPTIONS', 'PORT', 'POST', 'Permissions-Policy', 'Referrer-Policy', 'SELECT 1', 'X-CSRF-Token', 'X-Frame-Options', 'X-XSS-Protection', '__main__', 'connected', 'content-length', 'database', 'default', 'detail', 'development', 'error', 'healthy', 'nosniff', 'online', 'production', 'service', 'state', 'status', 'type', 'version']

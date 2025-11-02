@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/backend/middleware/csrf.py
+# hypothesis_version: 6.144.0
+
+[403, '/api/telemetry', 'DELETE', 'PATCH', 'POST', 'PUT', 'X-CSRF-Token', 'csrf_token', 'session_id']
