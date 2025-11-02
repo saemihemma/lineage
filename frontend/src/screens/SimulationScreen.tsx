@@ -117,15 +117,25 @@ export function SimulationScreen() {
     return () => clearInterval(pollInterval);
   }, [state?.active_tasks, updateState]);
 
-  const handleAction = async (action: () => Promise<any>, actionName: string) => {
-    // Prevent duplicate requests while busy
-    if (isBusy || !state) {
-      console.warn(`Action blocked: ${actionName} (already busy)`);
+  const handleAction = async (action: () => Promise<any>, actionName: string, allowDuringTasks: boolean = false) => {
+    // Expeditions and immediate actions can run during gathering tasks
+    // But still prevent duplicate requests for the same action type
+    if (!state) {
+      console.warn(`Action blocked: ${actionName} (no state)`);
+      return;
+    }
+    
+    // Check for blocking tasks only if this action requires exclusive access
+    if (!allowDuringTasks && isBusy) {
+      console.warn(`Action blocked: ${actionName} (exclusive task in progress)`);
       return;
     }
 
     try {
-      setIsBusy(true);
+      // Only set busy for actions that create tasks (build, grow, gather)
+      if (!allowDuringTasks) {
+        setIsBusy(true);
+      }
       const result = await action();
       if (result.state) {
         updateState(result.state);
@@ -195,7 +205,8 @@ export function SimulationScreen() {
   };
 
   const handleRunExpedition = (kind: string) => {
-    handleAction(() => gameAPI.runExpedition(kind), `run ${kind} expedition`);
+    // Expeditions can run during gathering (drones continue gathering while on expedition)
+    handleAction(() => gameAPI.runExpedition(kind), `run ${kind} expedition`, true);
   };
 
   const handleUploadClone = (cloneId: string) => {

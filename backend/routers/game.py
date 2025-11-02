@@ -294,12 +294,30 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
     """
     Start a timed task. Returns (new_state, task_id).
     Task is stored in active_tasks with start_time and duration.
+    
+    Task blocking rules:
+    - build_womb and grow_clone: Block if ANY task is active (exclusive)
+    - gather_resource: Can run alongside expeditions, but only one gather per resource type
+    - expeditions: Don't use task system (complete immediately)
     """
     new_state = state.copy()
     
-    # Check if already busy
+    # Check for conflicting tasks
     if new_state.active_tasks:
-        raise RuntimeError("A task is already in progress. Please wait.")
+        if task_type in ["build_womb", "grow_clone"]:
+            # Building/growing blocks on ANY active task
+            raise RuntimeError("A task is already in progress. Please wait.")
+        elif task_type == "gather_resource":
+            # Gathering can run alongside expeditions, but check for duplicate resource gathering
+            resource = task_params.get('resource', 'Tritanium')
+            for task_id, task_data in new_state.active_tasks.items():
+                existing_task_type = task_data.get('type')
+                # Can't gather same resource twice, but can gather different resources
+                if existing_task_type == "gather_resource" and task_data.get('resource') == resource:
+                    raise RuntimeError(f"Already gathering {resource}. Please wait for completion.")
+                # Can't gather if building/growing (exclusive tasks)
+                if existing_task_type in ["build_womb", "grow_clone"]:
+                    raise RuntimeError("Cannot gather resources while building or growing. Please wait.")
     
     # Calculate duration
     if task_type == "build_womb":
@@ -529,6 +547,7 @@ async def get_task_status(
 ):
     """
     Get current task status (for polling).
+    Returns status of all active tasks, or primary task if only one.
     Rate limit: 120 requests/minute
     """
     sid = get_session_id(session_id)
@@ -537,39 +556,56 @@ async def get_task_status(
     state = load_game_state(db, sid)
 
     if state is None or not state.active_tasks:
-        return JSONResponse(content={"active": False, "task": None})
-
-    # Get first (and should be only) active task
-    task_id = list(state.active_tasks.keys())[0]
-    task_data = state.active_tasks[task_id]
+        return JSONResponse(content={"active": False, "task": None, "tasks": []})
 
     current_time = time.time()
-    start_time = task_data.get('start_time', 0)
-    duration = task_data.get('duration', 0)
-    elapsed = current_time - start_time
-    remaining = max(0, duration - elapsed)
-    progress = min(100, int((elapsed / duration * 100)) if duration > 0 else 0)
+    tasks_info = []
+    completed_tasks = []
 
-    # Check if complete
-    is_complete = current_time >= start_time + duration
+    # Check all tasks
+    for task_id, task_data in state.active_tasks.items():
+        start_time = task_data.get('start_time', 0)
+        duration = task_data.get('duration', 0)
+        elapsed = current_time - start_time
+        remaining = max(0, duration - elapsed)
+        progress = min(100, int((elapsed / duration * 100)) if duration > 0 else 0)
+        is_complete = current_time >= start_time + duration
 
-    if is_complete:
-        # Auto-complete
+        if is_complete:
+            completed_tasks.append(task_id)
+        else:
+            task_type = task_data.get('type', 'unknown')
+            label = task_type.replace('_', ' ').title()
+            if task_type == "gather_resource":
+                resource = task_data.get('resource', 'Resource')
+                label = f"Gathering {resource}"
+            elif task_type == "grow_clone":
+                clone_kind = task_data.get('clone_kind', 'Clone')
+                label = f"Growing {clone_kind} Clone"
+            
+            tasks_info.append({
+                "id": task_id,
+                "type": task_type,
+                "progress": progress,
+                "elapsed": int(elapsed),
+                "remaining": int(remaining),
+                "duration": duration,
+                "label": label
+            })
+
+    # Auto-complete finished tasks
+    if completed_tasks:
         state = check_and_complete_tasks(state)
         save_game_state(db, sid, state)
-        return JSONResponse(content={"active": False, "task": None, "completed": True})
 
+    # Return primary task (first one) for backward compatibility, plus all tasks
+    primary_task = tasks_info[0] if tasks_info else None
+    
     return JSONResponse(content={
-        "active": True,
-        "task": {
-            "id": task_id,
-            "type": task_data.get('type'),
-            "progress": progress,
-            "elapsed": int(elapsed),
-            "remaining": int(remaining),
-            "duration": duration,
-            "label": task_data.get('type', 'task').replace('_', ' ').title()
-        }
+        "active": len(tasks_info) > 0,
+        "task": primary_task,  # Primary task for backward compatibility
+        "tasks": tasks_info,   # All active tasks
+        "completed": len(completed_tasks) > 0
     })
 
 
@@ -634,12 +670,11 @@ async def gather_resource_endpoint(
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
 
-    # Check for active tasks
-    if state.active_tasks:
-        raise HTTPException(status_code=400, detail="A task is already in progress")
+    # Note: Task conflict checking is now done in start_task()
+    # Gathering can run alongside expeditions, but blocks on build/grow tasks
 
     try:
-        # Start task timer
+        # Start task timer (start_task will check for conflicts)
         new_state, task_id = start_task(state, "gather_resource", resource=resource)
 
         # Actually perform the gather (happens immediately)
