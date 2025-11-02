@@ -2,19 +2,52 @@
 
 This guide shows you how to set up persistent storage on Railway so game states survive redeployments.
 
+## Two Options: Volumes (SQLite) or PostgreSQL
+
+You have two options:
+1. **SQLite with Volumes** (if Volumes tab is available)
+2. **PostgreSQL** (Easier! Recommended - Railway provides it automatically)
+
+Read below for both options.
+
 ## Quick Setup (5 minutes)
 
 ### Step 1: Create Persistent Volume in Railway
 
+**Step 1A: Check Settings Tab for Volumes**
+
 1. Go to your Railway project dashboard: https://railway.app
 2. Click on your **backend service** (the one running the FastAPI server)
-3. Click the **Volumes** tab (in the service settings)
-4. Click **+ New Volume** or **Add Volume**
-5. Fill in:
+3. Click the **Settings** tab (next to Variables, Metrics, etc.)
+4. Scroll down in the Settings page
+5. Look for a **"Volumes"** or **"Storage"** section
+6. If you see it, click **+ New Volume** or **Add Volume**
+7. Fill in:
    - **Volume Name**: `lineage-data`
    - **Mount Path**: `/app/data`
-   - **Size**: Leave default (starts small, expands automatically)
-6. Click **Add** or **Create**
+8. Click **Add** or **Create**
+
+**Step 1B: If Volumes Section Not in Settings**
+
+Volumes may only be available on certain Railway plans. Try:
+
+**Alternative 1: Check if you need to upgrade**
+- Railway Volumes are available on paid plans
+- Free tier might not include volumes
+- Check Railway pricing: https://railway.app/pricing
+
+**Alternative 2: Use Railway PostgreSQL (Recommended)**
+Instead of SQLite with volumes, use Railway's built-in PostgreSQL:
+1. In Railway dashboard, click **+ New** → **Database** → **PostgreSQL**
+2. Railway auto-creates a PostgreSQL database
+3. Railway automatically provides `DATABASE_URL` environment variable
+4. The backend code already supports PostgreSQL!
+5. No volume setup needed - PostgreSQL persists automatically
+6. **This is actually better** than SQLite for production
+
+**Alternative 3: Contact Railway Support**
+- If you're on a paid plan but don't see volumes, contact Railway support
+- They can help enable it or clarify plan features
 
 ### Step 2: Set Database Path Environment Variable
 
