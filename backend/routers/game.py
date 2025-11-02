@@ -212,10 +212,16 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
         return True  # New session is valid
 
     # Parse updated_at timestamp
-    updated_at_str = row['updated_at']
+    # PostgreSQL returns datetime objects, SQLite returns strings
+    updated_at_value = row['updated_at']
     try:
         from datetime import datetime
-        updated_at = datetime.fromisoformat(updated_at_str)
+        if isinstance(updated_at_value, datetime):
+            # PostgreSQL returns datetime object directly
+            updated_at = updated_at_value
+        else:
+            # SQLite returns string, parse it
+            updated_at = datetime.fromisoformat(str(updated_at_value))
         now = datetime.utcnow()
         age_seconds = (now - updated_at).total_seconds()
 
