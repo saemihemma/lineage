@@ -53,6 +53,9 @@ export function SimulationScreen() {
       return;
     }
 
+    // Get taskId before polling starts (for message retrieval later)
+    const taskId = Object.keys(state.active_tasks)[0];
+
     // Start polling
     setIsBusy(true);
     const pollInterval = setInterval(async () => {
@@ -69,10 +72,9 @@ export function SimulationScreen() {
           setIsBusy(false);
           clearInterval(pollInterval);
           
-          // Show pending message if any (e.g., "Womb built successfully")
+          // Show pending message if any (e.g., "Womb built successfully", "Clone grown")
           // This ensures message only appears after progress bar completes
           setPendingMessages((prev) => {
-            const taskId = state.active_tasks ? Object.keys(state.active_tasks)[0] : null;
             if (taskId && prev.has(taskId)) {
               const message = prev.get(taskId)!;
               addTerminalMessage(message);
@@ -84,9 +86,21 @@ export function SimulationScreen() {
           });
           
           // Reload state to get updates
-          gameAPI.getState().then((updatedState) => {
-            updateState(updatedState);
-          });
+          const updatedState = await gameAPI.getState();
+          updateState(updatedState);
+          
+          // Auto-select newly created clone if this was a grow_clone task
+          // Check the task type before state was updated (from closure)
+          const completedTaskType = state.active_tasks?.[taskId]?.type;
+          if (completedTaskType === 'grow_clone' && updatedState.clones) {
+            // Find the newest clone (last one in the list, which should be the most recent)
+            const cloneIds = Object.keys(updatedState.clones);
+            if (cloneIds.length > 0) {
+              const newestCloneId = cloneIds[cloneIds.length - 1];
+              setSelectedCloneId(newestCloneId);
+              addTerminalMessage(`Tip: Apply this clone (click "Apply Clone" button) to run expeditions.`);
+            }
+          }
         } else {
           // No active task
           setProgress({ value: 0, label: '' });
@@ -102,14 +116,18 @@ export function SimulationScreen() {
   }, [state?.active_tasks, updateState]);
 
   const handleAction = async (action: () => Promise<any>, actionName: string) => {
-    if (isBusy || !state) return;
-    
+    // Prevent duplicate requests while busy
+    if (isBusy || !state) {
+      console.warn(`Action blocked: ${actionName} (already busy)`);
+      return;
+    }
+
     try {
       setIsBusy(true);
       const result = await action();
       if (result.state) {
         updateState(result.state);
-        
+
         // For timed actions (build womb, gather, grow clone), don't show message immediately
         // Store it to show when progress bar completes
         if (result.message && result.state.active_tasks && Object.keys(result.state.active_tasks).length > 0) {
@@ -126,13 +144,28 @@ export function SimulationScreen() {
         }
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : `Failed to ${actionName}`;
+      // Enhanced error handling
+      let errorMsg = `Failed to ${actionName}`;
+
+      if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+
+      // Check for network errors
+      if (err && typeof err === 'object' && 'name' in err) {
+        if (err.name === 'TypeError' || err.name === 'NetworkError') {
+          errorMsg = 'Network error. Please check your connection.';
+        }
+      }
+
       addTerminalMessage(`ERROR: ${errorMsg}`);
       console.error(`Action failed: ${actionName}`, err);
+
+      // Reset busy state on error
       setIsBusy(false);
       setProgress({ value: 0, label: '' });
     }
-    // Note: Don't set isBusy to false here - let the polling effect handle it when task completes
+    // Note: Don't set isBusy to false on success - let the polling effect handle it when task completes
   };
 
   const handleBuildWomb = () => {
@@ -193,7 +226,7 @@ export function SimulationScreen() {
         <div className="topbar-left">
           <h1 className="game-title">LINEAGE</h1>
           <div className="self-stats">
-            SELF: {state.self_name || 'Unnamed'} | Level: {calculateSoulLevel(state.soul_xp)} | Soul: {state.soul_percent.toFixed(1)}%
+            SELF: {state.self_name || 'Unnamed'} | Level: {state.soul_level} | Soul: {state.soul_percent.toFixed(1)}%
           </div>
         </div>
         <div className="topbar-actions">
@@ -260,7 +293,10 @@ export function SimulationScreen() {
         {/* Bottom Row - Terminal and Practices */}
         <div className="bottom-row">
           <TerminalPanel messages={terminalMessages} />
-          <PracticesPanel practicesXp={state.practices_xp} />
+          <PracticesPanel
+            practicesXp={state.practices_xp}
+            practiceLevels={state.practice_levels}
+          />
         </div>
       </div>
 
@@ -273,15 +309,4 @@ export function SimulationScreen() {
       />
     </div>
   );
-}
-
-function calculateSoulLevel(soulXp: number): number {
-  // Simplified - should match backend logic
-  let level = 0;
-  let xpNeeded = 0;
-  while (soulXp >= xpNeeded) {
-    level++;
-    xpNeeded += 100 * level;
-  }
-  return level - 1;
 }

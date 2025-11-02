@@ -32,7 +32,7 @@ export function CloneDetailsPanel({
     );
   }
 
-  const totalXp = clone.xp.MINING + clone.xp.COMBAT + clone.xp.EXPLORATION;
+  const totalXp = (clone.xp.MINING || 0) + (clone.xp.COMBAT || 0) + (clone.xp.EXPLORATION || 0);
 
   return (
     <div className="panel clone-details-panel">
@@ -92,9 +92,15 @@ export function CloneDetailsPanel({
             
             <div className="action-section">
               <div className="section-title">Expeditions:</div>
-              <div className="action-note">
-                Apply clone first, then run expeditions
-              </div>
+              {!appliedCloneId || appliedCloneId !== clone.id ? (
+                <div className="action-note warning-note">
+                  ⚠ Apply this clone first to enable expeditions
+                </div>
+              ) : (
+                <div className="action-note success-note">
+                  ✓ Clone applied - Expeditions ready
+                </div>
+              )}
               <div className="expedition-buttons">
                 <button
                   className="action-button expedition-btn"

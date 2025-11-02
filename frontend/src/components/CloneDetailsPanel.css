@@ -84,6 +84,16 @@
   margin-top: 4px;
 }
 
+.action-note.warning-note {
+  color: #ffaa00;
+  font-weight: bold;
+}
+
+.action-note.success-note {
+  color: #00ff00;
+  font-weight: bold;
+}
+
 .action-button {
   background-color: #ff7a00;
   color: #111111;
