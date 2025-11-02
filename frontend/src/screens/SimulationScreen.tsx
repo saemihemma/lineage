@@ -14,6 +14,7 @@ import { ProgressPanel } from '../components/ProgressPanel';
 import { TerminalPanel } from '../components/TerminalPanel';
 import { PracticesPanel } from '../components/PracticesPanel';
 import { GrowCloneDialog } from '../components/GrowCloneDialog';
+import { LeaderboardDialog } from '../components/LeaderboardDialog';
 
 export function SimulationScreen() {
   const { state, loading, error, updateState } = useGameState();
@@ -22,6 +23,7 @@ export function SimulationScreen() {
   const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState({ value: 0, label: '' });
   const [showGrowDialog, setShowGrowDialog] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   // Store pending success messages until tasks complete (progress bar reaches 100%)
   // Using underscore prefix to indicate intentionally unused (we only need the setter)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -272,9 +274,9 @@ export function SimulationScreen() {
               </button>
             </>
           )}
-          <button 
+          <button
             className="action-btn"
-            onClick={() => {/* TODO: Show leaderboard */}}
+            onClick={() => setShowLeaderboard(true)}
           >
             Leaderboard
           </button>
@@ -333,6 +335,18 @@ export function SimulationScreen() {
         onClose={() => setShowGrowDialog(false)}
         onGrow={handleGrowClone}
         disabled={isBusy}
+      />
+
+      {/* Leaderboard Dialog */}
+      <LeaderboardDialog
+        isOpen={showLeaderboard}
+        onClose={() => setShowLeaderboard(false)}
+        currentState={{
+          self_name: state.self_name,
+          soul_level: state.soul_level,
+          soul_xp: state.soul_xp,
+          clones: state.clones,
+        }}
       />
     </div>
   );
