@@ -24,7 +24,8 @@ export function SimulationScreen() {
   const [selectedCloneId, setSelectedCloneId] = useState<string | null>(null);
   const [terminalMessages, setTerminalMessages] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
-  const [progress, setProgress] = useState({ value: 0, label: '' });
+  // Track multiple concurrent tasks by task_id
+  const [activeTaskProgress, setActiveTaskProgress] = useState<Record<string, { value: number; label: string; startTime: number }>>({});
   const [showGrowDialog, setShowGrowDialog] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   // Store pending success messages until tasks complete (progress bar reaches 100%)
@@ -32,6 +33,19 @@ export function SimulationScreen() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
+  
+  // Calculate primary progress (for single progress bar display)
+  // Show the most recently started task, or first active task if none specified
+  const primaryProgress = (() => {
+    const tasks = Object.entries(activeTaskProgress);
+    if (tasks.length === 0) {
+      return { value: 0, label: '' };
+    }
+    // Sort by start time (most recent first), then pick first
+    const sorted = tasks.sort(([, a], [, b]) => b.startTime - a.startTime);
+    const [, progress] = sorted[0];
+    return { value: progress.value, label: progress.label };
+  })();
 
   // Keep state ref in sync
   useEffect(() => {
@@ -104,55 +118,93 @@ export function SimulationScreen() {
     }
   }, [state, hasShownWelcome]);
 
-  // Poll task status if there's an active task
+  // Poll all active tasks - support concurrent tasks (gathering + expeditions)
   useEffect(() => {
     if (!state || !state.active_tasks || Object.keys(state.active_tasks).length === 0) {
-      setProgress({ value: 0, label: '' });
+      // No active tasks - clear all progress
+      setActiveTaskProgress({});
       setIsBusy(false);
       return;
     }
 
-    // Get taskId before polling starts (for message retrieval later)
-    const taskId = Object.keys(state.active_tasks)[0];
+    // Track all active task IDs
+    const activeTaskIds = Object.keys(state.active_tasks);
+    
+    // Initialize progress for new tasks (preserve existing ones to prevent flicker)
+    setActiveTaskProgress((prev) => {
+      const updated = { ...prev };
+      activeTaskIds.forEach((taskId) => {
+        if (!updated[taskId]) {
+          // New task - initialize progress
+          const task = state.active_tasks![taskId];
+          updated[taskId] = {
+            value: 0,
+            label: task.type === 'gather_resource' ? `Gathering ${task.resource}...` : 
+                   task.type === 'build_womb' ? 'Building Womb...' :
+                   task.type === 'grow_clone' ? `Growing ${task.kind} clone...` : 'Processing...',
+            startTime: task.start_time || Date.now(),
+          };
+        }
+      });
+      // Remove tasks that are no longer active
+      Object.keys(updated).forEach((taskId) => {
+        if (!activeTaskIds.includes(taskId)) {
+          delete updated[taskId];
+        }
+      });
+      return updated;
+    });
 
-    // Start polling
     setIsBusy(true);
+
+    // Poll all tasks - get status for each
     const pollInterval = setInterval(async () => {
       try {
+        // Poll task status (backend returns status for the primary/active task)
         const status = await gameAPI.getTaskStatus();
+        
         if (status.active && status.task) {
-          setProgress({
-            value: status.task.progress,
-            label: `${status.task.label}… ${status.task.remaining}s remaining`
+          // Update progress for this task (merge, don't replace all)
+          setActiveTaskProgress((prev) => {
+            const updated = { ...prev };
+            if (status.task && updated[status.task.id]) {
+              updated[status.task.id] = {
+                ...updated[status.task.id],
+                value: status.task.progress,
+                label: `${status.task.label}… ${status.task.remaining}s remaining`,
+              };
+            }
+            return updated;
           });
-        } else if (status.completed) {
-          // Task completed - progress bar reached 100%
-          setProgress({ value: 0, label: '' });
-          setIsBusy(false);
-          clearInterval(pollInterval);
+        } else if (status.completed && status.task) {
+          // Task completed - remove from active progress
+          const completedTaskId = status.task.id;
           
-          // Show pending message if any (e.g., "Womb built successfully", "Clone grown")
-          // This ensures message only appears after progress bar completes
+          setActiveTaskProgress((prev) => {
+            const updated = { ...prev };
+            delete updated[completedTaskId];
+            return updated;
+          });
+          
+          // Show pending message if any
           setPendingMessages((prev) => {
-            if (taskId && prev.has(taskId)) {
-              const message = prev.get(taskId)!;
+            if (prev.has(completedTaskId)) {
+              const message = prev.get(completedTaskId)!;
               addTerminalMessage(message);
               const newMap = new Map(prev);
-              newMap.delete(taskId);
+              newMap.delete(completedTaskId);
               return newMap;
             }
             return prev;
           });
           
-          // Reload state to get updates
+          // Reload state to get updates (events feed will also update, but this ensures sync)
           const updatedState = await gameAPI.getState();
           updateState(updatedState);
           
           // Auto-select newly created clone if this was a grow_clone task
-          // Check the task type before state was updated (from closure)
-          const completedTaskType = state.active_tasks?.[taskId]?.type;
-          if (completedTaskType === 'grow_clone' && updatedState.clones) {
-            // Find the newest clone (last one in the list, which should be the most recent)
+          const completedTask = state.active_tasks?.[completedTaskId];
+          if (completedTask?.type === 'grow_clone' && updatedState.clones) {
             const cloneIds = Object.keys(updatedState.clones);
             if (cloneIds.length > 0) {
               const newestCloneId = cloneIds[cloneIds.length - 1];
@@ -160,11 +212,18 @@ export function SimulationScreen() {
               addTerminalMessage(`Tip: Apply this clone (click "Apply Clone" button) to run expeditions.`);
             }
           }
+          
+          // Check if there are any remaining active tasks
+          if (Object.keys(updatedState.active_tasks || {}).length === 0) {
+            setIsBusy(false);
+          }
         } else {
-          // No active task
-          setProgress({ value: 0, label: '' });
-          setIsBusy(false);
-          clearInterval(pollInterval);
+          // No active task in response - but check state to be sure
+          const hasActiveTasks = state.active_tasks && Object.keys(state.active_tasks).length > 0;
+          if (!hasActiveTasks) {
+            setActiveTaskProgress({});
+            setIsBusy(false);
+          }
         }
       } catch (err) {
         console.error('Failed to poll task status:', err);
@@ -195,18 +254,31 @@ export function SimulationScreen() {
       }
       const result = await action();
       if (result.state) {
-        updateState(result.state);
+        // Merge active_tasks instead of replacing (prevents flicker)
+        const mergedState = {
+          ...result.state,
+          active_tasks: {
+            ...state.active_tasks, // Preserve existing tasks
+            ...result.state.active_tasks, // Add/update new tasks
+          },
+        };
+        updateState(mergedState);
 
         // For timed actions (build womb, gather, grow clone), don't show message immediately
         // Store it to show when progress bar completes
-        if (result.message && result.state.active_tasks && Object.keys(result.state.active_tasks).length > 0) {
-          // This is a timed action - store message for later
-          const taskId = Object.keys(result.state.active_tasks)[0];
-          setPendingMessages((prev) => {
-            const newMap = new Map(prev);
-            newMap.set(taskId, result.message);
-            return newMap;
-          });
+        if (result.message && mergedState.active_tasks && Object.keys(mergedState.active_tasks).length > 0) {
+          // Find the new task ID (the one that was just added)
+          const newTaskIds = Object.keys(result.state.active_tasks || {});
+          const existingTaskIds = Object.keys(state.active_tasks || {});
+          const addedTaskId = newTaskIds.find(id => !existingTaskIds.includes(id)) || newTaskIds[0];
+          
+          if (addedTaskId) {
+            setPendingMessages((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(addedTaskId, result.message);
+              return newMap;
+            });
+          }
         } else if (result.message) {
           // Immediate action (no timer) - show message right away
           addTerminalMessage(result.message);
@@ -232,7 +304,7 @@ export function SimulationScreen() {
 
       // Reset busy state on error
       setIsBusy(false);
-      setProgress({ value: 0, label: '' });
+      // Don't clear progress on error - let it remain to show what was happening
     }
     // Note: Don't set isBusy to false on success - let the polling effect handle it when task completes
   };
@@ -393,7 +465,7 @@ export function SimulationScreen() {
               onUpload={() => selectedCloneId && handleUploadClone(selectedCloneId)}
               disabled={isBusy}
             />
-            <ProgressPanel progress={progress} />
+            <ProgressPanel progress={primaryProgress} />
           </div>
         </div>
 
