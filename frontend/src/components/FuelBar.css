@@ -1,0 +1,79 @@
+.fuel-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.fuel-bar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ccc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fuel-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fuel-bar {
+  position: relative;
+  width: 120px;
+  height: 20px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.fuel-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  border-radius: 3px;
+}
+
+.fuel-bar.fuel-ok .fuel-bar-fill {
+  background: linear-gradient(90deg, #7FD38A 0%, #5BC069 100%);
+}
+
+.fuel-bar.fuel-warn .fuel-bar-fill {
+  background: linear-gradient(90deg, #F5C04E 0%, #E8A733 100%);
+}
+
+.fuel-bar.fuel-low .fuel-bar-fill {
+  background: linear-gradient(90deg, #E76A6A 0%, #D45555 100%);
+}
+
+.fuel-bar-ticks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.fuel-bar-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(-50%);
+}
+
+.fuel-bar-text {
+  font-size: 11px;
+  color: #aaa;
+  min-width: 80px;
+  white-space: nowrap;
+}
+
+.fuel-bar-text .fuel-empty {
+  color: #E76A6A;
+  font-weight: 600;
+}
+

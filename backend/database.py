@@ -184,6 +184,38 @@ class SQLiteAdapter(DatabaseAdapter):
             ON anomaly_flags(session_id, flagged_at DESC)
         """)
 
+        # Enhanced events table (A2: Event Logging & HUD)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                event_subtype TEXT,
+                entity_id TEXT,
+                payload_json TEXT,
+                privacy_level TEXT DEFAULT 'private',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create composite index on session_id and created_at for feed queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_session_created
+            ON events(session_id, created_at DESC)
+        """)
+
+        # Create index on event_type for filtering
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_type
+            ON events(event_type, created_at DESC)
+        """)
+
+        # Create index on created_at for cursor-based pagination
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_created_cursor
+            ON events(created_at DESC, id)
+        """)
+
         conn.commit()
 
 
@@ -326,6 +358,38 @@ class PostgreSQLAdapter(DatabaseAdapter):
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
             ON anomaly_flags(session_id, flagged_at DESC)
+        """)
+
+        # Enhanced events table (A2: Event Logging & HUD)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id VARCHAR(255) PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL,
+                event_type VARCHAR(50) NOT NULL,
+                event_subtype VARCHAR(50),
+                entity_id VARCHAR(255),
+                payload_json TEXT,
+                privacy_level VARCHAR(20) DEFAULT 'private',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create composite index on session_id and created_at for feed queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_session_created
+            ON events(session_id, created_at DESC)
+        """)
+
+        # Create index on event_type for filtering
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_type
+            ON events(event_type, created_at DESC)
+        """)
+
+        # Create index on created_at for cursor-based pagination
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_created_cursor
+            ON events(created_at DESC, id)
         """)
 
         conn.commit()

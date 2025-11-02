@@ -46,6 +46,12 @@ export class EventsAPI {
       return [];
     }
 
+    // 404 means endpoint doesn't exist yet - graceful degradation
+    if (response.status === 404) {
+      console.warn('Events feed endpoint not available yet - backend may not be updated');
+      return [];
+    }
+
     if (!response.ok) {
       throw new Error(`Events feed failed: ${response.status}`);
     }

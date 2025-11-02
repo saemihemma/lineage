@@ -16,6 +16,7 @@ import { TerminalPanel } from '../components/TerminalPanel';
 import { PracticesPanel } from '../components/PracticesPanel';
 import { GrowCloneDialog } from '../components/GrowCloneDialog';
 import { LeaderboardDialog } from '../components/LeaderboardDialog';
+import { FuelBar } from '../components/FuelBar';
 import type { GameState } from '../types/game';
 
 export function SimulationScreen() {
@@ -380,6 +381,9 @@ export function SimulationScreen() {
           <div className="self-stats">
             SELF: {state.self_name || 'Unnamed'} | Level: {state.soul_level} | Soul: {state.soul_percent.toFixed(1)}%
           </div>
+        </div>
+        <div className="topbar-center">
+          <FuelBar />
         </div>
         <div className="topbar-actions">
           <button 

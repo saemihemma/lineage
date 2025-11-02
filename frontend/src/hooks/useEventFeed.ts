@@ -261,12 +261,22 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
           });
         }
       } catch (err) {
-        console.error('Event feed polling error:', err);
-        // On error, pause briefly then resume
-        pausedRef.current = true;
-        setTimeout(() => {
-          pausedRef.current = false;
-        }, 5000); // Resume after 5 seconds
+        // Don't log 404 errors as errors (endpoint may not exist yet)
+        if (err instanceof Error && err.message.includes('404')) {
+          // Endpoint doesn't exist - silently degrade (no events, but don't break)
+          pausedRef.current = true;
+          // Check again in 30 seconds in case backend gets updated
+          setTimeout(() => {
+            pausedRef.current = false;
+          }, 30000);
+        } else {
+          console.error('Event feed polling error:', err);
+          // On error, pause briefly then resume
+          pausedRef.current = true;
+          setTimeout(() => {
+            pausedRef.current = false;
+          }, 5000); // Resume after 5 seconds
+        }
       }
     },
     [currentState, onEvents, onStatePatch, onTerminalMessage, formatTerminalMessage, applyEventPatch]
