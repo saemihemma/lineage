@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import { gameAPI } from '../api/game';
 import './LoadingScreen.css';
 
+const SELF_NAME_KEY = 'lineage_self_name';
+
 export function LoadingScreen() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -20,6 +22,14 @@ export function LoadingScreen() {
     'Preparing resource harvesters...',
   ]);
   const [currentMessage, setCurrentMessage] = useState(loadingMessages[0]);
+
+  // Load saved name from localStorage on mount
+  useEffect(() => {
+    const savedName = localStorage.getItem(SELF_NAME_KEY);
+    if (savedName) {
+      setName(savedName);
+    }
+  }, []);
 
   useEffect(() => {
     // Simulate loading progress
@@ -51,12 +61,17 @@ export function LoadingScreen() {
     if (name.trim() && loadingComplete && !saving) {
       setSaving(true);
       try {
+        const trimmedName = name.trim();
+
+        // Save name to localStorage for future sessions
+        localStorage.setItem(SELF_NAME_KEY, trimmedName);
+
         // Load current state
         const currentState = await gameAPI.getState();
         // Update self_name
         const updatedState = {
           ...currentState,
-          self_name: name.trim(),
+          self_name: trimmedName,
         };
         // Save to backend
         await gameAPI.saveState(updatedState);
@@ -74,10 +89,17 @@ export function LoadingScreen() {
 
   const canEnter = name.trim().length > 0 && loadingComplete;
 
+  const hasSavedName = localStorage.getItem(SELF_NAME_KEY) !== null;
+
   return (
     <div className="loading-screen">
       <div className="loading-content">
         <h2 className="loading-title">IDENTITY</h2>
+        {hasSavedName && name && (
+          <div style={{ color: '#00ff00', fontSize: '14px', marginBottom: '8px' }}>
+            Welcome back, {name}
+          </div>
+        )}
         <input
           type="text"
           className="loading-name-input"
