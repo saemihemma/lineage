@@ -244,6 +244,34 @@ export function SimulationScreen() {
           >
             Grow Clone
           </button>
+          {state.applied_clone_id && state.applied_clone_id in state.clones && state.clones[state.applied_clone_id].alive && (
+            <>
+              <button 
+                className="action-btn expedition-top-btn"
+                onClick={() => handleRunExpedition('MINING')}
+                disabled={isBusy}
+                title="Mining expeditions earn Tritanium and Metal Ore"
+              >
+                Mining Expedition
+              </button>
+              <button 
+                className="action-btn expedition-top-btn"
+                onClick={() => handleRunExpedition('COMBAT')}
+                disabled={isBusy}
+                title="Combat expeditions earn Biomass and Synthetic materials"
+              >
+                Combat Expedition
+              </button>
+              <button 
+                className="action-btn expedition-top-btn"
+                onClick={() => handleRunExpedition('EXPLORATION')}
+                disabled={isBusy}
+                title="Exploration expeditions earn mixed resources"
+              >
+                Exploration Expedition
+              </button>
+            </>
+          )}
           <button 
             className="action-btn"
             onClick={() => {/* TODO: Show leaderboard */}}

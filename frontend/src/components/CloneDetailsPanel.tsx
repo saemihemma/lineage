@@ -94,39 +94,13 @@ export function CloneDetailsPanel({
               <div className="section-title">Expeditions:</div>
               {!appliedCloneId || appliedCloneId !== clone.id ? (
                 <div className="action-note warning-note">
-                  ⚠ Apply this clone first to enable expeditions
+                  ⚠ Apply this clone first to enable expeditions (shown in top bar)
                 </div>
               ) : (
                 <div className="action-note success-note">
-                  ✓ Clone applied - Expeditions ready
+                  ✓ Clone applied - Expeditions available in top bar
                 </div>
               )}
-              <div className="expedition-buttons">
-                <button
-                  className="action-button expedition-btn"
-                  onClick={() => onRunExpedition('MINING')}
-                  disabled={disabled || !appliedCloneId || appliedCloneId !== clone.id}
-                  title={appliedCloneId !== clone.id ? "Apply this clone first to run expeditions" : "Mining expeditions earn Tritanium and Metal Ore"}
-                >
-                  Mining Expedition
-                </button>
-                <button
-                  className="action-button expedition-btn"
-                  onClick={() => onRunExpedition('COMBAT')}
-                  disabled={disabled || !appliedCloneId || appliedCloneId !== clone.id}
-                  title={appliedCloneId !== clone.id ? "Apply this clone first to run expeditions" : "Combat expeditions earn Biomass and Synthetic materials"}
-                >
-                  Combat Expedition
-                </button>
-                <button
-                  className="action-button expedition-btn"
-                  onClick={() => onRunExpedition('EXPLORATION')}
-                  disabled={disabled || !appliedCloneId || appliedCloneId !== clone.id}
-                  title={appliedCloneId !== clone.id ? "Apply this clone first to run expeditions" : "Exploration expeditions earn mixed resources"}
-                >
-                  Exploration Expedition
-                </button>
-              </div>
             </div>
 
             <div className="action-section">

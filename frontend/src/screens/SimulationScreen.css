@@ -62,6 +62,19 @@
   opacity: 0.6;
 }
 
+.action-btn.expedition-top-btn {
+  background-color: #2a2a2a;
+  color: #ffffff;
+  border: 1px solid #444444;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.action-btn.expedition-top-btn:hover:not(:disabled) {
+  background-color: #3a3a3a;
+  border-color: #ff7a00;
+}
+
 .simulation-content {
   flex: 1;
   display: flex;
