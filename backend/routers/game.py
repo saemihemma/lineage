@@ -212,7 +212,7 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
         return True  # New session is valid
 
     # Parse updated_at timestamp
-    updated_at_str = row[0]
+    updated_at_str = row['updated_at']
     try:
         from datetime import datetime
         updated_at = datetime.fromisoformat(updated_at_str)
@@ -492,7 +492,7 @@ def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: 
         return None
     
     try:
-        data = json.loads(row[0])
+        data = json.loads(row['state_data'])
         state = dict_to_game_state(data)
         
         # Check and complete any finished tasks
@@ -537,7 +537,7 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
         )
         row = cursor.fetchone()
         if row:
-            existing_data = json.loads(row[0])
+            existing_data = json.loads(row['state_data'])
             existing_version = existing_data.get("version", 1)
             if existing_version != state.version:
                 logger.warning(
