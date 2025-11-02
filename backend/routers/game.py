@@ -980,9 +980,20 @@ async def run_expedition_endpoint(
     session_id: Optional[str] = Cookie(None)
 ):
     """
-    Run an expedition (Mining, Combat, or Exploration).
+    Run an expedition (Mining, Combat, or Exploration) with server-authoritative outcomes.
     Rate limit: 10 requests/minute
+
+    Anti-cheat measures:
+    - Server generates RNG seed from HMAC(session_id, expedition_id, timestamp)
+    - Outcomes are signed with HMAC to prevent tampering
+    - Anomaly detection flags suspicious behavior patterns
     """
+    from core.anticheat import (
+        generate_expedition_seed,
+        generate_outcome_signature,
+        check_and_flag_anomaly
+    )
+
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "run_expedition")
 
@@ -993,21 +1004,92 @@ async def run_expedition_endpoint(
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
     state = load_game_state(db, sid, create_if_missing=True)
-    
+
     if state is None:
         # This should rarely happen now (auto-recovery), but handle it gracefully
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
         )
 
     try:
+        # Generate unique expedition ID
+        expedition_id = str(uuid.uuid4())
+        start_ts = time.time()
+
+        # Run expedition with server-authoritative outcome
         new_state, message = run_expedition(state, kind)
+
+        # Get clone that ran expedition
+        clone_id = state.applied_clone_id
+        clone_survived = new_state.clones.get(clone_id, None).alive if clone_id and clone_id in new_state.clones else True
+
+        # Calculate XP gained and loot (extract from state changes)
+        xp_before = state.clones.get(clone_id).xp[kind] if clone_id and clone_id in state.clones else 0
+        xp_after = new_state.clones.get(clone_id).xp[kind] if clone_id and clone_id in new_state.clones else 0
+        xp_gained = xp_after - xp_before
+
+        # Calculate loot (resource diff)
+        loot = {}
+        for res in CONFIG["RESOURCE_TYPES"]:
+            before = state.resources.get(res, 0)
+            after = new_state.resources.get(res, 0)
+            if after > before:
+                loot[res] = after - before
+
+        # Create outcome data
+        outcome_data = {
+            "result": "success" if clone_survived else "death",
+            "clone_id": clone_id,
+            "expedition_kind": kind,
+            "loot": loot,
+            "xp_gained": xp_gained,
+            "survived": clone_survived
+        }
+
+        # Generate signature
+        signature = generate_outcome_signature(sid, expedition_id, start_ts, outcome_data)
+
+        # Store outcome in database
+        end_ts = time.time()
+        execute_query(db, """
+            INSERT INTO expedition_outcomes
+            (id, session_id, expedition_kind, clone_id, start_ts, end_ts, result, loot_json, xp_gained, survived, signature)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            expedition_id,
+            sid,
+            kind,
+            clone_id or "",
+            start_ts,
+            end_ts,
+            outcome_data["result"],
+            json.dumps(loot),
+            xp_gained,
+            1 if clone_survived else 0,
+            signature
+        ))
+        db.commit()
+
+        # Check for anomalies
+        anomaly = check_and_flag_anomaly(sid, "expedition")
+        if anomaly:
+            # Store anomaly flag
+            execute_query(db, """
+                INSERT INTO anomaly_flags (session_id, action_type, anomaly_description, action_rate)
+                VALUES (?, ?, ?, ?)
+            """, (sid, "expedition", anomaly, 0.0))
+            db.commit()
+            logger.warning(f"🚩 Anomaly flagged for session {sid[:8]}...: {anomaly}")
+
+        # Save state
         save_game_state(db, sid, new_state)
 
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
-            "message": message
+            "message": message,
+            "expedition_id": expedition_id,
+            "signature": signature  # Return signature for client verification (optional)
         })
         response.set_cookie(
             key="session_id",

@@ -138,10 +138,52 @@ class SQLiteAdapter(DatabaseAdapter):
         
         # Create index on updated_at for cleanup queries
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at 
+            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at
             ON game_states(updated_at)
         """)
-        
+
+        # Expedition outcomes table (anti-cheat)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expedition_outcomes (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                expedition_kind TEXT NOT NULL,
+                clone_id TEXT NOT NULL,
+                start_ts REAL NOT NULL,
+                end_ts REAL NOT NULL,
+                result TEXT NOT NULL,
+                loot_json TEXT,
+                xp_gained INTEGER DEFAULT 0,
+                survived BOOLEAN DEFAULT 1,
+                signature TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create index on session_id for queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_expedition_outcomes_session
+            ON expedition_outcomes(session_id, created_at DESC)
+        """)
+
+        # Anomaly flags table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anomaly_flags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                anomaly_description TEXT NOT NULL,
+                action_rate REAL,
+                flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create index on session_id for admin queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
+            ON anomaly_flags(session_id, flagged_at DESC)
+        """)
+
         conn.commit()
 
 
@@ -240,10 +282,52 @@ class PostgreSQLAdapter(DatabaseAdapter):
         
         # Create index on updated_at
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at 
+            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at
             ON game_states(updated_at)
         """)
-        
+
+        # Expedition outcomes table (anti-cheat)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expedition_outcomes (
+                id VARCHAR(255) PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL,
+                expedition_kind VARCHAR(50) NOT NULL,
+                clone_id VARCHAR(255) NOT NULL,
+                start_ts DOUBLE PRECISION NOT NULL,
+                end_ts DOUBLE PRECISION NOT NULL,
+                result VARCHAR(50) NOT NULL,
+                loot_json TEXT,
+                xp_gained INTEGER DEFAULT 0,
+                survived BOOLEAN DEFAULT TRUE,
+                signature VARCHAR(64) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create index on session_id for queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_expedition_outcomes_session
+            ON expedition_outcomes(session_id, created_at DESC)
+        """)
+
+        # Anomaly flags table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anomaly_flags (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(255) NOT NULL,
+                action_type VARCHAR(50) NOT NULL,
+                anomaly_description TEXT NOT NULL,
+                action_rate DOUBLE PRECISION,
+                flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Create index on session_id for admin queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
+            ON anomaly_flags(session_id, flagged_at DESC)
+        """)
+
         conn.commit()
 
 
