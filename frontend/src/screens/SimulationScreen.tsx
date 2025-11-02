@@ -262,24 +262,24 @@ export function SimulationScreen() {
               <button 
                 className="action-btn expedition-top-btn"
                 onClick={() => handleRunExpedition('MINING')}
-                disabled={isBusy}
-                title="Mining expeditions earn Tritanium and Metal Ore"
+                disabled={false}
+                title="Mining expeditions earn Tritanium and Metal Ore. Can run while gathering resources."
               >
                 Mining Expedition
               </button>
               <button 
                 className="action-btn expedition-top-btn"
                 onClick={() => handleRunExpedition('COMBAT')}
-                disabled={isBusy}
-                title="Combat expeditions earn Biomass and Synthetic materials"
+                disabled={false}
+                title="Combat expeditions earn Biomass and Synthetic materials. Can run while gathering resources."
               >
                 Combat Expedition
               </button>
               <button 
                 className="action-btn expedition-top-btn"
                 onClick={() => handleRunExpedition('EXPLORATION')}
-                disabled={isBusy}
-                title="Exploration expeditions earn mixed resources"
+                disabled={false}
+                title="Exploration expeditions earn mixed resources. Can run while gathering resources."
               >
                 Exploration Expedition
               </button>
