@@ -1,5 +1,8 @@
 # LINEAGE
 
+![Test Suite](https://github.com/saemihemma/lineage/actions/workflows/tests.yml/badge.svg?branch=web-version)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+
 A strategic simulation game about clone management, expeditions, and SELF evolution in the EVE Frontier universe.
 
 ## Overview
@@ -79,7 +82,36 @@ pip install -r requirements.txt
 
 ## Testing
 
-Run unit tests:
+### Backend Tests (pytest)
+
+Run all backend tests:
+```bash
+python -m pytest backend/tests/ -v
+```
+
+Run specific test suites:
+```bash
+# Golden Path smoke test (critical user journey)
+python -m pytest backend/tests/test_smoke.py -v
+
+# Property-based tests (timer validation invariants)
+python -m pytest backend/tests/test_property_timers.py -v
+
+# Anti-cheat tests (HMAC signing, anomaly detection)
+python -m pytest backend/tests/test_anticheat.py -v
+
+# CSRF protection tests
+python -m pytest backend/tests/test_csrf.py -v
+```
+
+Run with coverage:
+```bash
+python -m pytest backend/tests/ --cov=backend --cov=core --cov-report=term-missing
+```
+
+### Legacy Unit Tests
+
+Run legacy unit tests:
 ```bash
 python scripts/verify.py --tests-only
 ```
@@ -88,6 +120,11 @@ Or manually:
 ```bash
 python -m unittest discover -v
 ```
+
+### Continuous Integration
+
+All tests run automatically on push and pull requests via GitHub Actions.
+See [.github/workflows/tests.yml](.github/workflows/tests.yml) for CI configuration.
 
 ## Documentation
 

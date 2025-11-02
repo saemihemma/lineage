@@ -57,6 +57,7 @@ logs/
 .coverage
 htmlcov/
 .tox/
+.hypothesis/  # Hypothesis property testing cache
 
 # Temporary files
 *.tmp
