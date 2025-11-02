@@ -19,7 +19,7 @@ import os
 import logging
 import time
 
-from routers import leaderboard, telemetry, game
+from routers import leaderboard, telemetry, game, config
 from database import get_db
 from middleware.csrf import CSRFMiddleware
 
@@ -157,6 +157,7 @@ app.add_middleware(
 app.include_router(leaderboard.router)
 app.include_router(telemetry.router)
 app.include_router(game.router)
+app.include_router(config.router)
 
 # Mount static files for SPA (frontend build)
 # This serves JS, CSS, images, and other static assets from frontend/dist
