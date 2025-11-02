@@ -51,7 +51,8 @@ export function LeaderboardDialog({ isOpen, onClose, currentState }: Leaderboard
     let clonesUploaded = 0;
 
     Object.values(currentState.clones || {}).forEach((clone: any) => {
-      totalExpeditions += (clone.xp?.MINING || 0) + (clone.xp?.COMBAT || 0) + (clone.xp?.EXPLORATION || 0);
+      // Count actual expeditions (survived_runs), not XP
+      totalExpeditions += (clone.survived_runs || 0);
       if (clone.uploaded) {
         clonesUploaded++;
       }
