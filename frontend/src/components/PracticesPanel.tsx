@@ -1,20 +1,18 @@
 /**
  * Practices Panel - shows LINEAGE practice XP progress
  */
+import type { GameState } from '../types/game';
 import './PracticesPanel.css';
 
 interface PracticesPanelProps {
   practicesXp: Record<string, number>;
+  practiceLevels: GameState['practice_levels'];
 }
 
-const PRACTICE_TRACKS = ['Kinetic', 'Cognitive', 'Constructive'];
+const PRACTICE_TRACKS = ['Kinetic', 'Cognitive', 'Constructive'] as const;
 const XP_PER_LEVEL = 100;
 
-export function PracticesPanel({ practicesXp }: PracticesPanelProps) {
-  const calculateLevel = (xp: number): number => {
-    return Math.floor(xp / XP_PER_LEVEL);
-  };
-
+export function PracticesPanel({ practicesXp, practiceLevels }: PracticesPanelProps) {
   const calculateProgress = (xp: number): number => {
     return (xp % XP_PER_LEVEL);
   };
@@ -28,7 +26,7 @@ export function PracticesPanel({ practicesXp }: PracticesPanelProps) {
       <div className="panel-content">
         {PRACTICE_TRACKS.map((track) => {
           const xp = practicesXp[track] || 0;
-          const level = calculateLevel(xp);
+          const level = practiceLevels[track];  // Use backend-calculated level
           const progress = calculateProgress(xp);
           const progressPercent = (progress / XP_PER_LEVEL) * 100;
 

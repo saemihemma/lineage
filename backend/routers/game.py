@@ -14,6 +14,8 @@ if str(_project_root) not in sys.path:
 import json
 import uuid
 import time
+import logging
+import os
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Cookie, Request
 from fastapi.responses import JSONResponse
@@ -26,11 +28,191 @@ from game.rules import (
     upload_clone, gather_resource
 )
 from core.models import Clone
-from core.config import CONFIG
+from core.config import CONFIG, RESOURCE_TYPES
 from core.state_manager import get_latest_version
 from core.game_logic import perk_constructive_craft_time_mult
 
 router = APIRouter(prefix="/api/game", tags=["game"])
+logger = logging.getLogger(__name__)
+
+# Environment check
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
+# Rate limiting storage - session-based (more accurate than IP)
+_rate_limit_store: Dict[str, Dict[str, list[float]]] = {}
+
+# Session expiration time (24 hours)
+SESSION_EXPIRY = 24 * 60 * 60
+
+# Rate limit configurations (requests per minute)
+RATE_LIMITS = {
+    "get_state": 60,
+    "save_state": 30,
+    "task_status": 120,
+    "gather_resource": 20,
+    "build_womb": 5,
+    "grow_clone": 10,
+    "apply_clone": 10,
+    "run_expedition": 10,
+    "upload_clone": 10,
+}
+
+# Valid input values
+VALID_RESOURCES = set(RESOURCE_TYPES)
+VALID_CLONE_KINDS = {"BASIC", "MINER", "VOLATILE"}
+VALID_EXPEDITION_KINDS = {"MINING", "COMBAT", "EXPLORATION"}
+
+
+def check_rate_limit(session_id: str, endpoint: str, limit: int) -> tuple[bool, Optional[int]]:
+    """
+    Check if session is within rate limit for endpoint.
+    Returns (is_allowed, retry_after_seconds).
+    """
+    now = time.time()
+    window = 60  # 1 minute window
+
+    # Initialize session storage
+    if session_id not in _rate_limit_store:
+        _rate_limit_store[session_id] = {}
+
+    # Initialize endpoint storage
+    if endpoint not in _rate_limit_store[session_id]:
+        _rate_limit_store[session_id][endpoint] = []
+
+    # Clean old entries
+    _rate_limit_store[session_id][endpoint] = [
+        t for t in _rate_limit_store[session_id][endpoint]
+        if now - t < window
+    ]
+
+    # Check limit
+    if len(_rate_limit_store[session_id][endpoint]) >= limit:
+        # Calculate retry-after based on oldest request
+        oldest = _rate_limit_store[session_id][endpoint][0]
+        retry_after = int(window - (now - oldest)) + 1
+        logger.warning(f"Rate limit exceeded for session {session_id[:8]}... on {endpoint}")
+        return False, retry_after
+
+    # Record request
+    _rate_limit_store[session_id][endpoint].append(now)
+    return True, None
+
+
+def enforce_rate_limit(session_id: str, endpoint: str):
+    """Enforce rate limit, raise HTTPException if exceeded."""
+    limit = RATE_LIMITS.get(endpoint, 60)
+    allowed, retry_after = check_rate_limit(session_id, endpoint, limit)
+
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)}
+        )
+
+
+def validate_resource(resource: str) -> str:
+    """Validate and sanitize resource input."""
+    if not resource or not isinstance(resource, str):
+        raise ValueError("Resource must be a non-empty string")
+
+    resource = resource.strip()
+
+    if resource not in VALID_RESOURCES:
+        raise ValueError(f"Invalid resource. Must be one of: {', '.join(VALID_RESOURCES)}")
+
+    return resource
+
+
+def validate_clone_kind(kind: str) -> str:
+    """Validate and sanitize clone kind input."""
+    if not kind or not isinstance(kind, str):
+        raise ValueError("Clone kind must be a non-empty string")
+
+    kind = kind.strip().upper()
+
+    if kind not in VALID_CLONE_KINDS:
+        raise ValueError(f"Invalid clone kind. Must be one of: {', '.join(VALID_CLONE_KINDS)}")
+
+    return kind
+
+
+def validate_expedition_kind(kind: str) -> str:
+    """Validate and sanitize expedition kind input."""
+    if not kind or not isinstance(kind, str):
+        raise ValueError("Expedition kind must be a non-empty string")
+
+    kind = kind.strip().upper()
+
+    if kind not in VALID_EXPEDITION_KINDS:
+        raise ValueError(f"Invalid expedition kind. Must be one of: {', '.join(VALID_EXPEDITION_KINDS)}")
+
+    return kind
+
+
+def validate_clone_id(clone_id: str) -> str:
+    """Validate and sanitize clone ID input."""
+    if not clone_id or not isinstance(clone_id, str):
+        raise ValueError("Clone ID must be a non-empty string")
+
+    clone_id = clone_id.strip()
+
+    # Check for basic sanity (alphanumeric, dashes, underscores)
+    if not all(c.isalnum() or c in '-_' for c in clone_id):
+        raise ValueError("Invalid clone ID format")
+
+    if len(clone_id) > 100:
+        raise ValueError("Clone ID too long")
+
+    return clone_id
+
+
+def sanitize_error_message(error: Exception) -> str:
+    """Sanitize error messages for production."""
+    if IS_PRODUCTION:
+        # Generic error messages in production
+        if isinstance(error, ValueError):
+            return "Invalid input provided"
+        elif isinstance(error, RuntimeError):
+            return "Operation failed. Please try again"
+        else:
+            return "An error occurred"
+    else:
+        # Detailed errors in development
+        return str(error)
+
+
+def check_session_expiry(db: sqlite3.Connection, session_id: str) -> bool:
+    """Check if session has expired. Returns True if valid, False if expired."""
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT updated_at FROM game_states WHERE session_id = ?",
+        (session_id,)
+    )
+    row = cursor.fetchone()
+
+    if row is None:
+        return True  # New session is valid
+
+    # Parse updated_at timestamp
+    updated_at_str = row[0]
+    try:
+        from datetime import datetime
+        updated_at = datetime.fromisoformat(updated_at_str)
+        now = datetime.utcnow()
+        age_seconds = (now - updated_at).total_seconds()
+
+        if age_seconds > SESSION_EXPIRY:
+            # Session expired, clean it up
+            cursor.execute("DELETE FROM game_states WHERE session_id = ?", (session_id,))
+            db.commit()
+            logger.info(f"Cleaned up expired session {session_id[:8]}...")
+            return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Error checking session expiry: {e}")
+        return True  # Allow on error
 
 
 def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
@@ -138,10 +320,16 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
         "rng_seed": state.rng_seed,
         "soul_percent": state.soul_percent,
         "soul_xp": state.soul_xp,
+        "soul_level": state.soul_level(),  # Add calculated soul level
         "assembler_built": state.assembler_built,
         "resources": state.resources,
         "applied_clone_id": state.applied_clone_id,
         "practices_xp": state.practices_xp,
+        "practice_levels": {  # Add calculated practice levels
+            "Kinetic": state.practice_level("Kinetic"),
+            "Cognitive": state.practice_level("Cognitive"),
+            "Constructive": state.practice_level("Constructive")
+        },
         "last_saved_ts": state.last_saved_ts,
         "self_name": state.self_name,
         "active_tasks": getattr(state, "active_tasks", {}),
@@ -219,12 +407,46 @@ def load_game_state(db: sqlite3.Connection, session_id: str) -> Optional[GameSta
     return state
 
 
-def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState):
-    """Save game state to database"""
+def save_game_state(db: sqlite3.Connection, session_id: str, state: GameState, check_version: bool = False):
+    """
+    Save game state to database with optional optimistic locking.
+
+    Args:
+        db: Database connection
+        session_id: Session identifier
+        state: Game state to save
+        check_version: If True, verify version matches before saving (prevents conflicts)
+
+    Raises:
+        RuntimeError: If check_version is True and state version doesn't match database
+    """
     cursor = db.cursor()
+
+    if check_version:
+        # Optimistic locking: check if version matches
+        cursor.execute(
+            "SELECT state_data FROM game_states WHERE session_id = ?",
+            (session_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            existing_data = json.loads(row[0])
+            existing_version = existing_data.get("version", 1)
+            if existing_version != state.version:
+                logger.warning(
+                    f"State conflict for session {session_id[:8]}...: "
+                    f"expected v{state.version}, found v{existing_version}"
+                )
+                raise RuntimeError(
+                    "State conflict detected. Your game state may have been updated in another tab. "
+                    "Please refresh the page."
+                )
+
+    # Increment version on save to track changes
+    state.version += 1
     state_dict = game_state_to_dict(state)
     state_json = json.dumps(state_dict)
-    
+
     cursor.execute("""
         INSERT INTO game_states (session_id, state_data, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -244,9 +466,16 @@ async def get_game_state(
     """
     Get current game state.
     Creates new state if none exists.
+    Rate limit: 60 requests/minute
     """
     sid = get_session_id(session_id)
-    
+    enforce_rate_limit(sid, "get_state")
+
+    # Check session expiry
+    if not check_session_expiry(db, sid):
+        # Session expired, create new one
+        sid = str(uuid.uuid4())
+
     state = load_game_state(db, sid)
     if state is None:
         # Create new game state
@@ -255,14 +484,21 @@ async def get_game_state(
         state.assembler_built = False
         state.last_saved_ts = time.time()
         save_game_state(db, sid, state)
-    
+
     # Check for completed tasks
     state = check_and_complete_tasks(state)
     if state.active_tasks != (state.active_tasks if True else {}):
         save_game_state(db, sid, state)
-    
+
     response = JSONResponse(content=game_state_to_dict(state))
-    response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+    response.set_cookie(
+        key="session_id",
+        value=sid,
+        httponly=True,
+        samesite="lax",
+        secure=IS_PRODUCTION,
+        max_age=SESSION_EXPIRY
+    )
     return response
 
 
@@ -272,33 +508,38 @@ async def get_task_status(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Get current task status (for polling)"""
+    """
+    Get current task status (for polling).
+    Rate limit: 120 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "task_status")
+
     state = load_game_state(db, sid)
-    
+
     if state is None or not state.active_tasks:
         return JSONResponse(content={"active": False, "task": None})
-    
+
     # Get first (and should be only) active task
     task_id = list(state.active_tasks.keys())[0]
     task_data = state.active_tasks[task_id]
-    
+
     current_time = time.time()
     start_time = task_data.get('start_time', 0)
     duration = task_data.get('duration', 0)
     elapsed = current_time - start_time
     remaining = max(0, duration - elapsed)
     progress = min(100, int((elapsed / duration * 100)) if duration > 0 else 0)
-    
+
     # Check if complete
     is_complete = current_time >= start_time + duration
-    
+
     if is_complete:
         # Auto-complete
         state = check_and_complete_tasks(state)
         save_game_state(db, sid, state)
         return JSONResponse(content={"active": False, "task": None, "completed": True})
-    
+
     return JSONResponse(content={
         "active": True,
         "task": {
@@ -320,19 +561,33 @@ async def save_game_state_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Save game state"""
+    """
+    Save game state.
+    Rate limit: 30 requests/minute
+    Max request size: 1MB
+    """
     sid = get_session_id(session_id)
-    
+    enforce_rate_limit(sid, "save_state")
+
     try:
         state = dict_to_game_state(state_data)
         state.last_saved_ts = time.time()
         save_game_state(db, sid, state)
-        
+
         response = JSONResponse(content={"status": "saved"})
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid game state: {str(e)}")
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error saving game state for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/gather-resource")
@@ -342,38 +597,56 @@ async def gather_resource_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Gather a resource (starts timer, completes immediately but UI waits)"""
+    """
+    Gather a resource (starts timer, completes immediately but UI waits).
+    Rate limit: 20 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "gather_resource")
+
+    # Validate input
+    try:
+        resource = validate_resource(resource)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(e))
+
     state = load_game_state(db, sid)
-    
+
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
-    
+
     # Check for active tasks
     if state.active_tasks:
         raise HTTPException(status_code=400, detail="A task is already in progress")
-    
+
     try:
         # Start task timer
         new_state, task_id = start_task(state, "gather_resource", resource=resource)
-        
+
         # Actually perform the gather (happens immediately)
         final_state, amount, message = gather_resource(new_state, resource)
-        
-        # Remove task since it's instant (just for consistency, we could keep it for UI feedback)
-        # Actually, let's keep it so frontend can show progress
+
         save_game_state(db, sid, final_state)
-        
+
         response = JSONResponse(content={
             "state": game_state_to_dict(final_state),
             "message": message,
             "amount": amount,
             "task_id": task_id
         })
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error gathering resource for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/build-womb")
@@ -382,35 +655,49 @@ async def build_womb_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Build the Womb (assembler) - starts timer"""
+    """
+    Build the Womb (assembler) - starts timer.
+    Rate limit: 5 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "build_womb")
+
     state = load_game_state(db, sid)
-    
+
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
-    
+
     # Check for active tasks
     if state.active_tasks:
         raise HTTPException(status_code=400, detail="A task is already in progress")
-    
+
     try:
         # Actually build (happens immediately)
         new_state, message = build_womb(state)
-        
+
         # Start timer task
         final_state, task_id = start_task(new_state, "build_womb")
-        
+
         save_game_state(db, sid, final_state)
-        
+
         response = JSONResponse(content={
             "state": game_state_to_dict(final_state),
             "message": message,
             "task_id": task_id
         })
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error building womb for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/grow-clone")
@@ -420,26 +707,37 @@ async def grow_clone_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Grow a new clone - starts timer"""
+    """
+    Grow a new clone - starts timer.
+    Rate limit: 10 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "grow_clone")
+
+    # Validate input
+    try:
+        kind = validate_clone_kind(kind)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(e))
+
     state = load_game_state(db, sid)
-    
+
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
-    
+
     # Check for active tasks
     if state.active_tasks:
         raise HTTPException(status_code=400, detail="A task is already in progress")
-    
+
     try:
         # Actually grow (happens immediately)
         new_state, clone, soul_split, message = grow_clone(state, kind)
-        
+
         # Start timer task
         final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind)
-        
+
         save_game_state(db, sid, final_state)
-        
+
         response = JSONResponse(content={
             "state": game_state_to_dict(final_state),
             "clone": {
@@ -455,10 +753,19 @@ async def grow_clone_endpoint(
             "message": message,
             "task_id": task_id
         })
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error growing clone for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/apply-clone")
@@ -468,25 +775,45 @@ async def apply_clone_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Apply a clone (activate it)"""
+    """
+    Apply a clone (activate it).
+    Rate limit: 10 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "apply_clone")
+
+    # Validate input
+    try:
+        clone_id = validate_clone_id(clone_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(e))
+
     state = load_game_state(db, sid)
-    
+
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
-    
+
     try:
         new_state, message = apply_clone(state, clone_id)
         save_game_state(db, sid, new_state)
-        
+
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
             "message": message
         })
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error applying clone for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/run-expedition")
@@ -496,25 +823,45 @@ async def run_expedition_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Run an expedition (Mining, Combat, or Exploration)"""
+    """
+    Run an expedition (Mining, Combat, or Exploration).
+    Rate limit: 10 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "run_expedition")
+
+    # Validate input
+    try:
+        kind = validate_expedition_kind(kind)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(e))
+
     state = load_game_state(db, sid)
-    
+
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
-    
+
     try:
         new_state, message = run_expedition(state, kind)
         save_game_state(db, sid, new_state)
-        
+
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
             "message": message
         })
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error running expedition for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/upload-clone")
@@ -524,22 +871,42 @@ async def upload_clone_endpoint(
     db: sqlite3.Connection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
-    """Upload a clone to SELF"""
+    """
+    Upload a clone to SELF.
+    Rate limit: 10 requests/minute
+    """
     sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "upload_clone")
+
+    # Validate input
+    try:
+        clone_id = validate_clone_id(clone_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(e))
+
     state = load_game_state(db, sid)
-    
+
     if state is None:
         raise HTTPException(status_code=404, detail="Game state not found")
-    
+
     try:
         new_state, message = upload_clone(state, clone_id)
         save_game_state(db, sid, new_state)
-        
+
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
             "message": message
         })
-        response.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error uploading clone for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)

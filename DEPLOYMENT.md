@@ -86,10 +86,97 @@ Or edit `core/api_config.py` directly.
 
 ### Security
 
-- **CORS**: Update `backend/main.py` to restrict allowed origins
-- **HTTPS**: Always use HTTPS in production
-- **API Keys**: Consider adding authentication for leaderboard submissions
-- **Rate Limiting**: Current implementation uses in-memory rate limiting. For production, use Redis.
+LINEAGE backend includes comprehensive security hardening to prevent abuse and ensure stability.
+
+#### Rate Limiting
+
+Session-based rate limiting is implemented on all game endpoints to prevent abuse:
+
+**Game API Endpoints:**
+- `GET /api/game/state` - 60 requests/minute (state retrieval)
+- `POST /api/game/state` - 30 requests/minute (state saving)
+- `GET /api/game/tasks/status` - 120 requests/minute (polling endpoint)
+- `POST /api/game/gather-resource` - 20 requests/minute
+- `POST /api/game/build-womb` - 5 requests/minute
+- `POST /api/game/grow-clone` - 10 requests/minute
+- `POST /api/game/apply-clone` - 10 requests/minute
+- `POST /api/game/run-expedition` - 10 requests/minute
+- `POST /api/game/upload-clone` - 10 requests/minute
+
+**Other Endpoints:**
+- Leaderboard: 10 requests/minute
+- Telemetry: 50 requests/minute
+
+Rate limits are enforced per session ID, providing more accurate tracking than IP-based limiting.
+Exceeded limits return HTTP 429 with a `Retry-After` header.
+
+**Note:** Current implementation uses in-memory rate limiting. For multi-instance production deployments, consider using Redis for distributed rate limiting.
+
+#### Security Headers
+
+All responses include security headers to protect against common web vulnerabilities:
+
+- `X-Content-Type-Options: nosniff` - Prevents MIME-type sniffing
+- `X-Frame-Options: DENY` - Prevents clickjacking attacks
+- `X-XSS-Protection: 1; mode=block` - Enables XSS protection
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` - Enforces HTTPS (production only)
+- `Content-Security-Policy` - Restricts resource loading to prevent XSS
+- `Referrer-Policy: strict-origin-when-cross-origin` - Controls referrer information
+- `Permissions-Policy` - Restricts browser features
+
+#### Request Size Limits
+
+Request body sizes are limited to prevent DoS attacks:
+
+- **State saving** (`POST /api/game/state`): Maximum 1MB
+- **All other endpoints**: Maximum 10KB
+
+Requests exceeding these limits return HTTP 413 (Payload Too Large).
+
+#### Input Validation
+
+All user inputs are validated and sanitized:
+
+- **Resource types**: Validated against allowed list (Tritanium, Metal Ore, Biomass, Synthetic, Organic, Shilajit)
+- **Clone kinds**: Validated against allowed list (BASIC, MINER, VOLATILE)
+- **Expedition types**: Validated against allowed list (MINING, COMBAT, EXPLORATION)
+- **Clone IDs**: Sanitized to prevent injection attacks, max length 100 characters
+- **SQL injection prevention**: All database queries use parameterized statements
+- **XSS prevention**: All inputs are sanitized before processing
+
+#### Session Security
+
+Sessions are managed securely with the following features:
+
+- **Session expiration**: 24 hours of inactivity
+- **HttpOnly cookies**: Prevents JavaScript access to session cookies
+- **SameSite attribute**: Set to `lax` to prevent CSRF attacks
+- **Secure flag**: Enabled in production (HTTPS only)
+- **Automatic cleanup**: Expired sessions are automatically removed from database
+
+#### Error Message Sanitization
+
+Error messages are sanitized to prevent information leakage:
+
+- **Production mode**: Generic error messages only
+- **Development mode**: Detailed error messages for debugging
+- **No stack traces**: Never exposed to clients in production
+- **Logging**: All errors are logged server-side for monitoring
+
+#### CORS Configuration
+
+CORS is configured based on environment:
+
+- **Production**: Restricted to domains specified in `ALLOWED_ORIGINS` environment variable
+- **Development**: Allows localhost on common development ports (3000, 5173, 8080)
+- **Methods**: Restricted to GET, POST, OPTIONS only
+- **Credentials**: Enabled for session cookie support
+
+#### Additional Security Measures
+
+- **Environment-based configuration**: Security settings adjust based on `ENVIRONMENT` variable
+- **Comprehensive logging**: All security events (rate limit violations, invalid inputs) are logged
+- **Database security**: All queries use parameterized statements to prevent SQL injection
 
 ### Database
 
@@ -109,13 +196,51 @@ Or edit `core/api_config.py` directly.
 - `DATABASE_URL`: Database connection string
 - `PORT`: Server port (default: 8000)
 - `HOST`: Server host (default: 0.0.0.0)
+- `ENVIRONMENT`: Environment mode - `production` or `development` (default: `development`)
+  - **Production mode**: Enables HSTS, secure cookies, sanitized errors
+  - **Development mode**: Detailed error messages, relaxed CORS
+- `ALLOWED_ORIGINS`: Comma-separated list of allowed CORS origins (production only)
+  - Example: `https://yourdomain.com,https://www.yourdomain.com`
+  - Required in production for security
 
 **Client:**
 - `LINEAGE_API_URL`: Backend API URL
 - `LINEAGE_API_ENABLED`: Enable/disable API (true/false)
 - `LINEAGE_API_TIMEOUT`: Request timeout (seconds)
 
+**Security Configuration:**
+
+To enable production security features, set these environment variables:
+
+```bash
+export ENVIRONMENT=production
+export ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+```
+
+Or in your hosting platform's environment settings:
+- Railway: Settings → Variables
+- Render: Environment → Environment Variables
+- Fly.io: `fly secrets set ENVIRONMENT=production`
+
 ## Testing
+
+### Run Security Tests
+
+LINEAGE includes comprehensive security tests covering rate limiting, input validation, session security, and more.
+
+```bash
+cd backend
+pytest tests/test_security.py -v
+```
+
+The security test suite includes 20+ tests covering:
+- Rate limiting enforcement on all endpoints
+- Input validation and sanitization
+- Security headers presence
+- Request size limits
+- Session security (HttpOnly, SameSite, isolation)
+- Error message sanitization
+- CORS configuration
 
 ### Test Backend API
 
@@ -136,6 +261,15 @@ curl -X POST http://localhost:8000/api/leaderboard/submit \
     "clones_uploaded": 3,
     "total_expeditions": 10
   }'
+
+# Test rate limiting (should fail after 60 requests)
+for i in {1..65}; do
+  curl -b cookies.txt -c cookies.txt http://localhost:8000/api/game/state
+  echo "Request $i"
+done
+
+# Test security headers
+curl -I http://localhost:8000/api/health | grep -E "X-|Content-Security"
 ```
 
 ### Test Game Client

@@ -17,10 +17,16 @@ export interface GameState {
   rng_seed: number | null;
   soul_percent: number;
   soul_xp: number;
+  soul_level: number;  // Calculated on backend
   assembler_built: boolean;
   resources: Record<string, number>;
   applied_clone_id: string;
   practices_xp: Record<string, number>;
+  practice_levels: {  // Calculated on backend
+    Kinetic: number;
+    Cognitive: number;
+    Constructive: number;
+  };
   last_saved_ts: number;
   self_name: string;
   clones: Record<string, Clone>;

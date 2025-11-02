@@ -9,10 +9,9 @@ interface CostsPanelProps {
 }
 
 export function CostsPanel({ state }: CostsPanelProps) {
-  // TODO: Calculate actual costs based on soul level and perks
-  // For now, show placeholder costs
-  const soulLevel = calculateSoulLevel(state.soul_xp);
-  
+  // Use soul_level from backend (single source of truth)
+  const soulLevel = state.soul_level;
+
   const wombCost = calculateWombCost(soulLevel);
   const cloneCosts = calculateCloneCosts(soulLevel);
 
@@ -53,16 +52,6 @@ export function CostsPanel({ state }: CostsPanelProps) {
       </div>
     </div>
   );
-}
-
-function calculateSoulLevel(soulXp: number): number {
-  let level = 1;
-  let xpNeeded = 0;
-  while (soulXp >= xpNeeded) {
-    level++;
-    xpNeeded += 100 * (level - 1);
-  }
-  return level - 1;
 }
 
 function calculateWombCost(level: number): Record<string, number> {

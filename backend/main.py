@@ -9,11 +9,14 @@ project_root = backend_dir.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import Headers
 import os
 import logging
+import time
 
 from routers import leaderboard, telemetry, game
 from database import get_db
@@ -22,10 +25,84 @@ from database import get_db
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Environment check
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
+# Request size limits (in bytes)
+MAX_REQUEST_SIZE = {
+    "default": 10 * 1024,  # 10KB for most endpoints
+    "state": 1 * 1024 * 1024,  # 1MB for state saving
+}
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses"""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # HSTS (only in production with HTTPS)
+        if IS_PRODUCTION:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Content Security Policy
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none';"
+        )
+        response.headers["Content-Security-Policy"] = csp
+
+        # Additional security headers
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+        return response
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Limit request body size to prevent DoS attacks"""
+
+    async def dispatch(self, request: Request, call_next):
+        # Get content length
+        content_length = request.headers.get("content-length")
+
+        if content_length:
+            content_length = int(content_length)
+
+            # Determine size limit based on endpoint
+            if "/api/game/state" in request.url.path and request.method == "POST":
+                max_size = MAX_REQUEST_SIZE["state"]
+            else:
+                max_size = MAX_REQUEST_SIZE["default"]
+
+            # Check if request is too large
+            if content_length > max_size:
+                logger.warning(
+                    f"Request too large: {content_length} bytes from {request.client.host} "
+                    f"to {request.url.path}"
+                )
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body too large. Maximum size: {max_size} bytes"}
+                )
+
+        return await call_next(request)
+
+
 # Create FastAPI app
 app = FastAPI(
     title="LINEAGE API",
-    description="Backend API for LINEAGE game - leaderboard and telemetry",
+    description="Backend API for LINEAGE game - leaderboard, telemetry, and gameplay",
     version="1.0.0"
 )
 
@@ -57,6 +134,10 @@ def get_allowed_origins() -> list:
         ]
 
 allowed_origins = get_allowed_origins()
+
+# Add security middleware (order matters - security headers should be last in chain)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS middleware
 app.add_middleware(
@@ -103,11 +184,28 @@ async def health_check():
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """Global exception handler"""
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
+    """
+    Global exception handler - sanitizes errors in production.
+    """
+    # Log the actual error for debugging
+    logger.error(f"Unhandled exception on {request.url.path}: {str(exc)}", exc_info=True)
+
+    # Return sanitized error message
+    if IS_PRODUCTION:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"}
+        )
+    else:
+        # Include error details in development
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Internal server error",
+                "error": str(exc),
+                "type": type(exc).__name__
+            }
+        )
 
 
 if __name__ == "__main__":
