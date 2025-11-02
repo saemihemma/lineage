@@ -168,9 +168,28 @@ def validate_clone_id(clone_id: str) -> str:
 
 
 def sanitize_error_message(error: Exception) -> str:
-    """Sanitize error messages for production."""
+    """Sanitize error messages for production, but preserve resource error details."""
+    error_str = str(error)
+    
+    # Always preserve resource error messages (they contain useful info about missing materials)
+    # These messages come from format_resource_error() and look like:
+    # "Insufficient resources for Womb.\nMissing: Tritanium: 50/100, Metal Ore: 20/40"
+    if "Insufficient resources" in error_str or "Missing:" in error_str:
+        return error_str
+    
+    # Always preserve other game logic errors that are user-friendly
+    if any(phrase in error_str for phrase in [
+        "Build the Womb first",
+        "Insufficient soul integrity",
+        "Clone unavailable",
+        "Cannot apply an uploaded clone",
+        "No clone applied to the spaceship",
+        "A task is already in progress"
+    ]):
+        return error_str
+    
     if IS_PRODUCTION:
-        # Generic error messages in production
+        # Generic error messages in production for unknown errors
         if isinstance(error, ValueError):
             return "Invalid input provided"
         elif isinstance(error, RuntimeError):
@@ -179,7 +198,7 @@ def sanitize_error_message(error: Exception) -> str:
             return "An error occurred"
     else:
         # Detailed errors in development
-        return str(error)
+        return error_str
 
 
 def check_session_expiry(db: sqlite3.Connection, session_id: str) -> bool:
