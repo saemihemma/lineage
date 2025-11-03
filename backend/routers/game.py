@@ -39,6 +39,40 @@ IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 # Rate limiting storage - session-based (more accurate than IP)
 _rate_limit_store: Dict[str, Dict[str, list[float]]] = {}
 
+
+def set_session_cookie(response: JSONResponse, session_id: str, cookie_name: str = "session_id"):
+    """
+    Helper to set session cookie with consistent settings.
+    Handles Railway/production cookie requirements.
+    
+    For Railway: May need SameSite=None with Secure=True if behind proxy.
+    SameSite=None REQUIRES Secure=True (browser security requirement).
+    """
+    # Check for Railway-specific environment variable to use SameSite=None
+    use_samesite_none = os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production" or \
+                       os.getenv("USE_SAMESITE_NONE", "false").lower() == "true"
+    
+    # For Railway/production with potential proxy: try SameSite=None
+    # SameSite=None REQUIRES Secure=True (browser security)
+    if IS_PRODUCTION and use_samesite_none:
+        same_site_value = "none"
+        secure_value = True  # Required when SameSite=None
+        logger.info(f"🍪 Railway mode: Setting cookie {cookie_name} with SameSite=None, Secure=True")
+    else:
+        same_site_value = "lax"
+        secure_value = IS_PRODUCTION  # True in production (HTTPS), False in dev (HTTP)
+        logger.debug(f"🍪 Setting cookie {cookie_name}: same_site={same_site_value}, secure={secure_value}, httponly=True")
+    
+    response.set_cookie(
+        key=cookie_name,
+        value=session_id,
+        httponly=True,
+        samesite=same_site_value,
+        secure=secure_value,
+        max_age=SESSION_EXPIRY,
+        path="/"  # Explicit path
+    )
+
 # Session expiration time (24 hours)
 SESSION_EXPIRY = 24 * 60 * 60
 
@@ -362,7 +396,7 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
         return True  # Allow on error - fail open to prevent breaking the game
 
 
-def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
+def get_session_id(session_id: Optional[str] = Cookie(None), request: Optional[Request] = None) -> str:
     """
     Get or create session ID from cookie.
     Note: Caller must ensure cookie is set in response if new session is created.
@@ -370,7 +404,11 @@ def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
     """
     if not session_id:
         session_id = str(uuid.uuid4())
-        logger.info(f"🆕 New session created: {session_id[:8]}...")
+        # Log more details about why new session was created
+        cookie_header = request.headers.get("Cookie", "") if request else "N/A"
+        logger.warning(f"🆕 New session created: {session_id[:8]}... (Cookie header present: {bool(cookie_header)}, length: {len(cookie_header)})")
+        if request:
+            logger.debug(f"   Request headers: Cookie={cookie_header[:100]}...")
     else:
         logger.debug(f"📋 Existing session: {session_id[:8]}...")
     return session_id
@@ -937,7 +975,7 @@ async def get_game_state(
     """
     from core.csrf import generate_csrf_cookie_value
 
-    sid = get_session_id(session_id)
+    sid = get_session_id(session_id, request)
     logger.info(f"📥 GET /state - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
     enforce_rate_limit(sid, "get_state")
 
@@ -1014,23 +1052,17 @@ async def get_game_state(
     response = JSONResponse(content=game_state_to_dict(state))
 
     # Set session cookie
-    response.set_cookie(
-        key="session_id",
-        value=sid,
-        httponly=True,
-        samesite="lax",
-        secure=IS_PRODUCTION,
-        max_age=SESSION_EXPIRY
-    )
+    set_session_cookie(response, sid, "session_id")
 
     # Set CSRF token cookie (NOT HttpOnly, so client can read it for headers)
     response.set_cookie(
         key="csrf_token",
         value=csrf_token,
         httponly=False,  # Client needs to read this for X-CSRF-Token header
-        samesite="lax",
+        samesite="lax" if IS_PRODUCTION else "lax",
         secure=IS_PRODUCTION,
-        max_age=SESSION_EXPIRY
+        max_age=SESSION_EXPIRY,
+        path="/"
     )
 
     return response
@@ -1150,14 +1182,7 @@ async def get_task_status(
         "completed": len(completed_tasks) > 0
     })
     # Always set session cookie to ensure persistence
-    response.set_cookie(
-        key="session_id",
-        value=sid,
-        httponly=True,
-        samesite="lax",
-        secure=IS_PRODUCTION,
-        max_age=SESSION_EXPIRY
-    )
+    set_session_cookie(response, sid, "session_id")
     return response
 
 
@@ -1325,7 +1350,7 @@ async def build_womb_endpoint(
     Build the Womb (assembler) - starts timer.
     Rate limit: 5 requests/minute
     """
-    sid = get_session_id(session_id)
+    sid = get_session_id(session_id, request)
     logger.info(f"🔨 POST /build-womb - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
     enforce_rate_limit(sid, "build_womb")
 
@@ -2053,14 +2078,7 @@ async def get_limits_status(
         "endpoints": endpoint_status
     })
     # Always set session cookie to ensure persistence
-    response.set_cookie(
-        key="session_id",
-        value=sid,
-        httponly=True,
-        samesite="lax",
-        secure=IS_PRODUCTION,
-        max_age=SESSION_EXPIRY
-    )
+    set_session_cookie(response, sid, "session_id")
     return response
 
 
