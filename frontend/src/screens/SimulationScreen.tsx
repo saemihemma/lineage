@@ -545,18 +545,16 @@ export function SimulationScreen() {
         </div>
         <div className="topbar-center">
           <FuelBar />
-          {getWombCount(state) >= 2 && (
-            <div className="attention-bar-global">
-              <span className="attention-bar-label">Attention:</span>
-              <div className="attention-bar-visual">
-                <div
-                  className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 50 ? 'good' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'critical'}`}
-                  style={{ width: `${getAverageAttentionPercent(state)}%` }}
-                />
-                <span className="attention-bar-text">{getAverageAttentionPercent(state).toFixed(0)}%</span>
-              </div>
+          <div className="attention-bar-global">
+            <span className="attention-bar-label">Attention:</span>
+            <div className="attention-bar-visual">
+              <div
+                className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 50 ? 'good' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'critical'}`}
+                style={{ width: `${getAverageAttentionPercent(state)}%` }}
+              />
+              <span className="attention-bar-text">{getAverageAttentionPercent(state).toFixed(0)}%</span>
             </div>
-          )}
+          </div>
           {/* Progress bar in HUD */}
           <div className="progress-bar-hud">
             <span className="progress-bar-label">{primaryProgress.label || 'Idle'}</span>

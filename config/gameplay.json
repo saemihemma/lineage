@@ -1,5 +1,5 @@
 {
-  "config_version": "systems_v1_suffering_tune_1",
+  "config_version": "systems_v1_safer_expeditions",
   "attention": {
     "bands": {
       "yellow": 25,
@@ -41,8 +41,8 @@
   },
   "expeditions": {
     "MINING": {
-      "base_death_prob": 0.12,
-      "base_xp": 10,
+      "base_death_prob": 0.06,
+      "base_xp": 20,
       "rewards": {
         "Tritanium": [8, 16],
         "Metal Ore": [6, 12]
@@ -50,8 +50,8 @@
       "shilajit_chance": 0.0
     },
     "COMBAT": {
-      "base_death_prob": 0.16,
-      "base_xp": 12,
+      "base_death_prob": 0.08,
+      "base_xp": 24,
       "rewards": {
         "Biomass": [3, 7],
         "Synthetic": [2, 5]
@@ -59,8 +59,8 @@
       "shilajit_chance": 0.0
     },
     "EXPLORATION": {
-      "base_death_prob": 0.13,
-      "base_xp": 8,
+      "base_death_prob": 0.065,
+      "base_xp": 16,
       "rewards": {
         "Tritanium": [2, 6],
         "Metal Ore": [2, 6],
