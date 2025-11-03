@@ -170,14 +170,25 @@ export function SimulationScreen() {
         
         if (status.active && status.task) {
           // Update progress for this task (merge, don't replace all)
+          // Also initialize if task exists in backend but not yet in frontend progress tracking
           setActiveTaskProgress((prev) => {
             const updated = { ...prev };
-            if (status.task && updated[status.task.id]) {
-              updated[status.task.id] = {
-                ...updated[status.task.id],
-                value: status.task.progress,
-                label: `${status.task.label}… ${status.task.remaining}s remaining`,
-              };
+            if (status.task) {
+              // Initialize task if it doesn't exist yet (handles race condition)
+              if (!updated[status.task.id]) {
+                updated[status.task.id] = {
+                  value: status.task.progress,
+                  label: status.task.label,
+                  startTime: Date.now() - (status.task.elapsed * 1000), // Estimate start time
+                };
+              } else {
+                // Update existing task progress
+                updated[status.task.id] = {
+                  ...updated[status.task.id],
+                  value: status.task.progress,
+                  label: `${status.task.label}… ${status.task.remaining}s remaining`,
+                };
+              }
             }
             return updated;
           });
