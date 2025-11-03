@@ -543,7 +543,7 @@ export function SimulationScreen() {
         <div className="topbar-left">
           <h1 className="game-title">LINEAGE</h1>
           <div className="self-stats">
-            SELF: {state.self_name || localStorage.getItem('lineage_self_name') || 'Unnamed'} | Level: {state.soul_level} | Soul: {state.soul_percent.toFixed(1)}%
+            SELF: {state.self_name || localStorage.getItem('lineage_self_name') || 'Unnamed'} | Level: {state.soul_level} | Soul: {(state.soul_percent || 0).toFixed(1)}%
           </div>
         </div>
         <div className="topbar-center">

@@ -41,6 +41,7 @@ export function FacilitiesPanel({ state, onRepair, disabled = false }: Facilitie
           <WombCard 
             key={womb.id} 
             womb={womb}
+            state={state}
             onRepair={onRepair}
             disabled={disabled}
           />
@@ -52,14 +53,14 @@ export function FacilitiesPanel({ state, onRepair, disabled = false }: Facilitie
 
 interface WombCardProps {
   womb: Womb;
+  state: GameState;
   onRepair?: (wombId: number) => void;
   disabled?: boolean;
 }
 
-function WombCard({ womb, onRepair, disabled }: WombCardProps) {
-  const attentionPercent = womb.max_attention > 0 
-    ? (womb.attention / womb.max_attention) * 100 
-    : 0;
+function WombCard({ womb, state, onRepair, disabled }: WombCardProps) {
+  // Attention is now global, not per-womb (0-100 scale)
+  const attentionPercent = Math.min(100, Math.max(0, state.global_attention || 0));
   const durabilityPercent = womb.max_durability > 0
     ? (womb.durability / womb.max_durability) * 100
     : 0;
@@ -99,7 +100,7 @@ function WombCard({ womb, onRepair, disabled }: WombCardProps) {
         </div>
         
         <div className="womb-card-stat">
-          <div className="womb-card-stat-label">Attention</div>
+          <div className="womb-card-stat-label">Attention (Global)</div>
           <div className="womb-card-stat-bar">
             <div 
               className={`womb-card-stat-fill ${attentionColor}`}
@@ -107,7 +108,7 @@ function WombCard({ womb, onRepair, disabled }: WombCardProps) {
             />
           </div>
           <div className="womb-card-stat-value">
-            {womb.attention.toFixed(1)} / {womb.max_attention.toFixed(1)}
+            {attentionPercent.toFixed(1)} / 100.0
           </div>
         </div>
       </div>

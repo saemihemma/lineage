@@ -92,26 +92,18 @@ export function getNextUnlockHint(state: GameState): string | null {
 
 /**
  * Calculate average attention across all wombs
+ * Note: Attention is now global, not per-womb
  */
 export function getAverageAttention(state: GameState): number {
-  if (!state.wombs || state.wombs.length === 0) return 0;
-  const total = state.wombs.reduce((sum, w) => sum + w.attention, 0);
-  return total / state.wombs.length;
+  return state.global_attention || 0;
 }
 
 /**
  * Calculate average attention percentage
+ * Note: Attention is now global (0-100), not per-womb
  */
 export function getAverageAttentionPercent(state: GameState): number {
-  if (!state.wombs || state.wombs.length === 0) return 0;
-  const functional = getFunctionalWombs(state);
-  if (functional.length === 0) return 0;
-  
-  const total = functional.reduce((sum, w) => {
-    const percent = w.max_attention > 0 ? (w.attention / w.max_attention) * 100 : 0;
-    return sum + percent;
-  }, 0);
-  
-  return total / functional.length;
+  // Global attention is already 0-100 scale
+  return Math.min(100, Math.max(0, state.global_attention || 0));
 }
 

@@ -31,9 +31,8 @@ export function WombsPanel({ state }: WombsPanelProps) {
   
   // Show single womb view (before 2nd womb)
   const firstWomb = wombs[0];
-  const attentionPercent = firstWomb.max_attention > 0 
-    ? (firstWomb.attention / firstWomb.max_attention) * 100 
-    : 0;
+  // Attention is now global, not per-womb (0-100 scale)
+  const attentionPercent = Math.min(100, Math.max(0, state.global_attention || 0));
   const durabilityPercent = firstWomb.max_durability > 0
     ? (firstWomb.durability / firstWomb.max_durability) * 100
     : 0;
@@ -60,16 +59,16 @@ export function WombsPanel({ state }: WombsPanelProps) {
             </div>
           </div>
           
-          {/* Attention */}
+          {/* Attention (Global) */}
           <div className="womb-stat">
-            <div className="womb-stat-label">Attention</div>
+            <div className="womb-stat-label">Attention (Global)</div>
             <div className="womb-stat-bar">
               <div 
                 className={`womb-stat-fill ${attentionColor}`}
                 style={{ width: `${attentionPercent}%` }}
               />
               <div className="womb-stat-text">
-                {firstWomb.attention.toFixed(1)} / {firstWomb.max_attention.toFixed(1)}
+                {attentionPercent.toFixed(1)} / 100.0
               </div>
             </div>
           </div>
@@ -81,12 +80,12 @@ export function WombsPanel({ state }: WombsPanelProps) {
                 Womb is damaged and non-functional. Repair required.
               </div>
             )}
-            {firstWomb.durability > 0 && firstWomb.attention < firstWomb.max_attention * 0.5 && (
+            {firstWomb.durability > 0 && attentionPercent < 50 && (
               <div className="womb-status-warning">
                 Attention is low. Womb may not function optimally.
               </div>
             )}
-            {firstWomb.durability > 0 && firstWomb.attention >= firstWomb.max_attention * 0.5 && (
+            {firstWomb.durability > 0 && attentionPercent >= 50 && (
               <div className="womb-status-ok">
                 Womb is operational
               </div>
