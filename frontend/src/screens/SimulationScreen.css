@@ -143,7 +143,7 @@
   overflow-y: auto;
 }
 
-/* Right column: 50/50 split, no scrolling needed */
+/* Right column: Give more space to Clone Details and SELF */
 .mission-control-right #cloneDetails {
   flex: 1;
   min-height: 0;
@@ -162,6 +162,18 @@
 
 .mission-control-right #self .collapsible-panel-content {
   overflow-y: auto;
+}
+
+/* Bottom right: Make gather resources smaller and push down */
+.mission-control-bottom-right #gather {
+  margin-top: auto;
+  flex: 0 0 auto;
+  max-height: 180px;
+}
+
+.mission-control-bottom-right #gather .collapsible-panel-content {
+  overflow-y: auto;
+  max-height: 140px;
 }
 
 .facilities-container {

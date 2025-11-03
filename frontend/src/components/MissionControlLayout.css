@@ -62,7 +62,9 @@
 
 .mission-control-bottom-right {
   grid-area: bottom-right;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Preserve existing flexbox styles as fallback */
