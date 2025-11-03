@@ -61,3 +61,34 @@
   transition: width 0.2s ease;
 }
 
+.practice-unlocks-box {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(255, 122, 0, 0.1);
+  border: 1px solid rgba(255, 122, 0, 0.3);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.practice-unlocks-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff7a00;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.practice-unlocks-hint {
+  font-size: 12px;
+  color: #ff9933;
+  font-weight: 500;
+}
+
+.practice-unlocks-current {
+  font-size: 11px;
+  color: #9aa4ad;
+  margin-top: 4px;
+}
+

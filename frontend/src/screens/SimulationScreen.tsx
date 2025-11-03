@@ -19,8 +19,9 @@ import { LeaderboardDialog } from '../components/LeaderboardDialog';
 import { FuelBar } from '../components/FuelBar';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { WombsPanel } from '../components/WombsPanel';
+import { FacilitiesPanel } from '../components/FacilitiesPanel';
 import type { GameState } from '../types/game';
-import { hasWomb, getWombCount, getUnlockedWombCount } from '../utils/wombs';
+import { hasWomb, getWombCount, getUnlockedWombCount, getAverageAttentionPercent } from '../utils/wombs';
 
 export function SimulationScreen() {
   const { state, loading, error, updateState } = useGameState();
@@ -346,6 +347,10 @@ export function SimulationScreen() {
     handleAction(() => gameAPI.uploadClone(cloneId), 'upload clone');
   };
 
+  const handleRepairWomb = (wombId: number) => {
+    handleAction(() => gameAPI.repairWomb(wombId), `repair womb ${wombId + 1}`);
+  };
+
   if (loading) {
     return (
       <div className="simulation-screen">
@@ -387,6 +392,18 @@ export function SimulationScreen() {
         </div>
         <div className="topbar-center">
           <FuelBar />
+          {getWombCount(state) >= 2 && (
+            <div className="attention-bar-global">
+              <span className="attention-bar-label">Attention:</span>
+              <div className="attention-bar-visual">
+                <div 
+                  className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 50 ? 'good' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'critical'}`}
+                  style={{ width: `${getAverageAttentionPercent(state)}%` }}
+                />
+                <span className="attention-bar-text">{getAverageAttentionPercent(state).toFixed(0)}%</span>
+              </div>
+            </div>
+          )}
         </div>
         <div className="topbar-actions">
           <button 
@@ -458,7 +475,7 @@ export function SimulationScreen() {
             />
           </div>
 
-          {/* Column 2: Costs, Gather, and Wombs (if < 2 wombs) */}
+          {/* Column 2: Costs, Gather, and Wombs/Facilities */}
           <div className="col-2">
             <CostsPanel state={state} />
             <GatherPanel 
@@ -466,6 +483,13 @@ export function SimulationScreen() {
               disabled={isBusy}
             />
             {getWombCount(state) < 2 && <WombsPanel state={state} />}
+            {getWombCount(state) >= 2 && (
+              <FacilitiesPanel 
+                state={state}
+                onRepair={handleRepairWomb}
+                disabled={isBusy}
+              />
+            )}
           </div>
 
           {/* Column 3: Clone Details and Progress */}
@@ -487,6 +511,7 @@ export function SimulationScreen() {
           <PracticesPanel
             practicesXp={state.practices_xp}
             practiceLevels={state.practice_levels}
+            state={state}
           />
         </div>
       </div>

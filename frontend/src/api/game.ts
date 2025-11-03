@@ -87,6 +87,18 @@ export class GameAPI {
     });
   }
 
+  async repairWomb(wombId: number): Promise<{ 
+    state: GameState; 
+    message: string; 
+    cost: Record<string, number>;
+    repair_time: number;
+    task_id: string;
+  }> {
+    return this.makeRequest(`/api/game/repair-womb?womb_id=${wombId}`, {
+      method: 'POST',
+    });
+  }
+
   async getTaskStatus(): Promise<{
     active: boolean;
     task: {

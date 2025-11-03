@@ -2,20 +2,27 @@
  * Practices Panel - shows LINEAGE practice XP progress
  */
 import type { GameState } from '../types/game';
+import { getNextUnlockHint, getWombCount, getUnlockedWombCount } from '../utils/wombs';
 import './PracticesPanel.css';
 
 interface PracticesPanelProps {
   practicesXp: Record<string, number>;
   practiceLevels: GameState['practice_levels'];
+  state: GameState;
 }
 
 const PRACTICE_TRACKS = ['Kinetic', 'Cognitive', 'Constructive'] as const;
 const XP_PER_LEVEL = 100;
 
-export function PracticesPanel({ practicesXp, practiceLevels }: PracticesPanelProps) {
+export function PracticesPanel({ practicesXp, practiceLevels, state }: PracticesPanelProps) {
   const calculateProgress = (xp: number): number => {
     return (xp % XP_PER_LEVEL);
   };
+  
+  const nextHint = getNextUnlockHint(state);
+  const wombCount = getWombCount(state);
+  const unlockedCount = getUnlockedWombCount(state);
+  const canUnlockMore = wombCount < unlockedCount && unlockedCount < 4;
 
   return (
     <div className="panel practices-panel">
@@ -47,6 +54,17 @@ export function PracticesPanel({ practicesXp, practiceLevels }: PracticesPanelPr
             </div>
           );
         })}
+        
+        {/* Womb Unlock Hints */}
+        {canUnlockMore && nextHint && (
+          <div className="practice-unlocks-box">
+            <div className="practice-unlocks-title">Throughput Unlocks</div>
+            <div className="practice-unlocks-hint">{nextHint}</div>
+            <div className="practice-unlocks-current">
+              Current: {wombCount} / {unlockedCount} Wombs
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
