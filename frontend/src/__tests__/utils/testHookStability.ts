@@ -1,8 +1,8 @@
 /**
  * Test utilities for detecting React Error #310 (hook stability issues)
  */
-import { StrictMode } from 'react'
-import type { ReactElement } from 'react'
+import { StrictMode, createElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { render } from '@testing-library/react'
 import type { RenderOptions } from '@testing-library/react'
 
@@ -15,8 +15,11 @@ export function renderWithStrictMode(
   ui: ReactElement,
   options?: Omit<RenderOptions, 'wrapper'>
 ) {
+  const Wrapper = ({ children }: { children: ReactNode }) => {
+    return createElement(StrictMode, null, children)
+  }
   return render(ui, {
-    wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
+    wrapper: Wrapper,
     ...options,
   })
 }
@@ -150,9 +153,9 @@ export function createErrorSpy() {
 export function verifyUnconditionalHooks(componentCode: string): boolean {
   // Simple heuristic: check if hooks appear after conditional statements
   // This is a basic check - full AST analysis should be done in static tests
-  const conditionalPattern = /if\s*\([^)]*\)\s*\{[\s\S]*?(useState|useEffect|useMemo|useCallback|useRef)/
+  const conditionalPattern = /if\s*\([^)]*\)\s*\{[\s\S]*?(useState|useEffect|useMemo|useCallback|useRef)/;
   
-  return !conditionalPattern.test(componentCode)
+  return !conditionalPattern.test(componentCode);
 }
 
 /**
