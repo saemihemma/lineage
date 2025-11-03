@@ -520,6 +520,14 @@ def resolve_gather(ctx: OutcomeContext) -> Outcome:
     - Attention delta from config
     - Feral attack check (affects time_mult and cost_mult)
     """
+    # Phase 7: Hardening - validate context
+    if not ctx.resource:
+        raise ValueError("resource required for gather")
+    if not ctx.outcomes_config:
+        raise ValueError("outcomes_config required")
+    if not ctx.seed_parts:
+        raise ValueError("seed_parts required for deterministic RNG")
+    
     # 1. Compute RNG from seed_parts (HMAC recipe)
     rng = random.Random(compute_rng_seed(ctx.seed_parts))
     
@@ -680,6 +688,16 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
     - Deterministic time
     - Feral attack check (affects time_mult and cost_mult)
     """
+    # Phase 7: Hardening - validate context
+    if not ctx.clone_kind:
+        raise ValueError("clone_kind required for grow")
+    if ctx.soul_percent is None:
+        raise ValueError("soul_percent required for grow")
+    if not ctx.outcomes_config:
+        raise ValueError("outcomes_config required")
+    if not ctx.seed_parts:
+        raise ValueError("seed_parts required for deterministic RNG")
+    
     # 1. Compute RNG from seed_parts (HMAC recipe)
     rng = random.Random(compute_rng_seed(ctx.seed_parts))
     
@@ -906,6 +924,16 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
     - Deterministic SELF XP retention
     - No feral attacks (warning only)
     """
+    # Phase 7: Hardening - validate context
+    if not ctx.clone:
+        raise ValueError("Clone required for upload")
+    if ctx.soul_percent is None:
+        raise ValueError("soul_percent required for upload")
+    if not ctx.outcomes_config:
+        raise ValueError("outcomes_config required")
+    if not ctx.seed_parts:
+        raise ValueError("seed_parts required for deterministic RNG")
+    
     # 1. Compute RNG from seed_parts (HMAC recipe)
     rng = random.Random(compute_rng_seed(ctx.seed_parts))
     
@@ -913,8 +941,6 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
     upload_config = ctx.outcomes_config.get("upload", {})
     
     # 3. Calculate clone total XP
-    if not ctx.clone:
-        raise ValueError("Clone required for upload")
     
     total_xp = sum(ctx.clone.xp.values())
     
