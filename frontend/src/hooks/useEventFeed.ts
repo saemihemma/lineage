@@ -131,6 +131,10 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
         case 'expedition.result':
           // Update clone XP and resources
           if (event.data.clone_id && event.data.clone_xp) {
+            // Ensure clones object exists
+            if (!newState.clones) {
+              newState.clones = {};
+            }
             const clone = newState.clones[event.data.clone_id];
             if (clone) {
               newState.clones = {
@@ -168,6 +172,10 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
           }
           // Mark clone as uploaded
           if (event.data.clone_id) {
+            // Ensure clones object exists
+            if (!newState.clones) {
+              newState.clones = {};
+            }
             const clone = newState.clones[event.data.clone_id];
             if (clone) {
               newState.clones = {

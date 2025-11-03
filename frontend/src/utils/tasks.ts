@@ -148,6 +148,10 @@ export function checkAndCompleteTasks(state: GameState): { state: GameState; com
             created_at: cloneData.created_at,
           };
 
+          // Ensure clones object exists
+          if (!newState.clones) {
+            newState.clones = {};
+          }
           newState.clones[clone.id] = clone;
           const message = `${cloneData.kind} clone grown successfully. id=${clone.id}`;
           completedMessages.push(message);

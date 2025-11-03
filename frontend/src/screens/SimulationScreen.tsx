@@ -524,7 +524,7 @@ export function SimulationScreen() {
           >
             Grow Clone
           </button>
-          {state.applied_clone_id && state.applied_clone_id in state.clones && state.clones[state.applied_clone_id].alive && (
+          {state.applied_clone_id && state.clones?.[state.applied_clone_id]?.alive && (
             <>
               <button 
                 className="action-btn expedition-top-btn"

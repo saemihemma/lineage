@@ -13,8 +13,7 @@ interface ExpeditionPanelProps {
 
 export function ExpeditionPanel({ state, onRunExpedition, disabled = false }: ExpeditionPanelProps) {
   const hasAppliedClone = state.applied_clone_id && 
-    state.applied_clone_id in state.clones && 
-    state.clones[state.applied_clone_id].alive;
+    state.clones?.[state.applied_clone_id]?.alive;
 
   if (!hasAppliedClone) {
     return (
