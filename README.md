@@ -82,6 +82,29 @@ pip install -r requirements.txt
 
 ## Testing
 
+### Pre-commit Hook (Automatic Smoke Tests)
+
+**IMPORTANT:** This repository uses a pre-commit hook that automatically runs smoke tests before every commit.
+
+**Setup (first time only):**
+```bash
+./scripts/install-pre-commit-hook.sh
+```
+
+This ensures critical user journeys never break. If smoke tests fail, your commit will be blocked.
+
+**To skip hook (emergency only):**
+```bash
+git commit --no-verify -m "emergency: skip smoke tests"
+```
+
+**Manual test run:**
+```bash
+python3 -m pytest backend/tests/test_smoke.py -v
+```
+
+See `.pre-commit-config.md` for detailed documentation.
+
 ### Backend Tests (pytest)
 
 Run all backend tests:
