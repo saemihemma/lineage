@@ -627,11 +627,10 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
     else:
         result["wombs"] = []
     
-    # Add ftue if it exists
-    if hasattr(state, 'ftue'):
-        result["ftue"] = state.ftue
-    elif 'ftue' in dir(state):
-        result["ftue"] = getattr(state, 'ftue', {})
+    # Add ftue if it exists (use getattr with default to handle dynamic attribute)
+    ftue = getattr(state, 'ftue', None)
+    if ftue is not None:
+        result["ftue"] = ftue
     else:
         result["ftue"] = {}
     
@@ -662,6 +661,7 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
         practices_xp=data.get("practices_xp", {}),
         last_saved_ts=data.get("last_saved_ts", time.time()),
         self_name=data.get("self_name", ""),
+        global_attention=data.get("global_attention", CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)),
         active_tasks=data.get("active_tasks", {}),
         ui_layout=data.get("ui_layout", {})
     )
@@ -695,24 +695,24 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
             created_at=c_data.get("created_at", 0.0)
         )
     
-    # Load ftue flags
+    # Load ftue flags (set as dynamic attribute since it's not in the dataclass)
     ftue_data = data.get("ftue", {})
-    if ftue_data:
-        state.ftue = ftue_data
-    else:
-        # Initialize empty ftue dict if not present
-        state.ftue = {}
+    if not ftue_data:
+        ftue_data = {}
     
     # Retroactively set FTUE flags for existing saves if conditions are met
     # This helps players who had saves before FTUE was implemented
-    if not state.ftue.get('step_first_expedition', False):
+    if not ftue_data.get('step_first_expedition', False):
         # Check if any clone has expedition XP
         for clone in state.clones.values():
             xp = clone.xp or {}
             total_xp = (xp.get("MINING", 0) + xp.get("COMBAT", 0) + xp.get("EXPLORATION", 0))
             if total_xp > 0:
-                state.ftue['step_first_expedition'] = True
+                ftue_data['step_first_expedition'] = True
                 break
+    
+    # Set ftue as a dynamic attribute (dataclass allows this)
+    setattr(state, 'ftue', ftue_data)
     
     return state
 
@@ -1444,10 +1444,13 @@ async def run_expedition_endpoint(
         
         # Set FTUE flag for first expedition if XP was gained
         if xp_gained > 0:
-            if not hasattr(new_state, 'ftue') or new_state.ftue is None:
-                new_state.ftue = {}
-            if not new_state.ftue.get('step_first_expedition', False):
-                new_state.ftue['step_first_expedition'] = True
+            ftue = getattr(new_state, 'ftue', None)
+            if ftue is None:
+                ftue = {}
+                setattr(new_state, 'ftue', ftue)
+            if not ftue.get('step_first_expedition', False):
+                ftue['step_first_expedition'] = True
+                setattr(new_state, 'ftue', ftue)
 
         # Calculate loot (resource diff)
         loot = {}

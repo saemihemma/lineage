@@ -41,6 +41,7 @@ class GameState(PlayerState):
             practices_xp=copy.deepcopy(self.practices_xp),
             last_saved_ts=self.last_saved_ts,
             self_name=self.self_name,
+            global_attention=getattr(self, 'global_attention', 0.0),
             active_tasks=copy.deepcopy(self.active_tasks),
             ui_layout=copy.deepcopy(self.ui_layout)
         )
@@ -49,10 +50,11 @@ class GameState(PlayerState):
         # Copy wombs if they exist (for backward compatibility, check if attribute exists)
         if hasattr(self, 'wombs'):
             new_state.wombs = [copy.deepcopy(w) for w in self.wombs]
-        # Copy ftue if it exists
-        if hasattr(self, 'ftue') and self.ftue is not None:
-            new_state.ftue = copy.deepcopy(self.ftue)
-        elif hasattr(self, 'ftue'):
-            new_state.ftue = {}
+        # Copy ftue if it exists (use getattr/setattr for dynamic attribute)
+        ftue = getattr(self, 'ftue', None)
+        if ftue is not None:
+            setattr(new_state, 'ftue', copy.deepcopy(ftue))
+        else:
+            setattr(new_state, 'ftue', {})
         return new_state
 
