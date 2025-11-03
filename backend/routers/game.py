@@ -430,6 +430,7 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                 if len(new_state.wombs) == 1:
                     new_state.assembler_built = True
                 task_data['completion_message'] = f"Womb {new_womb_id + 1} built successfully. You can now grow clones."
+                logger.info(f"🏗️ Womb created: ID={new_womb_id}, total wombs={len(new_state.wombs)}, durability={new_womb.durability}/{new_womb.max_durability}")
             
             # Complete repair_womb if this was a repair task
             if task_type == "repair_womb":
