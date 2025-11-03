@@ -146,36 +146,33 @@ export function clearStateFromLocalStorage(): void {
 }
 
 /**
- * Generate a random UUID v4
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-/**
  * Get or create persistent session ID for rate limiting
- * This ensures all API calls from this browser use the same session ID
+ * Uses self_name if available, otherwise creates simple session ID
  */
 export function getOrCreateSessionId(): string {
   try {
+    // First, check if we have a stored session ID
     let sessionId = localStorage.getItem(SESSION_ID_KEY);
 
     if (!sessionId) {
-      // Generate new session ID
-      sessionId = generateUUID();
+      // Try to use self_name from game state
+      const state = loadStateFromLocalStorage();
+      if (state?.self_name && state.self_name.trim()) {
+        sessionId = state.self_name.trim();
+      } else {
+        // Fallback to simple timestamp-based ID
+        sessionId = `player_${Date.now()}`;
+      }
+
       localStorage.setItem(SESSION_ID_KEY, sessionId);
-      console.log('🆔 Generated new session ID:', sessionId.substring(0, 8) + '...');
+      console.log('🆔 Created session ID:', sessionId);
     }
 
     return sessionId;
   } catch (error) {
     console.error('Failed to get/create session ID from localStorage:', error);
-    // Fallback to in-memory session ID (won't persist across page reloads)
-    return generateUUID();
+    // Fallback to simple timestamp
+    return `player_${Date.now()}`;
   }
 }
 
