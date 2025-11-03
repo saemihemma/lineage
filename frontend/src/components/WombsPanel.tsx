@@ -7,9 +7,11 @@ import './WombsPanel.css';
 
 interface WombsPanelProps {
   state: GameState;
+  onRepair?: (wombId: number) => void;
+  disabled?: boolean;
 }
 
-export function WombsPanel({ state }: WombsPanelProps) {
+export function WombsPanel({ state, onRepair, disabled = false }: WombsPanelProps) {
   const wombs = state.wombs || [];
   const wombCount = getWombCount(state);
   const unlockedCount = getUnlockedWombCount(state);
@@ -36,6 +38,7 @@ export function WombsPanel({ state }: WombsPanelProps) {
     : 0;
 
   const durabilityColor = durabilityPercent >= 50 ? 'good' : durabilityPercent >= 25 ? 'warning' : 'critical';
+  const needsRepair = firstWomb.durability < firstWomb.max_durability;
   
   return (
     <div className="panel wombs-panel">
@@ -63,12 +66,28 @@ export function WombsPanel({ state }: WombsPanelProps) {
                 Womb is damaged and non-functional. Repair required.
               </div>
             )}
-            {firstWomb.durability > 0 && (
+            {firstWomb.durability > 0 && !needsRepair && (
               <div className="womb-status-ok">
                 Womb is operational
               </div>
             )}
+            {firstWomb.durability > 0 && needsRepair && (
+              <div className="womb-status-warning">
+                Womb needs repair
+              </div>
+            )}
           </div>
+
+          {/* Repair Button */}
+          {needsRepair && onRepair && (
+            <button
+              className="womb-repair-btn"
+              onClick={() => onRepair(firstWomb.id)}
+              disabled={disabled}
+            >
+              Repair Womb
+            </button>
+          )}
           
           {/* Next Unlock Hint */}
           {wombCount < unlockedCount && nextHint && (

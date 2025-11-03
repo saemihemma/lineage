@@ -643,8 +643,8 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     feral_attack = None
     attention_config = ctx.gameplay_config.get("attention", {})
     bands = attention_config.get("bands", {})
-    yellow_threshold = bands.get("yellow", 30)
-    red_threshold = bands.get("red", 60)
+    yellow_threshold = bands.get("yellow", 25)
+    red_threshold = bands.get("red", 55)
     
     # Determine attention band
     attention_band = None
@@ -825,8 +825,8 @@ def resolve_gather(ctx: OutcomeContext) -> Outcome:
     feral_attack = None
     attention_config = ctx.gameplay_config.get("attention", {})
     bands = attention_config.get("bands", {})
-    yellow_threshold = bands.get("yellow", 30)
-    red_threshold = bands.get("red", 60)
+    yellow_threshold = bands.get("yellow", 25)
+    red_threshold = bands.get("red", 55)
     
     attention_band = None
     if ctx.global_attention >= red_threshold:
@@ -1030,8 +1030,8 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
     feral_attack = None
     attention_config = ctx.gameplay_config.get("attention", {})
     bands = attention_config.get("bands", {})
-    yellow_threshold = bands.get("yellow", 30)
-    red_threshold = bands.get("red", 60)
+    yellow_threshold = bands.get("yellow", 25)
+    red_threshold = bands.get("red", 55)
     
     attention_band = None
     if ctx.global_attention >= red_threshold:
@@ -1264,8 +1264,8 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
     feral_attack = None
     attention_config = ctx.gameplay_config.get("attention", {})
     bands = attention_config.get("bands", {})
-    yellow_threshold = bands.get("yellow", 30)
-    red_threshold = bands.get("red", 60)
+    yellow_threshold = bands.get("yellow", 25)
+    red_threshold = bands.get("red", 55)
     
     attention_band = None
     if ctx.global_attention >= red_threshold:

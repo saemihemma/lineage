@@ -37,6 +37,197 @@ _FERAL_DRONE_MESSAGES = _feral_messages_data.get("messages", [
     "Feral drone swarm detected. Womb integrity compromised."
 ])
 
+# Load flavor text messages
+_flavor_data = load_data()
+_CLONE_CRAFTED_MESSAGES = _flavor_data.get("clone_crafted_messages", {}).get("messages", [])
+_RESOURCE_GATHERING_MESSAGES = _flavor_data.get("resource_gathering_messages", {}).get("messages", [])
+_MINING_EXPEDITION_SUCCESS_MESSAGES = _flavor_data.get("mining_expedition_success_messages", {}).get("messages", [])
+_MINING_EXPEDITION_FAIL_MESSAGES = _flavor_data.get("mining_expedition_fail_messages", {}).get("messages", [])
+_COMBAT_EXPEDITION_SUCCESS_MESSAGES = _flavor_data.get("combat_expedition_success_messages", {}).get("messages", [])
+_COMBAT_EXPEDITION_FAIL_MESSAGES = _flavor_data.get("combat_expedition_fail_messages", {}).get("messages", [])
+_EXPLORATION_EXPEDITION_SUCCESS_MESSAGES = _flavor_data.get("exploration_expedition_success_messages", {}).get("messages", [])
+_EXPLORATION_EXPEDITION_FAIL_MESSAGES = _flavor_data.get("exploration_expedition_fail_messages", {}).get("messages", [])
+_UPLOAD_TO_SELF_MESSAGES = _flavor_data.get("upload_to_self_messages", {}).get("messages", [])
+_LEVEL_UP_MESSAGES = _flavor_data.get("level_up_messages", {}).get("messages", [])
+
+
+def format_clone_crafted_message(clone_kind: str, clone_id: str, traits: Dict[str, int], rng: random.Random) -> str:
+    """
+    Format clone crafted message with flavor text + functional details.
+    
+    Args:
+        clone_kind: Clone type (BASIC, MINER, VOLATILE)
+        clone_id: Clone ID
+        traits: Dict of trait codes to values
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string
+    """
+    # Get random flavor message
+    if _CLONE_CRAFTED_MESSAGES:
+        flavor_msg = rng.choice(_CLONE_CRAFTED_MESSAGES)
+    else:
+        flavor_msg = "Clone scaffold imprinted. Bioglass sings; the cradle empties."
+    
+    # Build functional details
+    trait_order = ['PWC', 'SSC', 'MGC', 'DLT', 'ENF', 'ELK', 'FRK']
+    trait_str = ", ".join([f"{trait_id} {traits.get(trait_id, 0)}" for trait_id in trait_order if trait_id in traits])
+    functional_details = f"Clone #{clone_id} crafted — Traits: {trait_str}."
+    
+    return f"{flavor_msg}. {functional_details}"
+
+
+def format_resource_gathering_message(resource: str, amount: int, total: int, rng: random.Random) -> str:
+    """
+    Format resource gathering message with flavor text + functional details.
+    
+    Args:
+        resource: Resource name
+        amount: Amount gathered
+        total: New total after gathering
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string
+    """
+    # Get random flavor message
+    if _RESOURCE_GATHERING_MESSAGES:
+        flavor_msg = rng.choice(_RESOURCE_GATHERING_MESSAGES)
+    else:
+        flavor_msg = "Harvest buffer fills; augers chant."
+    
+    # Build functional details
+    if resource == "Shilajit":
+        functional_details = f"Shilajit sample extracted. Resource +1. Total: {total}"
+    else:
+        functional_details = f"Gathered {amount} {resource}. Total: {total}"
+    
+    return f"{flavor_msg}. {functional_details}"
+
+
+def format_expedition_message(expedition_kind: str, success: bool, loot: Dict[str, int], xp_gained: int, survived_runs: int, shilajit_found: bool, rng: random.Random) -> str:
+    """
+    Format expedition success message with flavor text + functional details.
+    
+    Args:
+        expedition_kind: MINING, COMBAT, or EXPLORATION
+        success: True for success, False for failure
+        loot: Dict of resources gained
+        xp_gained: XP gained for this expedition type
+        survived_runs: Number of survived runs
+        shilajit_found: Whether Shilajit was found
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string
+    """
+    expedition_kind_lower = expedition_kind.lower()
+    
+    if success:
+        # Get success messages by expedition type
+        if expedition_kind == "MINING":
+            flavor_msgs = _MINING_EXPEDITION_SUCCESS_MESSAGES
+        elif expedition_kind == "COMBAT":
+            flavor_msgs = _COMBAT_EXPEDITION_SUCCESS_MESSAGES
+        else:  # EXPLORATION
+            flavor_msgs = _EXPLORATION_EXPEDITION_SUCCESS_MESSAGES
+        
+        if flavor_msgs:
+            flavor_msg = rng.choice(flavor_msgs)
+        else:
+            flavor_msg = f"You completed the {expedition_kind_lower} expedition."
+        
+        # Build functional details
+        loot_str = ", ".join([f"{k}+{v}" for k, v in loot.items()])
+        functional_details = f"{expedition_kind.title()} expedition complete: {loot_str}. {expedition_kind.title()} XP +{xp_gained}. Survived runs: {survived_runs}."
+        if shilajit_found:
+            functional_details += " Recovered Shilajit fragment from exploration site."
+        
+        return f"{flavor_msg}. {functional_details}"
+    else:
+        # This shouldn't be called for failures - use format_expedition_failure_message instead
+        return f"{expedition_kind.title()} expedition failed."
+
+
+def format_expedition_failure_message(expedition_kind: str, death_message: str, rng: random.Random) -> str:
+    """
+    Format expedition failure message with flavor text combined with death message.
+    
+    Args:
+        expedition_kind: MINING, COMBAT, or EXPLORATION
+        death_message: Functional death message (e.g., "Your clone was lost...")
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string with flavor first, then death message
+    """
+    # Get failure messages by expedition type
+    if expedition_kind == "MINING":
+        flavor_msgs = _MINING_EXPEDITION_FAIL_MESSAGES
+    elif expedition_kind == "COMBAT":
+        flavor_msgs = _COMBAT_EXPEDITION_FAIL_MESSAGES
+    else:  # EXPLORATION
+        flavor_msgs = _EXPLORATION_EXPEDITION_FAIL_MESSAGES
+    
+    if flavor_msgs:
+        flavor_msg = rng.choice(flavor_msgs)
+    else:
+        flavor_msg = f"The {expedition_kind.lower()} expedition ended in tragedy."
+    
+    # Combine flavor + death message
+    return f"{flavor_msg}. {death_message}"
+
+
+def format_upload_message(retained_pct: int, soul_xp_gained: int, soul_restore: float, new_level: int, rng: random.Random) -> str:
+    """
+    Format upload message with flavor text + functional details.
+    Note: Level up message should be separate.
+    
+    Args:
+        retained_pct: Percentage of XP retained (e.g., 60)
+        soul_xp_gained: SELF XP gained
+        soul_restore: Soul restore percentage
+        new_level: New SELF level (for functional details)
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string (without level info)
+    """
+    # Get random flavor message
+    if _UPLOAD_TO_SELF_MESSAGES:
+        flavor_msg = rng.choice(_UPLOAD_TO_SELF_MESSAGES)
+    else:
+        flavor_msg = "Keeper: I felt you in the Static before the light took shape."
+    
+    # Build functional details (without level - that's separate)
+    functional_details = f"Retained ~{retained_pct}% (+{soul_xp_gained} SELF XP). SELF restored by {soul_restore:.1f}%."
+    
+    return f"{flavor_msg}. Uploaded clone to SELF. {functional_details}"
+
+
+def format_level_up_message(new_level: int, rng: random.Random) -> str:
+    """
+    Format level up message with flavor text.
+    
+    Args:
+        new_level: New SELF level
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string
+    """
+    # Get random flavor message
+    if _LEVEL_UP_MESSAGES:
+        flavor_msg = rng.choice(_LEVEL_UP_MESSAGES)
+    else:
+        flavor_msg = "Keeper: Capacity expanded."
+    
+    # Build functional details
+    functional_details = f"SELF Level now {new_level}."
+    
+    return f"{flavor_msg}. {functional_details}"
+
 
 def format_feral_attack_message(feral_attack_info: Dict[str, Any], action_type: str = "unknown") -> str:
     """
@@ -486,11 +677,13 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                         # Use outcome's attention_delta (from gameplay.json)
                         new_state = gain_attention(new_state, attention_delta=attention_delta)
                     
-                    # Store completion message in task data for frontend to retrieve
-                    if resource == "Shilajit":
-                        task_data['completion_message'] = f"Shilajit sample extracted. Resource +1. Total: {new_total}"
-                    else:
-                        task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_total}"
+                    # Store completion message with flavor text
+                    task_data['completion_message'] = format_resource_gathering_message(
+                        resource=resource,
+                        amount=pending_amount,
+                        total=new_total,
+                        rng=new_state.rng
+                    )
                     
                     # Phase 5: Include feral attack message if occurred
                     if outcome_info.get('feral_attack'):
@@ -588,8 +781,13 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                             created_at=clone_data["created_at"]
                         )
                         new_state.clones[clone.id] = clone
-                        # Store completion message
-                        task_data['completion_message'] = f"{clone_data['kind']} clone grown successfully. id={clone.id}"
+                        # Store completion message with flavor text
+                        task_data['completion_message'] = format_clone_crafted_message(
+                            clone_kind=clone_data['kind'],
+                            clone_id=clone.id,
+                            traits=clone_data.get('traits', {}),
+                            rng=new_state.rng
+                        )
                         
                         # Store clone data in task_data for event emission later
                         task_data['completed_clone'] = {
@@ -765,6 +963,7 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
         },
         "last_saved_ts": state.last_saved_ts,
         "self_name": state.self_name,
+        "global_attention": getattr(state, "global_attention", 0.0),  # Global attention (0-100)
         "active_tasks": getattr(state, "active_tasks", {}),
         "ui_layout": getattr(state, "ui_layout", {}),
         "clones": {
@@ -1883,8 +2082,8 @@ async def upload_clone_endpoint(
         # Phase 6: Store session_id in state for seed generation (temporary approach)
         state._session_id = sid
         
-        # Phase 6: Returns feral attack info from outcome resolution
-        new_state, message, feral_attack_info = upload_clone(state, clone_id)
+        # Phase 6: Returns upload message, level up message (if any), and feral attack info
+        new_state, message, level_up_message, feral_attack_info = upload_clone(state, clone_id)
         
         # Clean up temporary attribute
         if hasattr(new_state, '_session_id'):
@@ -1920,11 +2119,13 @@ async def upload_clone_endpoint(
                 "soul_percent_delta": soul_percent_delta,
             }, entity_id=clone_id)
 
-        # Phase 6: Include feral attack info if occurred (warning only)
+        # Phase 6: Include feral attack info and level up message if occurred
         response_data = {
             "state": game_state_to_dict(new_state),
             "message": message
         }
+        if level_up_message:
+            response_data["level_up_message"] = level_up_message
         if feral_attack_info:
             response_data["feral_attack"] = feral_attack_info
             response_data["attack_message"] = format_feral_attack_message(feral_attack_info, "upload")

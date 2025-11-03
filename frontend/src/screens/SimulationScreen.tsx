@@ -549,7 +549,7 @@ export function SimulationScreen() {
             <span className="attention-bar-label">Attention:</span>
             <div className="attention-bar-visual">
               <div
-                className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 50 ? 'good' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'critical'}`}
+                className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 55 ? 'critical' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'good'}`}
                 style={{ width: `${getAverageAttentionPercent(state)}%` }}
               />
               <span className="attention-bar-text">{getAverageAttentionPercent(state).toFixed(0)}%</span>
@@ -654,7 +654,13 @@ export function SimulationScreen() {
             title="Womb"
             defaultOpen={true}
           >
-            {getWombCount(state) < 2 && <WombsPanel state={state} />}
+            {getWombCount(state) < 2 && (
+              <WombsPanel 
+                state={state}
+                onRepair={handleRepairWomb}
+                disabled={isBusy}
+              />
+            )}
             {getWombCount(state) >= 2 && (
               <FacilitiesPanel 
                 state={state}

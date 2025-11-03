@@ -4,6 +4,42 @@
  */
 import type { GameState, Womb, Clone } from '../types/game';
 
+// Flavor text messages (matching backend)
+const CLONE_CRAFTED_MESSAGES = [
+  "Clone scaffold imprinted. Bioglass sings; the cradle empties. You are accounted for.",
+  "Spindle spins down. A new vessel stands ready to receive a Rider."
+];
+
+const RESOURCE_GATHERING_MESSAGES = [
+  "Harvest buffer fills; augers chant. Your hold grows heavier with spoils.",
+  "Sluice lines clear. Tailings fall quiet. The Keep tallies your take."
+];
+
+// Helper functions to format messages with flavor text
+function formatCloneCraftedMessage(cloneKind: string, cloneId: string, traits: Record<string, number>): string {
+  const flavorMsg = CLONE_CRAFTED_MESSAGES[Math.floor(Math.random() * CLONE_CRAFTED_MESSAGES.length)];
+  const traitOrder = ['PWC', 'SSC', 'MGC', 'DLT', 'ENF', 'ELK', 'FRK'];
+  const traitStr = traitOrder
+    .map(traitId => {
+      const value = traits[traitId];
+      return value !== undefined ? `${traitId} ${value}` : null;
+    })
+    .filter(Boolean)
+    .join(', ');
+  return `${flavorMsg}. ${cloneKind} Clone #${cloneId} crafted — Traits: ${traitStr}.`;
+}
+
+function formatResourceGatheringMessage(resource: string, amount: number, total: number): string {
+  const flavorMsg = RESOURCE_GATHERING_MESSAGES[Math.floor(Math.random() * RESOURCE_GATHERING_MESSAGES.length)];
+  let functionalDetails: string;
+  if (resource === 'Shilajit') {
+    functionalDetails = `Shilajit sample extracted. Resource +1. Total: ${total}`;
+  } else {
+    functionalDetails = `Gathered ${amount} ${resource}. Total: ${total}`;
+  }
+  return `${flavorMsg}. ${functionalDetails}`;
+}
+
 // Constants from CONFIG
 const WOMB_MAX_DURABILITY = 100.0;
 
@@ -74,13 +110,8 @@ export function checkAndCompleteTasks(state: GameState): { state: GameState; com
           // Award practice XP
           awardPracticeXp(newState, 'Kinetic', 2);
 
-          // Store completion message
-          let message: string;
-          if (resource === 'Shilajit') {
-            message = `Shilajit sample extracted. Resource +1. Total: ${newTotal}`;
-          } else {
-            message = `Gathered ${pendingAmount} ${resource}. Total: ${newTotal}`;
-          }
+          // Store completion message with flavor text
+          const message = formatResourceGatheringMessage(resource, pendingAmount, newTotal);
           completedMessages.push(message);
           taskData.completion_message = message;
         }
@@ -151,7 +182,8 @@ export function checkAndCompleteTasks(state: GameState): { state: GameState; com
             newState.clones = {};
           }
           newState.clones[clone.id] = clone;
-          const message = `${cloneData.kind} clone grown successfully. id=${clone.id}`;
+          // Format message with flavor text
+          const message = formatCloneCraftedMessage(cloneData.kind || 'BASIC', clone.id, cloneData.traits || {});
           completedMessages.push(message);
           taskData.completion_message = message;
         }
