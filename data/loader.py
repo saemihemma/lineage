@@ -87,6 +87,16 @@ def load_data() -> Dict[str, Any]:
         "phrases": load_json_file("phrases.json") or {},
         "womb_config": load_json_file("womb_config.json") or {},
         "feral_drone_messages": load_json_file("feral_drone_messages.json") or {},
+        "clone_crafted_messages": load_json_file("clone_crafted_messages.json") or {},
+        "resource_gathering_messages": load_json_file("resource_gathering_messages.json") or {},
+        "mining_expedition_success_messages": load_json_file("mining_expedition_success_messages.json") or {},
+        "mining_expedition_fail_messages": load_json_file("mining_expedition_fail_messages.json") or {},
+        "combat_expedition_success_messages": load_json_file("combat_expedition_success_messages.json") or {},
+        "combat_expedition_fail_messages": load_json_file("combat_expedition_fail_messages.json") or {},
+        "exploration_expedition_success_messages": load_json_file("exploration_expedition_success_messages.json") or {},
+        "exploration_expedition_fail_messages": load_json_file("exploration_expedition_fail_messages.json") or {},
+        "upload_to_self_messages": load_json_file("upload_to_self_messages.json") or {},
+        "level_up_messages": load_json_file("level_up_messages.json") or {},
         "outcomes_config": load_json_file("outcomes_config.json") or {},
         "gameplay": load_config_file("gameplay.json") or {}
     }

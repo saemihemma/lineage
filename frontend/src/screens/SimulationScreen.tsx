@@ -425,6 +425,11 @@ export function SimulationScreen() {
           addTerminalMessage(result.message);
         }
         
+        // Show level up message if level increased (separate from upload message)
+        if ((result as any).level_up_message) {
+          addTerminalMessage((result as any).level_up_message);
+        }
+        
         // Show attack message if feral drone attack occurred
         if ((result as any).attack_message) {
           addTerminalMessage((result as any).attack_message);

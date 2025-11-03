@@ -25,7 +25,7 @@ export function CloneDetailsPanel({
 
   // Fetch traits config on mount
   useEffect(() => {
-    fetchGameplayConfig().then(setTraitsConfig).catch(err => {
+    fetchGameplayConfig().then(setTraitsConfig).catch((err: unknown) => {
       console.error('Failed to load traits config:', err);
     });
   }, []);
@@ -126,7 +126,7 @@ export function CloneDetailsPanel({
             {/* Compact traits section on the right */}
             {cloneTraits && Object.keys(cloneTraits).length > 0 && (
               <div className="traits-compact">
-                {traitOrder.map(traitId => {
+                {traitOrder.map((traitId: string) => {
                   const value = cloneTraits[traitId];
                   if (value === undefined) return null;
                   const traitDef = traitsConfig?.traits?.[traitId];

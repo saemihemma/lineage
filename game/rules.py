@@ -237,7 +237,14 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
         attention_delta = outcome.stats.attention_delta
         new_state = gain_attention(new_state, attention_delta=attention_delta)
     
-    msg = f"{CLONE_TYPES[kind].display} growing... SELF now {new_state.soul_percent:.1f}% (consumed ~{int(outcome.soul_split_percent * 100)}%)."
+    # Format message with flavor text using state's RNG
+    from backend.routers.game import format_clone_crafted_message
+    msg = format_clone_crafted_message(
+        clone_kind=kind,
+        clone_id=clone_data["id"],
+        traits=clone_data["traits"],
+        rng=new_state.rng
+    )
     # Create a Clone object for return (but don't add to state yet)
     clone = Clone(
         id=clone_data["id"],
@@ -358,7 +365,11 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
             new_state.applied_clone_id = ""
         # Do NOT increment survived_runs - clone died
         # Phase 4: Return feral attack info even on death (attack happened before death roll)
-        return new_state, f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes.", outcome.feral_attack
+        # Format death message with flavor text
+        from backend.routers.game import format_expedition_failure_message
+        death_message = f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes."
+        msg = format_expedition_failure_message(kind, death_message, new_state.rng)
+        return new_state, msg, outcome.feral_attack
     
     # Clone survived - apply rewards and XP
     for res, amount in outcome.loot.items():
@@ -382,18 +393,24 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
         attention_delta = outcome.stats.attention_delta
         new_state = gain_attention(new_state, attention_delta=attention_delta)
     
-    # Build message
-    loot_str = ", ".join([f"{k}+{v}" for k, v in outcome.loot.items()])
+    # Format success message with flavor text
+    from backend.routers.game import format_expedition_message
     gained = outcome.xp_gained.get(kind, 0)
-    msg = f"{kind.title()} expedition complete: {loot_str}. {kind.title()} XP +{gained}. Survived runs: {new_clone.survived_runs}."
-    if outcome.shilajit_found:
-        msg += " Recovered Shilajit fragment from exploration site."
+    msg = format_expedition_message(
+        expedition_kind=kind,
+        success=True,
+        loot=outcome.loot,
+        xp_gained=gained,
+        survived_runs=new_clone.survived_runs,
+        shilajit_found=outcome.shilajit_found,
+        rng=new_state.rng
+    )
     
     # Phase 4: Return feral attack info if occurred
     return new_state, msg, outcome.feral_attack
 
 
-def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[Dict[str, Any]]]:
+def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[str], Optional[Dict[str, Any]]]:
     """
     Upload a clone to SELF to gain XP.
     
@@ -463,6 +480,7 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[D
     outcome = resolve_upload(ctx)
     
     # Apply outcome to state
+    old_level = state.soul_level()  # Capture old level before state changes
     new_state = state.copy()
     new_state.soul_xp += outcome.soul_xp_gained
     new_state.soul_percent = new_state.soul_percent + outcome.soul_restore_percent
@@ -475,10 +493,25 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[D
         new_state.applied_clone_id = ""
     
     new_level = 1 + (new_state.soul_xp // CONFIG['SOUL_LEVEL_STEP'])
-    msg = f"Uploaded clone to SELF. Retained ~{int(outcome.terms['soul_xp']['retain']*100)}% (+{outcome.soul_xp_gained} SELF XP). SELF restored by {outcome.soul_restore_percent:.1f}%. SELF Level now {new_level}."
+    
+    # Format upload message with flavor text (without level info)
+    from backend.routers.game import format_upload_message, format_level_up_message
+    retained_pct = int(outcome.terms['soul_xp']['retain'] * 100)
+    upload_msg = format_upload_message(
+        retained_pct=retained_pct,
+        soul_xp_gained=outcome.soul_xp_gained,
+        soul_restore=outcome.soul_restore_percent,
+        new_level=new_level,
+        rng=new_state.rng
+    )
+    
+    # Check if level increased and format level up message
+    level_up_msg = None
+    if new_level > old_level:
+        level_up_msg = format_level_up_message(new_level, new_state.rng)
     
     # Phase 6: Return feral attack info if occurred
-    return new_state, msg, outcome.feral_attack
+    return new_state, upload_msg, level_up_msg, outcome.feral_attack
 
 
 def gather_resource(state: GameState, resource: str) -> Tuple[GameState, int, str]:
@@ -497,13 +530,20 @@ def gather_resource(state: GameState, resource: str) -> Tuple[GameState, int, st
     new_state = state.copy()
     amount = state.rng.randint(amount_min, amount_max)
     
+    # Format message with flavor text
+    from backend.routers.game import format_resource_gathering_message
     if resource == "Shilajit":
         new_state.resources[resource] = new_state.resources.get(resource, 0) + 1
-        msg = "Shilajit sample extracted. Resource +1."
         amount = 1
     else:
         new_state.resources[resource] = new_state.resources.get(resource, 0) + amount
-        msg = f"Gathered {amount} {resource}. Total: {new_state.resources[resource]}"
+    
+    msg = format_resource_gathering_message(
+        resource=resource,
+        amount=amount,
+        total=new_state.resources[resource],
+        rng=new_state.rng
+    )
     
     # Award practice XP
     award_practice_xp(new_state, "Kinetic", 2)
