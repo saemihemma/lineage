@@ -255,22 +255,34 @@ def emit_event(
 def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
     """Check if session has expired. Returns True if valid, False if expired."""
     # Check if transaction is in error state (PostgreSQL specific)
-    # If so, rollback before attempting new query
+    # If so, force connection recreation to get a clean connection
     try:
         if hasattr(db, 'status'):
             # PostgreSQL connection status check
             import psycopg2
-            if db.status == psycopg2.extensions.STATUS_IN_TRANSACTION:
-                # Check if there's an error by trying a simple query
-                # If that fails, we know transaction is aborted
+            from psycopg2.extensions import STATUS_READY, STATUS_IN_TRANSACTION
+            
+            status = db.status
+            # If connection is in transaction state (shouldn't happen with autocommit),
+            # or connection is closed/invalid, force connection recreation
+            if status < 0 or status == STATUS_IN_TRANSACTION:
+                # Connection is in bad state - force recreation by closing global connection
                 try:
-                    test_cursor = db.cursor()
-                    test_cursor.execute("SELECT 1")
-                    test_cursor.close()
-                except Exception:
-                    # Transaction is aborted, rollback
+                    from backend.database import _db_instance
+                    if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
+                        _db_instance.adapter.close()  # Force close to trigger recreation
+                        if hasattr(_db_instance.adapter, 'conn'):
+                            _db_instance.adapter.conn = None
+                        if hasattr(_db_instance, 'conn'):
+                            _db_instance.conn = None
+                        logger.warning("Closed bad PostgreSQL connection, will recreate on next use")
+                except Exception as e:
+                    logger.debug(f"Could not force close connection: {e}")
+                # Try rollback as fallback
+                try:
                     db.rollback()
-                    logger.warning("Rolled back aborted transaction in check_session_expiry")
+                except Exception:
+                    pass
     except Exception:
         # Not PostgreSQL or status check failed, continue
         pass
@@ -304,7 +316,11 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
                 # Session expired, clean it up
                 try:
                     execute_query(db, "DELETE FROM game_states WHERE session_id = ?", (session_id,))
-                    db.commit()
+                    # Don't need commit() with autocommit, but harmless if called
+                    try:
+                        db.commit()
+                    except Exception:
+                        pass  # Ignore commit errors with autocommit
                     logger.info(f"Cleaned up expired session {session_id[:8]}...")
                     return False
                 except Exception as delete_error:
@@ -321,8 +337,23 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
             logger.error(f"Error parsing timestamp in check_session_expiry: {e}")
             return True  # Allow on error
     except Exception as e:
-        # Query failed - likely transaction aborted
-        logger.error(f"Error in check_session_expiry query: {e}")
+        # Query failed - likely transaction aborted or connection issue
+        # Force connection recreation
+        error_str = str(e).lower()
+        if ("current transaction is aborted" in error_str or 
+            "transaction" in error_str and "aborted" in error_str):
+            try:
+                from backend.database import _db_instance
+                if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
+                    _db_instance.adapter.close()
+                    if hasattr(_db_instance.adapter, 'conn'):
+                        _db_instance.adapter.conn = None
+                    if hasattr(_db_instance, 'conn'):
+                        _db_instance.conn = None
+                    logger.warning("Closed bad connection after transaction abort error, will recreate")
+            except Exception as close_error:
+                logger.debug(f"Could not force close connection after error: {close_error}")
+        # Try rollback as fallback
         try:
             db.rollback()
             logger.info("Rolled back transaction after check_session_expiry error")
