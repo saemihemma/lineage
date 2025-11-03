@@ -43,34 +43,16 @@ _rate_limit_store: Dict[str, Dict[str, list[float]]] = {}
 def set_session_cookie(response: JSONResponse, session_id: str, cookie_name: str = "session_id"):
     """
     Helper to set session cookie with consistent settings.
-    Handles Railway/production cookie requirements.
-    
-    For Railway: May need SameSite=None with Secure=True if behind proxy.
-    SameSite=None REQUIRES Secure=True (browser security requirement).
+    Simplified - just for session tracking (game state is in localStorage).
     """
-    # Check for Railway-specific environment variable to use SameSite=None
-    use_samesite_none = os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production" or \
-                       os.getenv("USE_SAMESITE_NONE", "false").lower() == "true"
-    
-    # For Railway/production with potential proxy: try SameSite=None
-    # SameSite=None REQUIRES Secure=True (browser security)
-    if IS_PRODUCTION and use_samesite_none:
-        same_site_value = "none"
-        secure_value = True  # Required when SameSite=None
-        logger.info(f"🍪 Railway mode: Setting cookie {cookie_name} with SameSite=None, Secure=True")
-    else:
-        same_site_value = "lax"
-        secure_value = IS_PRODUCTION  # True in production (HTTPS), False in dev (HTTP)
-        logger.debug(f"🍪 Setting cookie {cookie_name}: same_site={same_site_value}, secure={secure_value}, httponly=True")
-    
     response.set_cookie(
         key=cookie_name,
         value=session_id,
         httponly=True,
-        samesite=same_site_value,
-        secure=secure_value,
+        samesite="lax",
+        secure=IS_PRODUCTION,  # True in production (HTTPS), False in dev (HTTP)
         max_age=SESSION_EXPIRY,
-        path="/"  # Explicit path
+        path="/"
     )
 
 # Session expiration time (24 hours)
@@ -313,7 +295,7 @@ def get_session_id(session_id: Optional[str] = Cookie(None), request: Optional[R
         session_id = str(uuid.uuid4())
         # Log more details about why new session was created
         cookie_header = request.headers.get("Cookie", "") if request else "N/A"
-        logger.warning(f"🆕 New session created: {session_id[:8]}... (Cookie header present: {bool(cookie_header)}, length: {len(cookie_header)})")
+        logger.debug(f"New session created: {session_id[:8]}...")
         if request:
             logger.debug(f"   Request headers: Cookie={cookie_header[:100]}...")
     else:
@@ -1171,7 +1153,6 @@ async def build_womb_endpoint(
     Rate limit: 5 requests/minute
     """
     sid = get_session_id(session_id, request)
-    logger.info(f"🔨 POST /build-womb - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
     enforce_rate_limit(sid, "build_womb")
 
     # Get state from request body (frontend localStorage) or fallback to default
@@ -1191,8 +1172,6 @@ async def build_womb_endpoint(
                 detail="Game state required in request body. Please refresh the page."
             )
     
-    current_womb_count = len(state.wombs) if state.wombs else 0
-    logger.info(f"📊 Before build_womb - Session: {sid[:8]}..., Wombs: {current_womb_count}, Assembler: {state.assembler_built}")
 
     # Check for active tasks
     if state.active_tasks:
