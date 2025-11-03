@@ -120,9 +120,47 @@
   transition: width 0.3s ease;
 }
 
-/* Womb panel height constraint */
-#womb.collapsible-panel .collapsible-panel-content {
-  max-height: 300px !important;
+/* Center column panel sizing */
+.mission-control-center #womb {
+  flex: 0 0 auto;
+  max-height: 280px;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.mission-control-center #womb .collapsible-panel-content {
+  overflow-y: auto;
+  max-height: 240px;
+}
+
+.mission-control-center #clones {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mission-control-center #clones .collapsible-panel-content {
+  overflow-y: auto;
+}
+
+/* Right column: 50/50 split, no scrolling needed */
+.mission-control-right #cloneDetails {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mission-control-right #cloneDetails .collapsible-panel-content {
+  overflow-y: auto;
+}
+
+.mission-control-right #self {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mission-control-right #self .collapsible-panel-content {
   overflow-y: auto;
 }
 
