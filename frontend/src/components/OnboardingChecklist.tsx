@@ -37,7 +37,13 @@ export function OnboardingChecklist({ state }: OnboardingChecklistProps) {
       id: 'build_womb',
       label: 'Build Womb',
       completed: ftue.step_build_womb || false,
-      check: () => state.assembler_built || false,
+      check: () => {
+        // Use wombs array if available, fallback to assembler_built
+        if (state.wombs && state.wombs.length > 0) {
+          return state.wombs.some(w => w.durability > 0);
+        }
+        return state.assembler_built || false;
+      },
     },
     {
       id: 'grow_clone',

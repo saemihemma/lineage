@@ -2,6 +2,7 @@
  * Costs Panel - displays costs for current actions
  */
 import type { GameState } from '../types/game';
+import { hasWomb, getWombCount, getUnlockedWombCount } from '../utils/wombs';
 import './CostsPanel.css';
 
 interface CostsPanelProps {
@@ -14,14 +15,17 @@ export function CostsPanel({ state }: CostsPanelProps) {
 
   const wombCost = calculateWombCost(soulLevel);
   const cloneCosts = calculateCloneCosts(soulLevel);
+  const wombCount = getWombCount(state);
+  const unlockedCount = getUnlockedWombCount(state);
+  const canBuildMore = wombCount < unlockedCount;
 
   return (
     <div className="panel costs-panel">
       <div className="panel-header">Costs (Current Level {soulLevel})</div>
       <div className="panel-content">
-        {!state.assembler_built && (
+        {canBuildMore && (
           <div className="cost-section">
-            <div className="cost-title">Build Womb:</div>
+            <div className="cost-title">Build Womb ({wombCount + 1}/{unlockedCount}):</div>
             <div className="cost-items">
               {Object.entries(wombCost).map(([resource, amount]) => (
                 <div key={resource} className="cost-item">
@@ -32,7 +36,7 @@ export function CostsPanel({ state }: CostsPanelProps) {
           </div>
         )}
         
-        {state.assembler_built && (
+        {hasWomb(state) && (
           <div className="cost-section">
             <div className="cost-title">Grow Clones:</div>
             {Object.entries(cloneCosts).map(([kind, costs]) => (

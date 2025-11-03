@@ -1824,3 +1824,55 @@ async def get_limits_status(
         "now": int(now),
         "endpoints": endpoint_status
     })
+
+
+@router.get("/time")
+async def get_server_time():
+    """
+    Get server time for client synchronization.
+
+    Used by frontend progress bars and timers to sync with server clock.
+    Returns current server timestamp in seconds since epoch.
+    """
+    return JSONResponse(content={
+        "server_time": time.time(),
+        "timestamp": int(time.time())
+    })
+
+
+@router.get("/debug/upload_breakdown")
+async def get_upload_breakdown(
+    session_id: Optional[str] = Cookie(None)
+):
+    """
+    Debug endpoint: Get detailed breakdown of upload formula calculation.
+
+    Shows how SELF XP gain is calculated for uploaded clones:
+    - Base XP from clone practices
+    - Retention multiplier (0.6-0.9 based on soul level)
+    - Final SELF XP gained
+
+    Used by frontend tooltips to explain upload mechanics to players.
+    """
+    sid = get_session_id(session_id)
+
+    # Get retain range for formula explanation
+    retain_range = CONFIG["SOUL_XP_RETAIN_RANGE"]  # (0.6, 0.9)
+
+    return JSONResponse(content={
+        "formula_explanation": {
+            "base_formula": "SELF XP Gain = Clone Total XP × Retention Multiplier",
+            "retention_multiplier": f"Scales from {retain_range[0]} (level 0) to {retain_range[1]} (level 10+)",
+            "total_xp": "Sum of MINING + COMBAT + EXPLORATION XP from expeditions",
+            "retain_range": list(retain_range)
+        },
+        "example_calculation": {
+            "clone_with_30_xp": {
+                "total_xp": 30,
+                "level_0_retention": retain_range[0],
+                "level_0_gain": int(30 * retain_range[0]),
+                "level_10_retention": retain_range[1],
+                "level_10_gain": int(30 * retain_range[1])
+            }
+        }
+    })

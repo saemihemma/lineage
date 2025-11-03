@@ -18,7 +18,9 @@ import { GrowCloneDialog } from '../components/GrowCloneDialog';
 import { LeaderboardDialog } from '../components/LeaderboardDialog';
 import { FuelBar } from '../components/FuelBar';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
+import { WombsPanel } from '../components/WombsPanel';
 import type { GameState } from '../types/game';
+import { hasWomb, getWombCount, getUnlockedWombCount } from '../utils/wombs';
 
 export function SimulationScreen() {
   const { state, loading, error, updateState } = useGameState();
@@ -320,7 +322,7 @@ export function SimulationScreen() {
   };
 
   const handleGrowCloneClick = () => {
-    if (!state?.assembler_built) {
+    if (!hasWomb(state)) {
       addTerminalMessage('ERROR: Build the Womb first before growing clones.');
       return;
     }
@@ -390,14 +392,17 @@ export function SimulationScreen() {
           <button 
             className="action-btn" 
             onClick={handleBuildWomb}
-            disabled={isBusy || state.assembler_built}
+            disabled={isBusy || getWombCount(state) >= getUnlockedWombCount(state)}
+            title={getWombCount(state) >= getUnlockedWombCount(state) 
+              ? `All ${getUnlockedWombCount(state)} womb${getUnlockedWombCount(state) > 1 ? 's' : ''} built. Unlock more through practice progression.`
+              : `Build Womb ${getWombCount(state) + 1}/${getUnlockedWombCount(state)}`}
           >
-            Build Womb
+            Build Womb {getWombCount(state) > 0 ? `(${getWombCount(state)}/${getUnlockedWombCount(state)})` : ''}
           </button>
           <button 
             className="action-btn" 
             onClick={handleGrowCloneClick}
-            disabled={isBusy || !state.assembler_built}
+            disabled={isBusy || !hasWomb(state)}
           >
             Grow Clone
           </button>
@@ -453,13 +458,14 @@ export function SimulationScreen() {
             />
           </div>
 
-          {/* Column 2: Costs and Gather */}
+          {/* Column 2: Costs, Gather, and Wombs (if < 2 wombs) */}
           <div className="col-2">
             <CostsPanel state={state} />
             <GatherPanel 
               onGather={handleGatherResource}
               disabled={isBusy}
             />
+            {getWombCount(state) < 2 && <WombsPanel state={state} />}
           </div>
 
           {/* Column 3: Clone Details and Progress */}
