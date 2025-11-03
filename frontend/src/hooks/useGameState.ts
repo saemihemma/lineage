@@ -113,8 +113,13 @@ export function useGameState() {
   // Save state
   const saveState = useCallback(async (newState: GameState) => {
     try {
-      await gameAPI.saveState(newState);
-      setState(newState);
+      const result = await gameAPI.saveState(newState);
+      // If saveState returns a state (version conflict), use that instead
+      if (result) {
+        setState(result);
+      } else {
+        setState(newState);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save game state');
       throw err;

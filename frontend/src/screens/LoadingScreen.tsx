@@ -67,14 +67,31 @@ export function LoadingScreen() {
         localStorage.setItem(SELF_NAME_KEY, trimmedName);
 
         // Load current state
-        const currentState = await gameAPI.getState();
+        let currentState = await gameAPI.getState();
         // Update self_name
         const updatedState = {
           ...currentState,
           self_name: trimmedName,
         };
-        // Save to backend
-        await gameAPI.saveState(updatedState);
+        // Save to backend (may return updated state on conflict)
+        const savedResult = await gameAPI.saveState(updatedState);
+        if (savedResult) {
+          // Version conflict - use latest state from server
+          currentState = savedResult;
+          console.log('Version conflict resolved, using latest state from server');
+        }
+        
+        // Ensure name is in the state we're using (fallback safety)
+        if (!currentState.self_name) {
+          currentState.self_name = trimmedName;
+          // Try one more save with the name
+          try {
+            await gameAPI.saveState(currentState);
+          } catch (retryErr) {
+            console.warn('Failed to retry save with name:', retryErr);
+          }
+        }
+        
         // Navigate to simulation
         navigate('/simulation');
       } catch (err) {

@@ -114,11 +114,28 @@ export function SimulationScreen() {
   useEffect(() => {
     if (state && !hasShownWelcome) {
       setHasShownWelcome(true);
-      if (!state.self_name) {
+      
+      // Fallback to localStorage if state doesn't have self_name
+      let displayName = state.self_name;
+      if (!displayName) {
+        const savedName = localStorage.getItem('lineage_self_name');
+        if (savedName) {
+          displayName = savedName;
+          // Try to update state with saved name
+          if (state) {
+            const updatedState = { ...state, self_name: savedName };
+            gameAPI.saveState(updatedState).catch((err) => {
+              console.warn('Failed to sync name from localStorage:', err);
+            });
+          }
+        }
+      }
+      
+      if (!displayName) {
         addTerminalMessage('Welcome to LINEAGE Simulation.');
         addTerminalMessage('Enter your SELF name to begin.');
       } else {
-        addTerminalMessage(`Welcome back, ${state.self_name}.`);
+        addTerminalMessage(`Welcome back, ${displayName}.`);
       }
     }
   }, [state, hasShownWelcome]);
@@ -414,7 +431,7 @@ export function SimulationScreen() {
         <div className="topbar-left">
           <h1 className="game-title">LINEAGE</h1>
           <div className="self-stats">
-            SELF: {state.self_name || 'Unnamed'} | Level: {state.soul_level} | Soul: {state.soul_percent.toFixed(1)}%
+            SELF: {state.self_name || localStorage.getItem('lineage_self_name') || 'Unnamed'} | Level: {state.soul_level} | Soul: {state.soul_percent.toFixed(1)}%
           </div>
         </div>
         <div className="topbar-center">

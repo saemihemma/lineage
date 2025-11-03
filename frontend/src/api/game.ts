@@ -39,11 +39,19 @@ export class GameAPI {
     return this.makeRequest<GameState>('/api/game/state');
   }
 
-  async saveState(state: GameState): Promise<void> {
-    await this.makeRequest('/api/game/state', {
+  async saveState(state: GameState): Promise<GameState | void> {
+    const response = await this.makeRequest<{ status: string; state?: GameState; message?: string }>('/api/game/state', {
       method: 'POST',
       body: JSON.stringify(state),
     });
+    
+    // Handle version conflict - backend returns latest state
+    if (response.status === 'conflict' && response.state) {
+      console.warn('Version conflict: state was updated by server, returning latest state');
+      return response.state;
+    }
+    
+    return; // Normal save success
   }
 
   async gatherResource(resource: string): Promise<{ state: GameState; message: string; amount: number }> {
