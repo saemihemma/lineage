@@ -442,8 +442,9 @@ export function SimulationScreen() {
       }
 
       // Check for network errors - provide more helpful messages
-      if (err && typeof err === 'object' && 'name' in err) {
-        if (err.name === 'NetworkError' || (err.name === 'TypeError' && err.message?.includes('fetch'))) {
+      if (err instanceof Error) {
+        const errName = (err as any).name || err.constructor.name;
+        if (errName === 'NetworkError' || (errName === 'TypeError' && err.message?.includes('fetch'))) {
           // More detailed network error message
           const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
           errorMsg = `Network error: Unable to connect to API at ${apiUrl}. Check your connection and ensure the backend is running.`;
