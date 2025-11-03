@@ -18,7 +18,6 @@ import { LeaderboardDialog } from '../components/LeaderboardDialog';
 import { FuelBar } from '../components/FuelBar';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { WombsPanel } from '../components/WombsPanel';
-import { FacilitiesPanel } from '../components/FacilitiesPanel';
 import { MissionControlLayout } from '../components/MissionControlLayout';
 import { CollapsiblePanel } from '../components/CollapsiblePanel';
 import { usePanelState } from '../stores/usePanelState';
@@ -720,23 +719,15 @@ export function SimulationScreen() {
           <CollapsiblePanel
             id="womb"
             category="centerOpen"
-            title="Womb"
+            title="Wombs"
             defaultOpen={true}
           >
-            {getWombCount(state) < 2 && (
-              <WombsPanel 
-                state={state}
-                onRepair={handleRepairWomb}
-                disabled={isBusy}
-              />
-            )}
-            {getWombCount(state) >= 2 && (
-              <FacilitiesPanel 
-                state={state}
-                onRepair={handleRepairWomb}
-                disabled={isBusy}
-              />
-            )}
+            <WombsPanel 
+              state={state}
+              onRepair={handleRepairWomb}
+              onBuild={handleBuildWomb}
+              disabled={isBusy}
+            />
           </CollapsiblePanel>
           
           <CollapsiblePanel

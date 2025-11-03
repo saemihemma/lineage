@@ -2,6 +2,199 @@
   min-height: 0;
 }
 
+.wombs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 8px;
+}
+
+.womb-card {
+  background: #151a1f;
+  border: 1px solid #1f252a;
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 100px;
+}
+
+.womb-card-unbuilt {
+  opacity: 0.5;
+  background: #0f1419;
+  border-color: #1a1f25;
+}
+
+.womb-card-damaged {
+  border-color: #f44336;
+  background: rgba(244, 67, 54, 0.05);
+}
+
+.womb-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.womb-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e7e7e7;
+}
+
+.womb-card-status-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.womb-card-status-badge.good {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.womb-card-status-badge.warning {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.womb-card-status-badge.critical {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.womb-card-status-badge.locked {
+  background: rgba(154, 164, 173, 0.2);
+  color: #9aa4ad;
+  border: 1px solid rgba(154, 164, 173, 0.3);
+}
+
+.womb-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.womb-card-content-unbuilt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 8px 0;
+}
+
+.womb-card-hint {
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+}
+
+.womb-card-durability {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.womb-card-durability-label {
+  font-size: 10px;
+  color: #9aa4ad;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.womb-card-durability-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e7e7e7;
+}
+
+.womb-card-durability-bar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: #0a0f14;
+  border: 1px solid #1f252a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.womb-card-durability-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.womb-card-durability-fill.good {
+  background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
+}
+
+.womb-card-durability-fill.warning {
+  background: linear-gradient(90deg, #ff9800 0%, #ffb74d 100%);
+}
+
+.womb-card-durability-fill.critical {
+  background: linear-gradient(90deg, #f44336 0%, #ef5350 100%);
+}
+
+.womb-card-action-btn {
+  padding: 6px 12px;
+  background: #ff7a00;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s ease;
+  width: 100%;
+}
+
+.womb-card-action-btn:hover:not(:disabled) {
+  background: #ff9933;
+}
+
+.womb-card-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.womb-card-build-btn {
+  padding: 6px 12px;
+  background: #4caf50;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s ease;
+  width: 100%;
+}
+
+.womb-card-build-btn:hover:not(:disabled) {
+  background: #66bb6a;
+}
+
+.womb-card-build-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Legacy styles (kept for backward compatibility if needed) */
 .womb-empty {
   text-align: center;
   padding: 20px;
@@ -17,133 +210,3 @@
   font-size: 12px;
   color: #666;
 }
-
-.womb-single {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 12px;
-}
-
-.womb-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.womb-stat-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #e7e7e7;
-  text-transform: uppercase;
-}
-
-.womb-stat-bar {
-  position: relative;
-  width: 100%;
-  height: 24px;
-  background: #151a1f;
-  border: 1px solid #1f252a;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.womb-stat-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #ff7a00 0%, #ff9933 100%);
-  transition: width 0.3s ease;
-}
-
-.womb-stat-fill.good {
-  background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
-}
-
-.womb-stat-fill.warning {
-  background: linear-gradient(90deg, #ff9800 0%, #ffb74d 100%);
-}
-
-.womb-stat-fill.critical {
-  background: linear-gradient(90deg, #f44336 0%, #ef5350 100%);
-}
-
-.womb-stat-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  z-index: 1;
-}
-
-.womb-status-info {
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.womb-status-ok {
-  color: #4caf50;
-  background: rgba(76, 175, 80, 0.1);
-}
-
-.womb-status-warning {
-  color: #ff9800;
-  background: rgba(255, 152, 0, 0.1);
-}
-
-.womb-status-critical {
-  color: #f44336;
-  background: rgba(244, 67, 54, 0.1);
-}
-
-.womb-unlock-hint {
-  margin-top: 12px;
-  padding: 10px;
-  background: rgba(255, 122, 0, 0.1);
-  border: 1px solid rgba(255, 122, 0, 0.3);
-  border-radius: 4px;
-}
-
-.womb-unlock-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #ff7a00;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.womb-unlock-text {
-  font-size: 12px;
-  color: #ff9933;
-}
-
-.womb-repair-btn {
-  margin-top: 12px;
-  padding: 8px 16px;
-  background: #ff7a00;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: background 0.2s ease;
-}
-
-.womb-repair-btn:hover:not(:disabled) {
-  background: #ff9933;
-}
-
-.womb-repair-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
