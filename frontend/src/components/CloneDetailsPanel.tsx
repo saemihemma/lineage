@@ -46,7 +46,7 @@ export function CloneDetailsPanel({
   
   // Canonical trait order
   const traitOrder = ['PWC', 'SSC', 'MGC', 'DLT', 'ENF', 'ELK', 'FRK'];
-  const cloneTraits = clone.traits || {};
+  const cloneTraits: Record<string, number> = clone.traits || {};
 
   return (
     <div className="panel clone-details-panel">
@@ -128,7 +128,7 @@ export function CloneDetailsPanel({
             {cloneTraits && Object.keys(cloneTraits).length > 0 && (
               <div className="traits-compact">
                 {traitOrder.map((traitId: string) => {
-                  const value: number | undefined = (cloneTraits as Record<string, number>)[traitId];
+                  const value: number | undefined = cloneTraits[traitId];
                   if (value === undefined) return null;
                   const traitDef = traitsConfig?.traits?.[traitId];
                   const traitName = traitDef?.name || traitId;
