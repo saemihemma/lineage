@@ -28,6 +28,66 @@ from game.rules import (
 from core.models import Clone
 from core.config import CONFIG, RESOURCE_TYPES
 from core.state_manager import get_latest_version
+from data.loader import load_data
+import random
+
+# Load feral drone messages
+_feral_messages_data = load_data().get("feral_drone_messages", {})
+_FERAL_DRONE_MESSAGES = _feral_messages_data.get("messages", [
+    "Feral drone swarm detected. Womb integrity compromised."
+])
+
+
+def format_feral_attack_message(feral_attack_info: Dict[str, Any], action_type: str = "unknown") -> str:
+    """
+    Format a feral drone attack message with random flavor text + functional effects.
+    
+    Args:
+        feral_attack_info: Dict with 'band' and 'effects' keys
+        action_type: Type of action attacked ('gather', 'grow', 'expedition', 'upload')
+    
+    Returns:
+        Formatted message string
+    """
+    band = feral_attack_info.get("band", "unknown").upper()
+    effects = feral_attack_info.get("effects", {})
+    
+    # Get random flavor message
+    flavor_msg = random.choice(_FERAL_DRONE_MESSAGES)
+    
+    # Build functional effects info
+    functional_parts = []
+    
+    if action_type == "gather" or action_type == "grow":
+        time_mult = effects.get("time_mult", 1.0)
+        cost_mult = effects.get("cost_mult", 1.0)
+        
+        if time_mult != 1.0:
+            slowdown = ((time_mult - 1.0) * 100)
+            action_name = "Gathering" if action_type == "gather" else "Growth"
+            functional_parts.append(f"{action_name} slowed by {slowdown:.0f}%")
+        
+        if cost_mult != 1.0:
+            cost_increase = ((cost_mult - 1.0) * 100)
+            functional_parts.append(f"Cost increased by {cost_increase:.0f}%")
+    
+    elif action_type == "expedition":
+        death_add = effects.get("death_chance", 0.0)
+        if death_add > 0:
+            functional_parts.append(f"Expedition danger increased by {death_add*100:.0f}%")
+    
+    elif action_type == "upload":
+        # Upload has no mechanical effects, just warning
+        functional_parts.append("High attention detected - proceed with caution")
+    
+    # Combine flavor + functional info
+    if functional_parts:
+        functional_info = ". " + ". ".join(functional_parts)
+        return f"⚠️ FERAL DRONE ATTACK ({band} ALERT): {flavor_msg}{functional_info}."
+    else:
+        return f"⚠️ FERAL DRONE ATTACK ({band} ALERT): {flavor_msg}."
+
+
 from core.game_logic import perk_constructive_craft_time_mult
 
 router = APIRouter(prefix="/api/game", tags=["game"])
@@ -395,8 +455,8 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                     
                     # Award practice XP (from config)
                     from core.game_logic import award_practice_xp
-                    from core.config import OUTCOMES_CONFIG
-                    gather_config = OUTCOMES_CONFIG.get("gather", {})
+                    from core.config import GAMEPLAY_CONFIG
+                    gather_config = GAMEPLAY_CONFIG.get("gather", {})
                     practice_xp = gather_config.get("practice_xp", {}).get("kinetic", 2)
                     award_practice_xp(new_state, "Kinetic", practice_xp)
                     
@@ -417,8 +477,7 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                     # Phase 5: Include feral attack message if occurred
                     if outcome_info.get('feral_attack'):
                         feral_info = outcome_info['feral_attack']
-                        band = feral_info.get("band", "unknown").upper()
-                        task_data['attack_message'] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Gathering slowed and cost increased due to high attention."
+                        task_data['attack_message'] = format_feral_attack_message(feral_info, "gather")
                     
                     # Note: gather.complete event will be emitted when state is saved (after this function returns)
             
@@ -455,14 +514,33 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
             
             # Complete repair_womb if this was a repair task
             if task_type == "repair_womb":
+                from core.config import GAMEPLAY_CONFIG
+                import random
+                
                 womb_id = task_data.get('womb_id')
-                repair_amount = task_data.get('repair_amount', 0)
                 if womb_id is not None:
                     target_womb = next((w for w in new_state.wombs if w.id == womb_id), None)
                     if target_womb:
-                        # Restore durability to full
-                        target_womb.durability = target_womb.max_durability
-                        task_data['completion_message'] = f"Womb {womb_id} repaired to full durability."
+                        # Systems v1: Restore durability by random amount from config range
+                        repair_config = GAMEPLAY_CONFIG.get("wombs", {}).get("repair", {})
+                        restore_range = repair_config.get("restore_range", [0.15, 0.30])
+                        restore_min, restore_max = restore_range[0], restore_range[1]
+                        
+                        # Calculate restore amount as percentage of max durability
+                        restore_percent = new_state.rng.uniform(restore_min, restore_max)
+                        restore_amount = target_womb.max_durability * restore_percent
+                        
+                        # Restore durability (cap at max)
+                        target_womb.durability = min(
+                            target_womb.max_durability,
+                            target_womb.durability + restore_amount
+                        )
+                        
+                        task_data['completion_message'] = (
+                            f"Womb {womb_id} repaired. "
+                            f"Durability restored by {restore_percent*100:.1f}% "
+                            f"({target_womb.durability:.1f}/{target_womb.max_durability:.1f})."
+                        )
             
             # Create clone if this was a grow_clone task
             if task_type == "grow_clone":
@@ -1202,16 +1280,22 @@ async def gather_resource_endpoint(
         from backend.engine.outcomes import (
             OutcomeContext, SeedParts, resolve_gather
         )
-        from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
+        from core.config import GAMEPLAY_CONFIG, GAMEPLAY_CONFIG_VERSION
+        from game.wombs import find_active_womb
+        
+        # Systems v1: Capture womb_id and task_started_at for deterministic seeding
+        active_womb = find_active_womb(state)
+        womb_id = active_womb.id if active_womb else 0
+        task_started_at = time.time()
         
         # Build outcome context
         gather_id = str(uuid.uuid4())
         seed_parts = SeedParts(
-            user_id=sid,
-            session_id=sid,
-            action_id=gather_id,
-            config_version=OUTCOMES_CONFIG_VERSION,
-            timestamp=time.time()
+            self_name=state.self_name or "",
+            womb_id=womb_id,
+            task_started_at=task_started_at,
+            config_version=GAMEPLAY_CONFIG_VERSION,
+            action_id=gather_id
         )
         
         # Get best womb durability
@@ -1220,6 +1304,9 @@ async def gather_resource_endpoint(
             functional_wombs = [w for w in state.wombs if w.is_functional()]
             if functional_wombs:
                 womb_durability = functional_wombs[0].durability
+        
+        # Count active wombs for overload calculation
+        active_wombs_count = len(functional_wombs) if state.wombs else 0
         
         ctx = OutcomeContext(
             action='gather',
@@ -1230,8 +1317,9 @@ async def gather_resource_endpoint(
             womb_durability=womb_durability,
             resource=resource,
             config=CONFIG,
-            outcomes_config=OUTCOMES_CONFIG,
-            seed_parts=seed_parts
+            gameplay_config=GAMEPLAY_CONFIG,
+            seed_parts=seed_parts,
+            active_wombs_count=active_wombs_count
         )
         
         # Resolve outcome
@@ -1296,8 +1384,7 @@ async def gather_resource_endpoint(
         }
         if outcome.feral_attack:
             response_data["feral_attack"] = outcome.feral_attack
-            band = outcome.feral_attack.get("band", "unknown").upper()
-            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Gathering slowed and cost increased due to high attention."
+            response_data["attack_message"] = format_feral_attack_message(outcome.feral_attack, "gather")
         elif attack_message:
             response_data["attack_message"] = attack_message
         
@@ -1479,8 +1566,7 @@ async def grow_clone_endpoint(
         }
         if feral_attack_info:
             response_data["feral_attack"] = feral_attack_info
-            band = feral_attack_info.get("band", "unknown").upper()
-            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Clone growth slowed and cost increased due to high attention."
+            response_data["attack_message"] = format_feral_attack_message(feral_attack_info, "grow")
         elif attack_message:
             response_data["attack_message"] = attack_message
         
@@ -1719,10 +1805,7 @@ async def run_expedition_endpoint(
         # Phase 4: Include feral attack info from outcome resolution
         if feral_attack_info:
             response_data["feral_attack"] = feral_attack_info
-            # Build message for frontend display
-            band = feral_attack_info.get("band", "unknown").upper()
-            death_add = feral_attack_info.get("effects", {}).get("death_chance", 0.0)
-            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Expedition danger increased by {death_add*100:.0f}% due to high attention."
+            response_data["attack_message"] = format_feral_attack_message(feral_attack_info, "expedition")
         # Womb durability attack (from check_and_apply_womb_systems)
         elif attack_message:
             response_data["attack_message"] = attack_message
@@ -1824,8 +1907,7 @@ async def upload_clone_endpoint(
         }
         if feral_attack_info:
             response_data["feral_attack"] = feral_attack_info
-            band = feral_attack_info.get("band", "unknown").upper()
-            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): High attention detected during upload - proceed with caution."
+            response_data["attack_message"] = format_feral_attack_message(feral_attack_info, "upload")
         elif attack_message:
             response_data["attack_message"] = attack_message
         
