@@ -1770,7 +1770,7 @@ async def run_expedition_endpoint(
                     "success" if clone_survived else "death",
                     json.dumps(loot),
                     xp_gained,
-                    1 if clone_survived else 0,
+                    bool(clone_survived),  # Convert to boolean for database (column expects BOOLEAN, not INTEGER)
                     signature
                 ))
                 db.commit()

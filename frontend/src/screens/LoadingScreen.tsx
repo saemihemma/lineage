@@ -116,7 +116,7 @@ export function LoadingScreen() {
   return (
     <div className="loading-screen">
       <div className="loading-content">
-        <h2 className="loading-title">IDENTITY</h2>
+        <h2 className="loading-title">name your SELF</h2>
         {isReturningUser && name && (
           <div style={{ color: '#00ff00', fontSize: '14px', marginBottom: '8px' }}>
             Welcome back, {name}
