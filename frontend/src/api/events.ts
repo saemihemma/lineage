@@ -53,7 +53,13 @@ export class EventsAPI {
     }
 
     if (!response.ok) {
-      throw new Error(`Events feed failed: ${response.status}`);
+      // Gracefully handle errors - don't throw to avoid breaking the app
+      // Events feed is optional, state is managed via localStorage
+      if (response.status === 404) {
+        return [];
+      }
+      console.warn(`Events feed returned ${response.status} - gracefully ignoring`);
+      return [];
     }
 
     // Store ETag for next request

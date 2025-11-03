@@ -61,15 +61,16 @@ export function useGameState() {
     stateRef.current = state;
   }, [state]);
   
-  // Stable empty object guard for optional chaining
-  const EMPTY_TASKS_OBJ = useMemo(() => ({} as Record<string, any>), []);
-  
   // Create stable version string for active_tasks using useMemo
-  // Guard against optional chaining instability by normalizing to empty object
+  // Only recalculate when active_tasks actually changes, not when any part of state changes
+  // This prevents unnecessary re-runs of effects that depend on activeTasksVersion
   const activeTasksVersion = useMemo(() => {
-    const tasks = state?.active_tasks ?? EMPTY_TASKS_OBJ;
+    const tasks = state?.active_tasks;
+    if (!tasks || Object.keys(tasks).length === 0) {
+      return '';
+    }
     return Object.keys(tasks).sort().join('|');
-  }, [state, EMPTY_TASKS_OBJ]); // Depend on state (which can be null), not state?.active_tasks
+  }, [state?.active_tasks]);
   
   useEffect(() => {
     // Clear any existing interval

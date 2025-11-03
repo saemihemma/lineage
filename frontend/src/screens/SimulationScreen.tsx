@@ -79,7 +79,9 @@ export function SimulationScreen() {
     setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
   }, []); // setTerminalMessages is a stable setState function
 
-  // Event feed hook for live state sync
+  // Event feed hook - DISABLED: Not needed with localStorage-based state management
+  // Tasks complete client-side now, so event feed is redundant
+  // Keeping the hook setup but not starting polling to avoid unnecessary API calls
   const {
     startPolling,
     stopPolling,
@@ -94,23 +96,20 @@ export function SimulationScreen() {
         updateState(patchedState);
       }
     },
-    enabled: !!state && !loading, // Only poll when state is loaded
+    enabled: false, // DISABLED: Event feed not needed with localStorage
   });
 
-  // Start/stop event feed polling based on state availability
-  useEffect(() => {
-    if (!state || loading) {
-      stopPolling();
-      return;
-    }
-
-    // Start polling when state is available
-    startPolling();
-
-    return () => {
-      stopPolling();
-    };
-  }, [state, loading, startPolling, stopPolling]);
+  // Event feed polling disabled - no longer needed with localStorage
+  // useEffect(() => {
+  //   if (!state || loading) {
+  //     stopPolling();
+  //     return;
+  //   }
+  //   startPolling();
+  //   return () => {
+  //     stopPolling();
+  //   };
+  // }, [state, loading, startPolling, stopPolling]);
 
   // Reset event feed on reconnection or after long idle
   useEffect(() => {

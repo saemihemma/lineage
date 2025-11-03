@@ -9,13 +9,20 @@ export function FuelBar() {
   const [fuelStatus, setFuelStatus] = useState<LimitsStatus | null>(null);
 
   // Poll fuel status every 2-3 seconds
+  // Gracefully handles failures - won't show errors if endpoint unavailable
   useEffect(() => {
     const fetchStatus = async () => {
-      const status = await limitsAPI.getStatus();
-      if (status) {
-        setFuelStatus(status);
-      } else {
-        // Endpoint not available - don't show error, just don't display fuel bar
+      try {
+        const status = await limitsAPI.getStatus();
+        if (status) {
+          setFuelStatus(status);
+        } else {
+          // Endpoint not available - silently don't display fuel bar
+          setFuelStatus(null);
+        }
+      } catch (err) {
+        // Silently handle errors - don't show fuel bar if API unavailable
+        // This prevents network error spam in console
         setFuelStatus(null);
       }
     };

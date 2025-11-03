@@ -152,6 +152,8 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Memoize provider value to prevent re-render storms
+  // Note: state must be in dependencies so consumers see updates, but this is intentional
+  // The real fix for #310 is ensuring activeTasksVersion only depends on active_tasks, not entire state
   const value = useMemo(
     () => ({ state, togglePanel, setPanelOpen, resetToDefaults }),
     [state, togglePanel, setPanelOpen, resetToDefaults]
