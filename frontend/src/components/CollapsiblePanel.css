@@ -73,46 +73,9 @@
   display: none;
 }
 
-/* Resize handle */
-.resize-handle {
-  position: absolute;
-  z-index: 10;
-  background-color: transparent;
-  transition: background-color 0.2s ease;
-}
-
-.resize-handle-vertical {
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  cursor: col-resize;
-}
-
-.resize-handle-vertical:hover,
-.resize-handle-vertical:active {
-  background-color: rgba(74, 158, 255, 0.3);
-}
-
-/* Left column: resize handle on right edge */
-.collapsible-panel:has(.resize-handle-vertical) {
-  position: relative;
-}
-
-.resize-handle-horizontal {
-  left: 0;
-  right: 0;
-  height: 4px;
-  cursor: row-resize;
-}
-
-.resize-handle-horizontal:hover,
-.resize-handle-horizontal:active {
-  background-color: rgba(74, 158, 255, 0.3);
-}
-
-/* Terminal: resize handle on top edge */
-.collapsible-panel.terminal-panel .resize-handle-horizontal {
-  top: 0;
-  bottom: auto;
+/* Terminal panel constraints */
+.terminal-panel .collapsible-panel-content {
+  min-height: 220px;
+  max-height: 50vh;
 }
 

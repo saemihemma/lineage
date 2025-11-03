@@ -1,8 +1,8 @@
 /**
  * Panel state management with React Context and localStorage persistence
- * Manages panel open/closed state and panel sizes for Mission Control UI
+ * Manages panel open/closed state for Mission Control UI
  */
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 
 const STORAGE_KEY = 'lineage:ui:v1';
 
@@ -22,11 +22,6 @@ export interface PanelState {
     self: boolean;
   };
   terminalOpen: boolean;
-  sizes: {
-    leftPx?: number;      // Left column width in pixels (default: 320px)
-    rightPx?: number;     // Right column width in pixels (default: 360px)
-    terminalPct?: number; // Terminal height as % of viewport (default: 30%)
-  };
 }
 
 const DEFAULT_STATE: PanelState = {
@@ -45,18 +40,12 @@ const DEFAULT_STATE: PanelState = {
     self: true,
   },
   terminalOpen: true,
-  sizes: {
-    leftPx: 320,
-    rightPx: 360,
-    terminalPct: 30,
-  },
 };
 
 interface PanelStateContextType {
   state: PanelState;
   togglePanel: (category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen', id: string) => void;
   setPanelOpen: (category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen', id: string, open: boolean) => void;
-  setPanelSize: (sizeKey: 'leftPx' | 'rightPx' | 'terminalPct', size: number) => void;
   resetToDefaults: () => void;
 }
 
@@ -76,22 +65,17 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
       if (stored) {
         const parsed = JSON.parse(stored);
         // Merge with defaults to handle schema changes
-        // Ensure sizes object always exists with valid structure
         const mergedState = {
           ...DEFAULT_STATE,
           ...parsed,
           leftOpen: { ...DEFAULT_STATE.leftOpen, ...(parsed.leftOpen || {}) },
           centerOpen: { ...DEFAULT_STATE.centerOpen, ...(parsed.centerOpen || {}) },
           rightOpen: { ...DEFAULT_STATE.rightOpen, ...(parsed.rightOpen || {}) },
-          sizes: {
-            ...DEFAULT_STATE.sizes,
-            ...(parsed.sizes || {}),
-          },
         };
-        // Validate sizes are numbers
-        if (typeof mergedState.sizes.leftPx !== 'number') mergedState.sizes.leftPx = DEFAULT_STATE.sizes.leftPx;
-        if (typeof mergedState.sizes.rightPx !== 'number') mergedState.sizes.rightPx = DEFAULT_STATE.sizes.rightPx;
-        if (typeof mergedState.sizes.terminalPct !== 'number') mergedState.sizes.terminalPct = DEFAULT_STATE.sizes.terminalPct;
+        // Remove sizes property if it exists (migration)
+        if ('sizes' in mergedState) {
+          delete (mergedState as any).sizes;
+        }
         return mergedState;
       }
     } catch (err) {
@@ -100,6 +84,25 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
     // Always return a valid state object
     return DEFAULT_STATE;
   });
+
+  // One-time migration: Remove stale sizes key from localStorage
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) {
+        return;
+      }
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if ('sizes' in parsed) {
+          delete parsed.sizes;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+      }
+    } catch {
+      // Ignore migration errors
+    }
+  }, []); // Run once on mount
 
   // Save to localStorage whenever state changes
   useEffect(() => {
@@ -144,22 +147,18 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const setPanelSize = useCallback((sizeKey: 'leftPx' | 'rightPx' | 'terminalPct', size: number) => {
-    setState((prev) => ({
-      ...prev,
-      sizes: {
-        ...prev.sizes,
-        [sizeKey]: size,
-      },
-    }));
-  }, []);
-
   const resetToDefaults = useCallback(() => {
     setState(DEFAULT_STATE);
   }, []);
 
+  // Memoize provider value to prevent re-render storms
+  const value = useMemo(
+    () => ({ state, togglePanel, setPanelOpen, resetToDefaults }),
+    [state, togglePanel, setPanelOpen, resetToDefaults]
+  );
+
   return (
-    <PanelStateContext.Provider value={{ state, togglePanel, setPanelOpen, setPanelSize, resetToDefaults }}>
+    <PanelStateContext.Provider value={value}>
       {children}
     </PanelStateContext.Provider>
   );

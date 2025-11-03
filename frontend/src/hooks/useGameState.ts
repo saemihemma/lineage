@@ -52,6 +52,8 @@ export function useGameState() {
   }, []);
 
   // Check for task completion periodically
+  // Use ref to track previous active_tasks keys for stable comparison
+  const prevActiveTasksKeysRef = useRef<string>('');
   useEffect(() => {
     // Clear any existing interval
     if (taskCheckIntervalRef.current) {
@@ -63,9 +65,22 @@ export function useGameState() {
     const activeTasks = state?.active_tasks;
     const hasActiveTasks = activeTasks && Object.keys(activeTasks).length > 0;
     
+    // Create stable key string for comparison (sorted task IDs)
+    const currentTaskKeys = hasActiveTasks ? Object.keys(activeTasks).sort().join(',') : '';
+    
+    // Only proceed if task keys actually changed (prevents unnecessary re-setup)
     if (!state || !hasActiveTasks) {
+      prevActiveTasksKeysRef.current = currentTaskKeys;
       return;
     }
+
+    // Only re-setup if task IDs actually changed (not just object reference)
+    if (prevActiveTasksKeysRef.current === currentTaskKeys && taskCheckIntervalRef.current) {
+      // Same tasks, interval already running, no need to re-setup
+      return;
+    }
+    
+    prevActiveTasksKeysRef.current = currentTaskKeys;
 
     console.log(`🔵 Starting task completion checking: ${Object.keys(activeTasks).length} active task(s)`);
 
@@ -115,7 +130,7 @@ export function useGameState() {
         taskCheckIntervalRef.current = null;
       }
     };
-  }, [state?.active_tasks]); // Re-run when active_tasks changes
+  }, [state]); // Depend on entire state object, but use ref pattern to detect actual task changes
 
   // Save state to localStorage
   const saveState = useCallback((newState: GameState) => {

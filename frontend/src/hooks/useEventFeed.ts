@@ -59,6 +59,20 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
   const pausedRef = useRef(!enabled);
   const lastTimestampRef = useRef(0);
   const seenEventIdsRef = useRef<Set<string>>(new Set());
+  
+  // Use refs for callbacks to avoid re-creating pollEvents when callbacks change
+  const onStatePatchRef = useRef(onStatePatch);
+  const onTerminalMessageRef = useRef(onTerminalMessage);
+  const onEventsRef = useRef(onEvents);
+  const currentStateRef = useRef(currentState);
+  
+  // Update refs when callbacks or state change
+  useEffect(() => {
+    onStatePatchRef.current = onStatePatch;
+    onTerminalMessageRef.current = onTerminalMessage;
+    onEventsRef.current = onEvents;
+    currentStateRef.current = currentState;
+  }, [onStatePatch, onTerminalMessage, onEvents, currentState]);
 
   /**
    * Apply incremental patch to state based on event
@@ -220,12 +234,13 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
 
   /**
    * Poll for new events
+   * Uses refs for callbacks to keep dependencies stable (primitives only)
    */
   const pollEvents = useCallback(
     async () => {
       if (pausedRef.current) return;
 
-      const state = currentState;
+      const state = currentStateRef.current;
       
       try {
         const after = lastTimestampRef.current || undefined;
@@ -235,27 +250,27 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
           // Update last timestamp
           lastTimestampRef.current = Math.max(...events.map(e => e.timestamp));
 
-          // Call onEvents callback (if custom handler)
-          if (onEvents) {
-            onEvents(events);
+          // Call onEvents callback (if custom handler) via ref
+          if (onEventsRef.current) {
+            onEventsRef.current(events);
           }
 
           // Apply patches for each event (in order, chaining state updates)
           // Dedupe is handled inside applyEventPatch
           let latestState = state;
           events.forEach((event) => {
-            // Format and add terminal messages
+            // Format and add terminal messages via ref
             const message = formatTerminalMessage(event);
-            if (message && onTerminalMessage) {
-              onTerminalMessage(message);
+            if (message && onTerminalMessageRef.current) {
+              onTerminalMessageRef.current(message);
             }
 
-            // Apply state patch (using latest state, so patches can chain)
-            if (latestState && onStatePatch) {
+            // Apply state patch (using latest state, so patches can chain) via ref
+            if (latestState && onStatePatchRef.current) {
               const patchedState = applyEventPatch(event, latestState);
               if (patchedState) {
                 latestState = patchedState;
-                onStatePatch(patchedState);
+                onStatePatchRef.current(patchedState);
               }
             }
           });
@@ -279,7 +294,7 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
         }
       }
     },
-    [currentState, onEvents, onStatePatch, onTerminalMessage, formatTerminalMessage, applyEventPatch]
+    [formatTerminalMessage, applyEventPatch] // Only stable functions, no callbacks or state
   );
 
   /**
@@ -288,6 +303,7 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
   const startPolling = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
 
     if (!enabled) {
@@ -305,7 +321,7 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
       pollEvents();
     }, interval);
   },
-  [enabled, interval, pollEvents]
+  [enabled, interval, pollEvents] // enabled and interval are primitives, pollEvents is stable
   );
 
   /**

@@ -1,7 +1,7 @@
 /**
  * Simulation Screen - Main game interface
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useGameState } from '../hooks/useGameState';
 import { useEventFeed } from '../hooks/useEventFeed';
 import { gameAPI } from '../api/game';
@@ -45,6 +45,15 @@ export function SimulationScreen() {
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const prevClonesRef = useRef<Record<string, any>>({});
   
+  // Stable empty object for optional chaining guard
+  const EMPTY_TASKS = useMemo(() => ({} as Record<string, any>), []);
+  
+  // Create stable version string for active_tasks to avoid object reference dependencies
+  const activeTasksVersion = useMemo(() => {
+    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    return Object.keys(tasks).sort().join('|');
+  }, [state?.active_tasks, EMPTY_TASKS]);
+  
   // Calculate primary progress (for single progress bar display)
   // Show the most recently started task, or first active task if none specified
   const primaryProgress = (() => {
@@ -63,9 +72,10 @@ export function SimulationScreen() {
     stateRef.current = state;
   }, [state]);
 
-  const addTerminalMessage = (message: string) => {
+  // Memoize addTerminalMessage to ensure stable reference for useEventFeed
+  const addTerminalMessage = useCallback((message: string) => {
     setTerminalMessages((prev) => [...prev, message].slice(-100)); // Keep last 100 messages
-  };
+  }, []); // setTerminalMessages is a stable setState function
 
   // Event feed hook for live state sync
   const {
@@ -158,7 +168,8 @@ export function SimulationScreen() {
 
   // Track task progress locally (no backend polling needed)
   useEffect(() => {
-    if (!state || !state.active_tasks || Object.keys(state.active_tasks).length === 0) {
+    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    if (!state || !tasks || Object.keys(tasks).length === 0) {
       // No active tasks - clear all progress
       setActiveTaskProgress({});
       setIsBusy(false);
@@ -166,7 +177,7 @@ export function SimulationScreen() {
     }
 
     // Track all active task IDs
-    const activeTaskIds = Object.keys(state.active_tasks || {});
+    const activeTaskIds = Object.keys(tasks);
     
     // Initialize progress for new tasks (preserve existing ones to prevent flicker)
     setActiveTaskProgress((prev) => {
@@ -174,7 +185,7 @@ export function SimulationScreen() {
       activeTaskIds.forEach((taskId) => {
         if (!updated[taskId]) {
           // New task - initialize progress
-          const task = (state.active_tasks || {})[taskId];
+          const task = tasks[taskId];
           updated[taskId] = {
             value: 0,
             label: task.type === 'gather_resource' ? `Gathering ${task.resource}...` : 
@@ -199,7 +210,8 @@ export function SimulationScreen() {
 
     // Update progress locally based on task timing
     const progressInterval = setInterval(() => {
-      if (!state || !state.active_tasks) {
+      const currentTasks = state?.active_tasks ?? EMPTY_TASKS;
+      if (!state || !currentTasks || Object.keys(currentTasks).length === 0) {
         return;
       }
 
@@ -208,7 +220,7 @@ export function SimulationScreen() {
         const updated = { ...prev };
         let allComplete = true;
 
-        for (const [taskId, taskData] of Object.entries(state.active_tasks || {})) {
+        for (const [taskId, taskData] of Object.entries(currentTasks)) {
           const startTime = taskData.start_time || 0;
           const duration = taskData.duration || 0;
           
@@ -242,7 +254,7 @@ export function SimulationScreen() {
           }
         }
 
-        if (allComplete && (!state.active_tasks || Object.keys(state.active_tasks).length === 0)) {
+        if (allComplete && (!currentTasks || Object.keys(currentTasks).length === 0)) {
           setIsBusy(false);
         }
 
@@ -251,7 +263,7 @@ export function SimulationScreen() {
     }, 500); // Update every 500ms for smoother progress
 
     return () => clearInterval(progressInterval);
-  }, [state?.active_tasks]);
+  }, [activeTasksVersion, state, EMPTY_TASKS]);
 
   // Listen for task completion and show messages
   useEffect(() => {
@@ -564,10 +576,11 @@ export function SimulationScreen() {
 
   // Auto-expand Progress when tasks start
   useEffect(() => {
-    if (state.active_tasks && Object.keys(state.active_tasks).length > 0) {
+    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    if (tasks && Object.keys(tasks).length > 0) {
       setPanelOpen('rightOpen', 'progress', true);
     }
-  }, [state.active_tasks, setPanelOpen]);
+  }, [activeTasksVersion, state, setPanelOpen, EMPTY_TASKS]);
 
   // Keyboard shortcut: Ctrl+/ or F12 toggles Terminal
   useEffect(() => {
@@ -719,9 +732,6 @@ export function SimulationScreen() {
             category="terminalOpen"
             title="Terminal"
             defaultOpen={true}
-            resizable={true}
-            resizeDirection="horizontal"
-            minSize={10}
             className="terminal-panel"
           >
             <TerminalPanel messages={terminalMessages} />
