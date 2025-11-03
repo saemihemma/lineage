@@ -11,7 +11,6 @@ import { ClonesPanel } from '../components/ClonesPanel';
 import { CostsPanel } from '../components/CostsPanel';
 import { GatherPanel } from '../components/GatherPanel';
 import { CloneDetailsPanel } from '../components/CloneDetailsPanel';
-import { ProgressPanel } from '../components/ProgressPanel';
 import { TerminalPanel } from '../components/TerminalPanel';
 import { PracticesPanel } from '../components/PracticesPanel';
 import { GrowCloneDialog } from '../components/GrowCloneDialog';
@@ -548,7 +547,7 @@ export function SimulationScreen() {
             <div className="attention-bar-global">
               <span className="attention-bar-label">Attention:</span>
               <div className="attention-bar-visual">
-                <div 
+                <div
                   className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 50 ? 'good' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'critical'}`}
                   style={{ width: `${getAverageAttentionPercent(state)}%` }}
                 />
@@ -556,6 +555,16 @@ export function SimulationScreen() {
               </div>
             </div>
           )}
+          {/* Progress bar in HUD */}
+          <div className="progress-bar-hud">
+            <span className="progress-bar-label">{primaryProgress.label || 'Idle'}</span>
+            <div className="progress-bar-visual">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${primaryProgress.value}%` }}
+              />
+            </div>
+          </div>
         </div>
         <div className="topbar-actions">
           <button 
@@ -685,16 +694,7 @@ export function SimulationScreen() {
               disabled={isBusy}
             />
           </CollapsiblePanel>
-          
-          <CollapsiblePanel
-            id="progress"
-            category="rightOpen"
-            title="Progress"
-            defaultOpen={false}
-          >
-            <ProgressPanel progress={primaryProgress} />
-          </CollapsiblePanel>
-          
+
           <CollapsiblePanel
             id="self"
             category="rightOpen"

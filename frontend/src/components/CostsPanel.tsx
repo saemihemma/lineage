@@ -21,34 +21,35 @@ export function CostsPanel({ state }: CostsPanelProps) {
 
   return (
     <div className="panel costs-panel">
-      <div className="panel-header">Costs (Current Level {soulLevel})</div>
+      <div className="panel-header">Costs (Level {soulLevel})</div>
       <div className="panel-content">
-        {canBuildMore && (
-          <div className="cost-section">
-            <div className="cost-title">Build Womb ({wombCount + 1}/{unlockedCount}):</div>
-            <div className="cost-items">
-              {Object.entries(wombCost).map(([resource, amount]) => (
-                <div key={resource} className="cost-item">
-                  {resource}: <span className="cost-amount">{amount}</span>
-                </div>
-              ))}
-            </div>
+        <div className="cost-section">
+          <div className={`cost-title ${!canBuildMore ? 'disabled' : ''}`}>
+            Womb ({wombCount}/{unlockedCount}):
           </div>
-        )}
-        
+          <div className="cost-items-inline">
+            {Object.entries(wombCost).map(([resource, amount]) => (
+              <span key={resource} className="cost-item-inline">
+                {resource}: <span className="cost-amount">{amount}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+
         {hasWomb(state) && (
           <div className="cost-section">
-            <div className="cost-title">Grow Clones:</div>
+            <div className="cost-title">Clones:</div>
             {Object.entries(cloneCosts).map(([kind, costs]) => (
-              <div key={kind} className="clone-cost-group">
-                <div className="clone-cost-kind">{kind}:</div>
-                <div className="cost-items">
-                  {Object.entries(costs).map(([resource, amount]) => (
-                    <div key={resource} className="cost-item">
+              <div key={kind} className="clone-cost-group-compact">
+                <span className="clone-cost-kind-compact">{kind}:</span>
+                <span className="cost-items-inline">
+                  {Object.entries(costs).map(([resource, amount], idx) => (
+                    <span key={resource} className="cost-item-inline">
                       {resource}: <span className="cost-amount">{amount}</span>
-                    </div>
+                      {idx < Object.entries(costs).length - 1 ? ', ' : ''}
+                    </span>
                   ))}
-                </div>
+                </span>
               </div>
             ))}
           </div>

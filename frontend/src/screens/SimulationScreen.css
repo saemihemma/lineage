@@ -87,6 +87,45 @@
   z-index: 1;
 }
 
+/* Progress bar in HUD */
+.progress-bar-hud {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.progress-bar-label {
+  color: #9aa4ad;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.progress-bar-visual {
+  position: relative;
+  width: 150px;
+  height: 20px;
+  background: #151a1f;
+  border: 1px solid #1f252a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #00a8ff 0%, #33bbff 100%);
+  transition: width 0.3s ease;
+}
+
+/* Womb panel height constraint */
+#womb.collapsible-panel .collapsible-panel-content {
+  max-height: 300px !important;
+  overflow-y: auto;
+}
+
 .facilities-container {
   width: 100%;
   margin-top: 10px;
