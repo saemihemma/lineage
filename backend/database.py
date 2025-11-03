@@ -127,21 +127,21 @@ class SQLiteAdapter(DatabaseAdapter):
             ON telemetry_events(session_id, timestamp)
         """)
         
-        # Game states table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS game_states (
-                session_id TEXT PRIMARY KEY,
-                state_data TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create index on updated_at for cleanup queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at
-            ON game_states(updated_at)
-        """)
+        # Game states table - REMOVED: Game state now stored in localStorage on frontend
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS game_states (
+        #         session_id TEXT PRIMARY KEY,
+        #         state_data TEXT NOT NULL,
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        #         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # # Create index on updated_at for cleanup queries
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_game_states_updated_at
+        #     ON game_states(updated_at)
+        # """)
 
         # Expedition outcomes table (anti-cheat)
         cursor.execute("""
@@ -384,21 +384,21 @@ class PostgreSQLAdapter(DatabaseAdapter):
             ON telemetry_events(session_id, timestamp)
         """)
         
-        # Game states table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS game_states (
-                session_id VARCHAR(255) PRIMARY KEY,
-                state_data TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create index on updated_at
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_game_states_updated_at
-            ON game_states(updated_at)
-        """)
+        # Game states table - REMOVED: Game state now stored in localStorage on frontend
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS game_states (
+        #         session_id VARCHAR(255) PRIMARY KEY,
+        #         state_data TEXT NOT NULL,
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        #         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # # Create index on updated_at
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_game_states_updated_at
+        #     ON game_states(updated_at)
+        # """)
 
         # Expedition outcomes table (anti-cheat)
         cursor.execute("""

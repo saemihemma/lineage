@@ -1,63 +1,63 @@
 /**
  * React hook for managing game state
+ * Uses localStorage for persistence instead of database
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { gameAPI } from '../api/game';
 import type { GameState } from '../types/game';
+import { loadStateFromLocalStorage, saveStateToLocalStorage, createDefaultState } from '../utils/localStorage';
 
 export function useGameState() {
   const [state, setState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const pollingIntervalRef = useRef<number | null>(null);
+  const taskCheckIntervalRef = useRef<number | null>(null);
 
-  // Load initial state with retry logic
+  // Load initial state from localStorage
   useEffect(() => {
-    async function load(retries = 3) {
-      try {
-        setLoading(true);
-        setError(null);
-        console.log('🔄 Loading initial game state...');
-        const gameState = await gameAPI.getState();
-        
-        // Log state details for debugging
-        const wombCount = gameState.wombs?.length || 0;
-        console.log('📦 State loaded:', {
-          hasWombs: Array.isArray(gameState.wombs),
-          wombCount,
-          assemblerBuilt: gameState.assembler_built,
-          selfName: gameState.self_name,
-          hasClones: Object.keys(gameState.clones || {}).length > 0,
-          activeTasks: Object.keys(gameState.active_tasks || {}).length,
-        });
-        
-        setState(gameState);
-      } catch (err) {
-        if (retries > 0) {
-          // Retry on transient errors (network, server restart, etc.)
-          console.warn(`Failed to load game state, retrying... (${retries} retries left)`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-          return load(retries - 1);
-        }
-        const errorMsg = err instanceof Error ? err.message : 'Failed to load game state';
-        setError(errorMsg);
-        console.error('Failed to load game state after retries:', err);
-      } finally {
-        setLoading(false);
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('🔄 Loading game state from localStorage...');
+      
+      let gameState = loadStateFromLocalStorage();
+      
+      // If no saved state, create default
+      if (!gameState) {
+        console.log('📦 No saved state found, creating new game state');
+        gameState = createDefaultState();
+        saveStateToLocalStorage(gameState);
       }
+      
+      // Log state details for debugging
+      const wombCount = gameState.wombs?.length || 0;
+      console.log('📦 State loaded:', {
+        hasWombs: Array.isArray(gameState.wombs),
+        wombCount,
+        assemblerBuilt: gameState.assembler_built,
+        selfName: gameState.self_name,
+        hasClones: Object.keys(gameState.clones || {}).length > 0,
+        activeTasks: Object.keys(gameState.active_tasks || {}).length,
+      });
+      
+      setState(gameState);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load game state';
+      setError(errorMsg);
+      console.error('Failed to load game state:', err);
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
 
-  // Poll state when active tasks exist (to detect task completion)
+  // Check for task completion periodically
   useEffect(() => {
-    // Clear any existing polling
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
+    // Clear any existing interval
+    if (taskCheckIntervalRef.current) {
+      clearInterval(taskCheckIntervalRef.current);
+      taskCheckIntervalRef.current = null;
     }
 
-    // Only poll if state exists and has active tasks
+    // Only check if state exists and has active tasks
     const activeTasks = state?.active_tasks;
     const hasActiveTasks = activeTasks && Object.keys(activeTasks).length > 0;
     
@@ -65,96 +65,69 @@ export function useGameState() {
       return;
     }
 
-    console.log(`🔵 Starting task polling: ${Object.keys(activeTasks).length} active task(s)`);
+    console.log(`🔵 Starting task completion checking: ${Object.keys(activeTasks).length} active task(s)`);
 
-    // Start polling every 1 second to check for task completion
-    // CRITICAL: Always use backend state - backend is source of truth for resources, XP, etc.
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const updatedState = await gameAPI.getState();
+    // Check every second for completed tasks
+    taskCheckIntervalRef.current = setInterval(() => {
+      setState((prevState) => {
+        if (!prevState || !prevState.active_tasks) return prevState;
         
-        // Always update state from backend (backend is source of truth)
-        // This ensures resources, practices XP, and other changes are reflected immediately
-        setState((prevState) => {
-          if (!prevState) return updatedState;
-          
-          const prevTasks = prevState.active_tasks || {};
-          const newTasks = updatedState.active_tasks || {};
-          
-          // Check if active_tasks changed (tasks completed or new tasks added)
-          const prevTaskKeys = Object.keys(prevTasks);
-          const newTaskKeys = Object.keys(newTasks);
-          const tasksChanged = prevTaskKeys.length !== newTaskKeys.length || 
-                              prevTaskKeys.some(id => !newTasks[id]) ||
-                              newTaskKeys.some(id => !prevTasks[id]) ||
-                              JSON.stringify(prevTasks) !== JSON.stringify(newTasks);
-          
-          // Check if wombs changed
-          const prevWombCount = prevState.wombs?.length || 0;
-          const newWombCount = updatedState.wombs?.length || 0;
-          const wombsChanged = prevWombCount !== newWombCount;
-          
-          // Always use backend state when polling - it has the latest resources, XP, etc.
-          // The backend saves state after every action, so polling should always sync
-          if (tasksChanged) {
-            console.log(`🟢 Tasks changed: ${prevTaskKeys.length} → ${newTaskKeys.length}, syncing state from backend`);
+        const now = Date.now() / 1000; // Current time in seconds
+        const updatedTasks = { ...prevState.active_tasks };
+        let tasksChanged = false;
+        
+        // Check each active task for completion
+        for (const [taskId, taskData] of Object.entries(updatedTasks)) {
+          const endTime = taskData.end_time;
+          if (endTime && now >= endTime) {
+            // Task completed - remove it
+            console.log(`✅ Task completed: ${taskId}`);
+            delete updatedTasks[taskId];
+            tasksChanged = true;
           }
-          
-          if (wombsChanged) {
-            console.log(`🏗️ Wombs changed: ${prevWombCount} → ${newWombCount}, syncing state from backend`);
-          }
-          
-          // Always return backend state - it's the source of truth
-          // Even if tasks didn't change, backend might have updated resources, XP, etc.
-          return updatedState;
-        });
-
-        // Check if we should stop polling (no more active tasks)
-        const stillHasActiveTasks = updatedState.active_tasks && Object.keys(updatedState.active_tasks).length > 0;
-        if (!stillHasActiveTasks && pollingIntervalRef.current) {
-          console.log(`🔴 No more active tasks - stopping polling`);
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
         }
-      } catch (err) {
-        // Don't spam errors if polling fails (might be transient network issue)
-        console.warn('Failed to poll game state for task completion:', err);
-      }
-    }, 1000); // Poll every 1 second
+        
+        if (tasksChanged) {
+          const newState = {
+            ...prevState,
+            active_tasks: updatedTasks,
+          };
+          // Auto-save when tasks complete
+          saveStateToLocalStorage(newState);
+          return newState;
+        }
+        
+        return prevState;
+      });
+    }, 1000); // Check every 1 second
 
     // Cleanup on unmount or when state changes
     return () => {
-      if (pollingIntervalRef.current) {
-        console.log(`🟡 Cleaning up task polling`);
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
+      if (taskCheckIntervalRef.current) {
+        console.log(`🟡 Cleaning up task checking`);
+        clearInterval(taskCheckIntervalRef.current);
+        taskCheckIntervalRef.current = null;
       }
     };
   }, [state?.active_tasks]); // Re-run when active_tasks changes
 
-  // Save state
-  const saveState = useCallback(async (newState: GameState) => {
+  // Save state to localStorage
+  const saveState = useCallback((newState: GameState) => {
     try {
-      const result = await gameAPI.saveState(newState);
-      // If saveState returns a state (version conflict), use that instead
-      if (result) {
-        setState(result);
-      } else {
-        setState(newState);
-      }
+      saveStateToLocalStorage(newState);
+      setState(newState);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save game state');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to save game state';
+      setError(errorMsg);
       throw err;
     }
   }, []);
 
-  // Update state after action
-  // NOTE: Do NOT auto-save here - backend already saves state on every action.
-  // Auto-save causes race conditions where frontend overwrites newer backend state.
+  // Update state after action and auto-save
   const updateState = useCallback((newState: GameState) => {
     setState(newState);
-    // No auto-save - backend handles persistence on actions
-    // If you need to save state explicitly, use saveState() instead
+    // Auto-save to localStorage after every update
+    saveStateToLocalStorage(newState);
   }, []);
 
   return {

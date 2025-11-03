@@ -932,111 +932,131 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
         raise
 
 
+# DEPRECATED: State endpoints removed - game state is now managed via localStorage on frontend
+# @router.get("/state")
+# async def get_game_state(
+#     request: Request,
+#     db: DatabaseConnection = Depends(get_db),
+#     session_id: Optional[str] = Cookie(None)
+# ):
+#     """
+#     Get current game state.
+#     Creates new state if none exists.
+#     Includes CSRF token for state-changing requests.
+#     Rate limit: 60 requests/minute
+#     """
+#     raise HTTPException(status_code=410, detail="State endpoints deprecated - use localStorage on frontend")
+
 @router.get("/state")
-async def get_game_state(
-    request: Request,
-    db: DatabaseConnection = Depends(get_db),
-    session_id: Optional[str] = Cookie(None)
-):
-    """
-    Get current game state.
-    Creates new state if none exists.
-    Includes CSRF token for state-changing requests.
-    Rate limit: 60 requests/minute
-    """
-    from core.csrf import generate_csrf_cookie_value
+async def get_game_state_deprecated():
+    """State endpoints removed - game state is now managed via localStorage"""
+    raise HTTPException(status_code=410, detail="State endpoints deprecated - game state is now managed via localStorage on frontend")
 
-    sid = get_session_id(session_id, request)
-    logger.info(f"📥 GET /state - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
-    enforce_rate_limit(sid, "get_state")
-
-    # Check if this is a new session (no cookie provided)
-    is_new_session = not session_id
-    
-    # Check session expiry
-    if not check_session_expiry(db, sid):
-        # Session expired, create new one
-        sid = str(uuid.uuid4())
-        is_new_session = True
-
-    state = load_game_state(db, sid)
-    if state is None:
-        # Create new game state
-        logger.info(f"🆕 Creating new game state for session {sid[:8]}...")
-        state = GameState()
-        state.version = get_latest_version()
-        state.assembler_built = False
-        state.last_saved_ts = time.time()
-        save_game_state(db, sid, state)
-        is_new_session = True  # Mark as new since we just created state
-    else:
-        womb_count = len(state.wombs) if state.wombs else 0
-        logger.debug(f"📦 Loaded state for session {sid[:8]}... - Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}")
-
-    # Check for completed tasks
-    old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
-    old_womb_count = len(state.wombs) if state.wombs else 0
-    logger.debug(f"🔍 Before check_and_complete_tasks: active_tasks={len(old_active_tasks)}, wombs={old_womb_count}")
-    state = check_and_complete_tasks(state)
-    new_womb_count = len(state.wombs) if state.wombs else 0
-    logger.debug(f"🔍 After check_and_complete_tasks: active_tasks={len(state.active_tasks) if state.active_tasks else 0}, wombs={new_womb_count}")
-    
-    if state.active_tasks != old_active_tasks:
-        # Tasks were completed - emit completion events
-        logger.info(f"🔄 Tasks completed during load, saving updated state for session {sid[:8]}... (wombs: {old_womb_count} → {new_womb_count})")
-        save_game_state(db, sid, state)
-        for task_id, old_task_data in old_active_tasks.items():
-            if task_id not in state.active_tasks:
-                # Task was completed
-                task_type = old_task_data.get('type')
-                
-                if task_type == "gather_resource":
-                    resource = old_task_data.get('resource')
-                    if resource:
-                        new_total = state.resources.get(resource, 0)
-                        delta = old_task_data.get('pending_amount', 0)
-                        emit_event(db, sid, "gather.complete", {
-                            "resource": resource,
-                            "delta": delta,
-                            "new_total": new_total
-                        })
-                        emit_event(db, sid, "resource.delta", {
-                            "resource": resource,
-                            "delta": delta,
-                            "new_total": new_total
-                        })
-                
-                elif task_type == "grow_clone":
-                    completed_clone = old_task_data.get('completed_clone')
-                    if completed_clone:
-                        emit_event(db, sid, "clone.grow.complete", {
-                            "clone": completed_clone
-                        }, entity_id=completed_clone.get("id"))
-    elif new_womb_count != old_womb_count:
-        # Wombs changed but tasks didn't (edge case - should save anyway)
-        logger.warning(f"⚠️ Wombs changed ({old_womb_count} → {new_womb_count}) but active_tasks unchanged - saving anyway")
-        save_game_state(db, sid, state)
-
-    # Generate CSRF token for this session
-    csrf_token = generate_csrf_cookie_value(sid)
-
-    response = JSONResponse(content=game_state_to_dict(state))
-
-    # Set session cookie
-    set_session_cookie(response, sid, "session_id")
-
-    # Set CSRF token cookie (NOT HttpOnly, so client can read it for headers)
-    response.set_cookie(
-        key="csrf_token",
-        value=csrf_token,
-        httponly=False,  # Client needs to read this for X-CSRF-Token header
-        samesite="lax" if IS_PRODUCTION else "lax",
-        secure=IS_PRODUCTION,
-        max_age=SESSION_EXPIRY,
-        path="/"
-    )
-
-    return response
+# OLD IMPLEMENTATION - KEPT FOR REFERENCE
+# async def get_game_state_OLD(
+#     request: Request,
+#     db: DatabaseConnection = Depends(get_db),
+#     session_id: Optional[str] = Cookie(None)
+# ):
+#     """
+#     Get current game state.
+#     Creates new state if none exists.
+#     Includes CSRF token for state-changing requests.
+#     Rate limit: 60 requests/minute
+#     """
+#     from core.csrf import generate_csrf_cookie_value
+#
+#     sid = get_session_id(session_id, request)
+#     logger.info(f"📥 GET /state - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
+#     enforce_rate_limit(sid, "get_state")
+#
+#     # Check if this is a new session (no cookie provided)
+#     is_new_session = not session_id
+#     
+#     # Check session expiry
+#     if not check_session_expiry(db, sid):
+#         # Session expired, create new one
+#         sid = str(uuid.uuid4())
+#         is_new_session = True
+#
+#     state = load_game_state(db, sid)
+#     if state is None:
+#         # Create new game state
+#         logger.info(f"🆕 Creating new game state for session {sid[:8]}...")
+#         state = GameState()
+#         state.version = get_latest_version()
+#         state.assembler_built = False
+#         state.last_saved_ts = time.time()
+#         save_game_state(db, sid, state)
+#         is_new_session = True  # Mark as new since we just created state
+#     else:
+#         womb_count = len(state.wombs) if state.wombs else 0
+#         logger.debug(f"📦 Loaded state for session {sid[:8]}... - Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}")
+#
+#     # Check for completed tasks
+#     old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
+#     old_womb_count = len(state.wombs) if state.wombs else 0
+#     logger.debug(f"🔍 Before check_and_complete_tasks: active_tasks={len(old_active_tasks)}, wombs={old_womb_count}")
+#     state = check_and_complete_tasks(state)
+#     new_womb_count = len(state.wombs) if state.wombs else 0
+#     logger.debug(f"🔍 After check_and_complete_tasks: active_tasks={len(state.active_tasks) if state.active_tasks else 0}, wombs={new_womb_count}")
+#     
+#     if state.active_tasks != old_active_tasks:
+#         # Tasks were completed - emit completion events
+#         logger.info(f"🔄 Tasks completed during load, saving updated state for session {sid[:8]}... (wombs: {old_womb_count} → {new_womb_count})")
+#         save_game_state(db, sid, state)
+#         for task_id, old_task_data in old_active_tasks.items():
+#             if task_id not in state.active_tasks:
+#                 # Task was completed
+#                 task_type = old_task_data.get('type')
+#                 
+#                 if task_type == "gather_resource":
+#                     resource = old_task_data.get('resource')
+#                     if resource:
+#                         new_total = state.resources.get(resource, 0)
+#                         delta = old_task_data.get('pending_amount', 0)
+#                         emit_event(db, sid, "gather.complete", {
+#                             "resource": resource,
+#                             "delta": delta,
+#                             "new_total": new_total
+#                         })
+#                         emit_event(db, sid, "resource.delta", {
+#                             "resource": resource,
+#                             "delta": delta,
+#                             "new_total": new_total
+#                         })
+#                 
+#                 elif task_type == "grow_clone":
+#                     completed_clone = old_task_data.get('completed_clone')
+#                     if completed_clone:
+#                         emit_event(db, sid, "clone.grow.complete", {
+#                             "clone": completed_clone
+#                         }, entity_id=completed_clone.get("id"))
+#     elif new_womb_count != old_womb_count:
+#         # Wombs changed but tasks didn't (edge case - should save anyway)
+#         logger.warning(f"⚠️ Wombs changed ({old_womb_count} → {new_womb_count}) but active_tasks unchanged - saving anyway")
+#         save_game_state(db, sid, state)
+#
+#     # Generate CSRF token for this session
+#     csrf_token = generate_csrf_cookie_value(sid)
+#
+#     response = JSONResponse(content=game_state_to_dict(state))
+#
+#     # Set session cookie
+#     set_session_cookie(response, sid, "session_id")
+#
+#     # Set CSRF token cookie (NOT HttpOnly, so client can read it for headers)
+#     response.set_cookie(
+#         key="csrf_token",
+#         value=csrf_token,
+#         httponly=False,  # Client needs to read this for X-CSRF-Token header
+#         samesite="lax" if IS_PRODUCTION else "lax",
+#         secure=IS_PRODUCTION,
+#         max_age=SESSION_EXPIRY,
+#         path="/"
+#     )
+#
+#     return response
 
 
 @router.get("/tasks/status")
@@ -1158,59 +1178,65 @@ async def get_task_status(
 
 
 @router.post("/state")
-async def save_game_state_endpoint(
-    state_data: Dict[str, Any],
-    request: Request,
-    db: DatabaseConnection = Depends(get_db),
-    session_id: Optional[str] = Cookie(None)
-):
-    """
-    Save game state.
-    Uses optimistic locking to prevent race conditions where frontend auto-save
-    might overwrite newer backend state (e.g., after task completion).
-    
-    Rate limit: 30 requests/minute
-    Max request size: 1MB
-    """
-    sid = get_session_id(session_id)
-    enforce_rate_limit(sid, "save_state")
+async def save_game_state_endpoint_deprecated():
+    """State endpoints removed - game state is now managed via localStorage"""
+    raise HTTPException(status_code=410, detail="State endpoints deprecated - game state is now managed via localStorage on frontend")
 
-    # Check if this is a new session (no cookie provided)
-    is_new_session = not session_id
-
-    try:
-        state = dict_to_game_state(state_data)
-        state.last_saved_ts = time.time()
-        # Use optimistic locking to prevent overwriting newer backend state
-        # This protects against race conditions where frontend auto-save sends stale state
-        try:
-            save_game_state(db, sid, state, check_version=True)
-        except RuntimeError as version_error:
-            # Version conflict - likely frontend has stale state
-            # Reload latest state from database and return it
-            logger.warning(f"Version conflict for session {sid[:8]}...: {version_error}")
-            latest_state = load_game_state(db, sid, create_if_missing=True)
-            if latest_state:
-                # Return latest state so frontend can refresh
-                response = JSONResponse(content={
-                    "status": "conflict",
-                    "state": game_state_to_dict(latest_state),
-                    "message": "Your game state was updated. Please refresh."
-                })
-            else:
-                # Shouldn't happen, but handle gracefully
-                response = JSONResponse(content={"status": "error", "message": str(version_error)})
-            set_session_cookie(response, sid, "session_id")
-            return response
-
-        response = JSONResponse(content={"status": "saved"})
-        # Always set cookie (even if not new session, ensures cookie is refreshed)
-        set_session_cookie(response, sid, "session_id")
-        return response
-    except Exception as e:
-        error_msg = sanitize_error_message(e)
-        logger.error(f"Error saving game state for session {sid[:8]}...: {str(e)}")
-        raise HTTPException(status_code=400, detail=error_msg)
+# OLD IMPLEMENTATION - KEPT FOR REFERENCE
+# @router.post("/state")
+# async def save_game_state_endpoint_OLD(
+#     state_data: Dict[str, Any],
+#     request: Request,
+#     db: DatabaseConnection = Depends(get_db),
+#     session_id: Optional[str] = Cookie(None)
+# ):
+#     """
+#     Save game state.
+#     Uses optimistic locking to prevent race conditions where frontend auto-save
+#     might overwrite newer backend state (e.g., after task completion).
+#     
+#     Rate limit: 30 requests/minute
+#     Max request size: 1MB
+#     """
+#     sid = get_session_id(session_id)
+#     enforce_rate_limit(sid, "save_state")
+#
+#     # Check if this is a new session (no cookie provided)
+#     is_new_session = not session_id
+#
+#     try:
+#         state = dict_to_game_state(state_data)
+#         state.last_saved_ts = time.time()
+#         # Use optimistic locking to prevent overwriting newer backend state
+#         # This protects against race conditions where frontend auto-save sends stale state
+#         try:
+#             save_game_state(db, sid, state, check_version=True)
+#         except RuntimeError as version_error:
+#             # Version conflict - likely frontend has stale state
+#             # Reload latest state from database and return it
+#             logger.warning(f"Version conflict for session {sid[:8]}...: {version_error}")
+#             latest_state = load_game_state(db, sid, create_if_missing=True)
+#             if latest_state:
+#                 # Return latest state so frontend can refresh
+#                 response = JSONResponse(content={
+#                     "status": "conflict",
+#                     "state": game_state_to_dict(latest_state),
+#                     "message": "Your game state was updated. Please refresh."
+#                 })
+#             else:
+#                 # Shouldn't happen, but handle gracefully
+#                 response = JSONResponse(content={"status": "error", "message": str(version_error)})
+#             set_session_cookie(response, sid, "session_id")
+#             return response
+#
+#         response = JSONResponse(content={"status": "saved"})
+#         # Always set cookie (even if not new session, ensures cookie is refreshed)
+#         set_session_cookie(response, sid, "session_id")
+#         return response
+#     except Exception as e:
+#         error_msg = sanitize_error_message(e)
+#         logger.error(f"Error saving game state for session {sid[:8]}...: {str(e)}")
+#         raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/gather-resource")

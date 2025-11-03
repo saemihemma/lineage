@@ -56,23 +56,15 @@ export class GameAPI {
     return data;
   }
 
+  // State management moved to localStorage - these methods are no longer used
   async getState(): Promise<GameState> {
-    return this.makeRequest<GameState>('/api/game/state');
+    console.warn('getState() called but state is now managed via localStorage');
+    throw new Error('State management moved to localStorage. Use loadStateFromLocalStorage() instead.');
   }
 
   async saveState(state: GameState): Promise<GameState | void> {
-    const response = await this.makeRequest<{ status: string; state?: GameState; message?: string }>('/api/game/state', {
-      method: 'POST',
-      body: JSON.stringify(state),
-    });
-    
-    // Handle version conflict - backend returns latest state
-    if (response.status === 'conflict' && response.state) {
-      console.warn('Version conflict: state was updated by server, returning latest state');
-      return response.state;
-    }
-    
-    return; // Normal save success
+    console.warn('saveState() called but state is now managed via localStorage');
+    throw new Error('State management moved to localStorage. Use saveStateToLocalStorage() instead.');
   }
 
   async gatherResource(resource: string): Promise<{ state: GameState; message: string; amount: number }> {

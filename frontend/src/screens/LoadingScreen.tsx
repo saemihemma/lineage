@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { gameAPI } from '../api/game';
+import { loadStateFromLocalStorage, saveStateToLocalStorage, createDefaultState } from '../utils/localStorage';
 import './LoadingScreen.css';
 
 const SELF_NAME_KEY = 'lineage_self_name';
@@ -57,7 +57,7 @@ export function LoadingScreen() {
     return () => clearInterval(interval);
   }, [loadingMessages]);
 
-  const handleEnter = async () => {
+  const handleEnter = () => {
     if (name.trim() && loadingComplete && !saving) {
       setSaving(true);
       try {
@@ -67,10 +67,17 @@ export function LoadingScreen() {
         // Save name to localStorage for future sessions
         localStorage.setItem(SELF_NAME_KEY, trimmedName);
 
-        // Load current state
-        console.log('📥 LoadingScreen: Loading initial state...');
-        let currentState = await gameAPI.getState();
-        console.log('📦 LoadingScreen: Initial state loaded', {
+        // Load current state from localStorage
+        console.log('📥 LoadingScreen: Loading state from localStorage...');
+        let currentState = loadStateFromLocalStorage();
+        
+        // If no state exists, create default
+        if (!currentState) {
+          console.log('📦 LoadingScreen: No saved state, creating new game state');
+          currentState = createDefaultState();
+        }
+        
+        console.log('📦 LoadingScreen: State loaded', {
           hasWombs: Array.isArray(currentState.wombs),
           wombCount: currentState.wombs?.length || 0,
           selfName: currentState.self_name,
@@ -82,26 +89,10 @@ export function LoadingScreen() {
           ...currentState,
           self_name: trimmedName,
         };
-        // Save to backend (may return updated state on conflict)
-        console.log('💾 LoadingScreen: Saving state with name...');
-        const savedResult = await gameAPI.saveState(updatedState);
-        if (savedResult) {
-          // Version conflict - use latest state from server
-          currentState = savedResult;
-          console.log('⚠️ LoadingScreen: Version conflict resolved, using latest state from server');
-        }
         
-        // Ensure name is in the state we're using (fallback safety)
-        if (!currentState.self_name) {
-          currentState.self_name = trimmedName;
-          // Try one more save with the name
-          try {
-            console.log('🔄 LoadingScreen: Retrying save with name...');
-            await gameAPI.saveState(currentState);
-          } catch (retryErr) {
-            console.warn('❌ LoadingScreen: Failed to retry save with name:', retryErr);
-          }
-        }
+        // Save to localStorage
+        console.log('💾 LoadingScreen: Saving state with name to localStorage...');
+        saveStateToLocalStorage(updatedState);
         
         // Navigate to simulation
         console.log('➡️ LoadingScreen: Navigating to simulation');
