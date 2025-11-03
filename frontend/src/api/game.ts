@@ -26,16 +26,16 @@ export class GameAPI {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
-    // Log request details for debugging
-    console.log(`🌐 API Request: ${options?.method || 'GET'} ${endpoint}`, {
-      url,
-      baseUrl: this.baseUrl,
-      hasCredentials: true,
-      headers: options?.headers,
-    });
-    
     try {
       const sessionId = getOrCreateSessionId();
+
+      // Log request details for debugging
+      console.log(`🌐 API Request: ${options?.method || 'GET'} ${endpoint}`, {
+        url,
+        baseUrl: this.baseUrl,
+        sessionId: sessionId,
+        hasCredentials: true,
+      });
 
       const response = await fetch(url, {
         ...options,

@@ -159,13 +159,16 @@ export function getOrCreateSessionId(): string {
       const state = loadStateFromLocalStorage();
       if (state?.self_name && state.self_name.trim()) {
         sessionId = state.self_name.trim();
+        console.log('🆔 Created session ID from self_name:', sessionId);
       } else {
         // Fallback to simple timestamp-based ID
         sessionId = `player_${Date.now()}`;
+        console.log('🆔 Created session ID from timestamp:', sessionId);
       }
 
       localStorage.setItem(SESSION_ID_KEY, sessionId);
-      console.log('🆔 Created session ID:', sessionId);
+    } else {
+      console.log('🆔 Using existing session ID:', sessionId);
     }
 
     return sessionId;
