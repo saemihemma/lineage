@@ -1,8 +1,8 @@
 """Game state management with RNG integration"""
 import random
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
-from core.models import PlayerState
+from core.models import PlayerState, Womb
 
 
 @dataclass
@@ -46,5 +46,8 @@ class GameState(PlayerState):
         )
         # Copy clones
         new_state.clones = {cid: copy.deepcopy(c) for cid, c in self.clones.items()}
+        # Copy wombs if they exist (for backward compatibility, check if attribute exists)
+        if hasattr(self, 'wombs'):
+            new_state.wombs = [copy.deepcopy(w) for w in self.wombs]
         return new_state
 

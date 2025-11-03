@@ -99,5 +99,26 @@ CONFIG = {
     "MIN_UPLOAD_XP_THRESHOLD": 50,
     "SOUL_SAFETY_MARGIN": 5.0,
     "MIN_CLONES_TO_KEEP": 2,
+    # Womb (Assembler) configuration
+    "WOMB_MAX_DURABILITY": 100.0,
+    "WOMB_MAX_ATTENTION": 100.0,
+    "WOMB_ATTENTION_DECAY_PER_HOUR": 1.0,  # Attention lost per hour of idle
+    "WOMB_ATTENTION_GAIN_ON_ACTION": 5.0,  # Attention gained per action (grow clone, build womb)
+    "WOMB_ATTACK_CHANCE": 0.15,  # Chance of attack on state change (15%)
+    "WOMB_ATTACK_DAMAGE_MIN": 5.0,  # Minimum attack damage
+    "WOMB_ATTACK_DAMAGE_MAX": 15.0,  # Maximum attack damage
+    "WOMB_REPAIR_COST_PER_DURABILITY": {"Tritanium": 0.5, "Metal Ore": 0.3},  # Cost per durability point
+    "WOMB_REPAIR_TIME_MIN": 20,  # Minimum repair time in seconds
+    "WOMB_REPAIR_TIME_MAX": 40,  # Maximum repair time in seconds
+    "WOMB_MAX_COUNT": 4,  # Maximum number of wombs
+    # Womb unlock thresholds (Practice levels)
+    "WOMB_UNLOCK_ANY_PRACTICE_L4": True,  # +1 womb when any practice reaches L4
+    "WOMB_UNLOCK_ANY_PRACTICE_L7": True,  # +1 womb when any practice reaches L7
+    "WOMB_UNLOCK_TWO_PRACTICES_L9": True,  # +1 womb when two practices reach L9
+    # Practice synergies (multipliers)
+    "WOMB_SYNERGY_COGNITIVE_ATTENTION_MULT": 0.95,  # Cognitive L3+ reduces attention decay (increases gain multiplier)
+    "WOMB_SYNERGY_KINETIC_ATTACK_MULT": 0.90,  # Kinetic L3+ reduces attack chance/damage
+    "WOMB_SYNERGY_CONSTRUCTIVE_REPAIR_MULT": 0.85,  # Constructive L3+ reduces repair cost/time
+    "WOMB_SYNERGY_THRESHOLD": 3,  # Practice level required for synergy
 }
 

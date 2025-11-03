@@ -216,7 +216,12 @@ class SQLiteAdapter(DatabaseAdapter):
             ON events(created_at DESC, id)
         """)
 
-        conn.commit()
+        # Schema initialization doesn't need explicit commit with autocommit=True
+        # But we'll keep commit for safety
+        try:
+            conn.commit()
+        except Exception:
+            pass
 
 
 class PostgreSQLAdapter(DatabaseAdapter):
@@ -242,7 +247,20 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 self.db_url,
                 cursor_factory=RealDictCursor  # Returns dict-like rows similar to sqlite3.Row
             )
+            # Enable autocommit mode - each query is its own transaction
+            # This prevents "transaction aborted" errors when one query fails
+            # For multi-query operations that need transactions, we'll use explicit BEGIN/COMMIT
+            self.conn.autocommit = True
             self.init_schema(self.conn)
+        
+        # Ensure connection is in a clean state (handle any lingering transaction errors)
+        try:
+            if self.conn.status != psycopg2.extensions.STATUS_READY:
+                # Connection is in a bad state, reset it
+                self.conn.rollback()
+        except Exception:
+            pass
+        
         return self.conn
     
     def close(self) -> None:
@@ -392,7 +410,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
             ON events(created_at DESC, id)
         """)
 
-        conn.commit()
+        # Schema initialization doesn't need explicit commit with autocommit=True
+        # But we'll keep commit for safety
+        try:
+            conn.commit()
+        except Exception:
+            pass
 
 
 class Database:
@@ -484,6 +507,7 @@ def get_db_placeholder() -> str:
 def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any:
     """
     Execute a SQL query with parameter placeholders converted for the current database.
+    Automatically handles PostgreSQL aborted transactions by rolling back and retrying.
     
     This allows writing SQL queries with '?' placeholders (SQLite style) and automatically
     converts them to '%s' (PostgreSQL style) if needed.
@@ -496,6 +520,9 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
     Returns:
         Cursor object
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     placeholder = get_db_placeholder()
     
     # Convert placeholders if needed (SQLite uses '?', PostgreSQL uses '%s')
@@ -503,6 +530,29 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
         # Convert SQLite-style placeholders to PostgreSQL-style
         sql = sql.replace("?", "%s")
     
-    cursor = conn.cursor()
-    cursor.execute(sql, params)
-    return cursor
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        return cursor
+    except Exception as e:
+        # Check if this is a PostgreSQL "transaction aborted" error
+        error_str = str(e).lower()
+        error_type = str(type(e).__name__)
+        
+        if ("current transaction is aborted" in error_str or 
+            "infailedsqltransaction" in error_type.lower() or
+            "transaction" in error_str and "aborted" in error_str):
+            # Rollback the aborted transaction
+            try:
+                conn.rollback()
+                logger.warning(f"Rolled back aborted transaction before retry: {sql[:50]}...")
+                # Retry the query after rollback
+                cursor = conn.cursor()
+                cursor.execute(sql, params)
+                return cursor
+            except Exception as retry_error:
+                logger.error(f"Failed to retry query after rollback: {retry_error}")
+                raise
+        else:
+            # Not a transaction error, re-raise
+            raise

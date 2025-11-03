@@ -54,6 +54,25 @@ def serialize_config() -> Dict[str, Any]:
         "assembler": {
             "cost": CONFIG["ASSEMBLER_COST"],
             "buildTime": list(CONFIG["ASSEMBLER_TIME"]),
+            # Womb system configuration
+            "maxDurability": CONFIG.get("WOMB_MAX_DURABILITY", 100.0),
+            "maxAttention": CONFIG.get("WOMB_MAX_ATTENTION", 100.0),
+            "attentionDecayPerHour": CONFIG.get("WOMB_ATTENTION_DECAY_PER_HOUR", 1.0),
+            "attentionGainOnAction": CONFIG.get("WOMB_ATTENTION_GAIN_ON_ACTION", 5.0),
+            "attackChance": CONFIG.get("WOMB_ATTACK_CHANCE", 0.15),
+            "attackDamageMin": CONFIG.get("WOMB_ATTACK_DAMAGE_MIN", 5.0),
+            "attackDamageMax": CONFIG.get("WOMB_ATTACK_DAMAGE_MAX", 15.0),
+            "repairCostPerDurability": CONFIG.get("WOMB_REPAIR_COST_PER_DURABILITY", {"Tritanium": 0.5, "Metal Ore": 0.3}),
+            "repairTimeMin": CONFIG.get("WOMB_REPAIR_TIME_MIN", 20),
+            "repairTimeMax": CONFIG.get("WOMB_REPAIR_TIME_MAX", 40),
+            "maxCount": CONFIG.get("WOMB_MAX_COUNT", 4),
+            "unlockAnyPracticeL4": CONFIG.get("WOMB_UNLOCK_ANY_PRACTICE_L4", True),
+            "unlockAnyPracticeL7": CONFIG.get("WOMB_UNLOCK_ANY_PRACTICE_L7", True),
+            "unlockTwoPracticesL9": CONFIG.get("WOMB_UNLOCK_TWO_PRACTICES_L9", True),
+            "synergyCognitiveAttentionMult": CONFIG.get("WOMB_SYNERGY_COGNITIVE_ATTENTION_MULT", 0.95),
+            "synergyKineticAttackMult": CONFIG.get("WOMB_SYNERGY_KINETIC_ATTACK_MULT", 0.90),
+            "synergyConstructiveRepairMult": CONFIG.get("WOMB_SYNERGY_CONSTRUCTIVE_REPAIR_MULT", 0.85),
+            "synergyThreshold": CONFIG.get("WOMB_SYNERGY_THRESHOLD", 3),
         },
 
         # Expedition configuration

@@ -199,43 +199,136 @@ def sanitize_error_message(error: Exception) -> str:
         return error_str
 
 
+def emit_event(
+    db: DatabaseConnection,
+    session_id: str,
+    event_type: str,
+    event_data: Dict[str, Any],
+    entity_id: Optional[str] = None
+) -> None:
+    """
+    Emit an event to the events feed.
+    Events are stored in the database for the events feed endpoint.
+    """
+    try:
+        event_id = str(uuid.uuid4())
+        event_subtype = None
+        
+        # Map event types to database fields
+        # Frontend expects: gather.start, gather.complete, clone.grow.start, etc.
+        # Database uses: event_type, event_subtype
+        if "." in event_type:
+            parts = event_type.split(".", 1)
+            event_type_db = parts[0]  # e.g., "gather", "clone", "expedition"
+            event_subtype = parts[1]   # e.g., "start", "complete", "result"
+        else:
+            event_type_db = event_type
+        
+        payload_json = json.dumps(event_data)
+        
+        try:
+            execute_query(db, """
+                INSERT INTO events (id, session_id, event_type, event_subtype, entity_id, payload_json, privacy_level, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'private', CURRENT_TIMESTAMP)
+            """, (
+                event_id,
+                session_id,
+                event_type_db,
+                event_subtype,
+                entity_id,
+                payload_json
+            ))
+            db.commit()
+        except Exception as db_error:
+            # Rollback on error to prevent transaction cascade
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            # Don't break the game if event emission fails
+            logger.warning(f"Failed to emit event {event_type} for session {session_id[:8]}...: {db_error}")
+    except Exception as e:
+        # Don't break the game if event emission fails
+        logger.warning(f"Failed to emit event {event_type} for session {session_id[:8]}...: {e}")
+
+
 def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
     """Check if session has expired. Returns True if valid, False if expired."""
-    cursor = execute_query(
-        db,
-        "SELECT updated_at FROM game_states WHERE session_id = ?",
-        (session_id,)
-    )
-    row = cursor.fetchone()
-
-    if row is None:
-        return True  # New session is valid
-
-    # Parse updated_at timestamp
-    # PostgreSQL returns datetime objects, SQLite returns strings
-    updated_at_value = row['updated_at']
+    # Check if transaction is in error state (PostgreSQL specific)
+    # If so, rollback before attempting new query
     try:
-        from datetime import datetime
-        if isinstance(updated_at_value, datetime):
-            # PostgreSQL returns datetime object directly
-            updated_at = updated_at_value
-        else:
-            # SQLite returns string, parse it
-            updated_at = datetime.fromisoformat(str(updated_at_value))
-        now = datetime.utcnow()
-        age_seconds = (now - updated_at).total_seconds()
+        if hasattr(db, 'status'):
+            # PostgreSQL connection status check
+            import psycopg2
+            if db.status == psycopg2.extensions.STATUS_IN_TRANSACTION:
+                # Check if there's an error by trying a simple query
+                # If that fails, we know transaction is aborted
+                try:
+                    test_cursor = db.cursor()
+                    test_cursor.execute("SELECT 1")
+                    test_cursor.close()
+                except Exception:
+                    # Transaction is aborted, rollback
+                    db.rollback()
+                    logger.warning("Rolled back aborted transaction in check_session_expiry")
+    except Exception:
+        # Not PostgreSQL or status check failed, continue
+        pass
+    
+    try:
+        cursor = execute_query(
+            db,
+            "SELECT updated_at FROM game_states WHERE session_id = ?",
+            (session_id,)
+        )
+        row = cursor.fetchone()
 
-        if age_seconds > SESSION_EXPIRY:
-            # Session expired, clean it up
-            execute_query(db, "DELETE FROM game_states WHERE session_id = ?", (session_id,))
-            db.commit()
-            logger.info(f"Cleaned up expired session {session_id[:8]}...")
-            return False
+        if row is None:
+            return True  # New session is valid
 
-        return True
+        # Parse updated_at timestamp
+        # PostgreSQL returns datetime objects, SQLite returns strings
+        updated_at_value = row['updated_at']
+        try:
+            from datetime import datetime
+            if isinstance(updated_at_value, datetime):
+                # PostgreSQL returns datetime object directly
+                updated_at = updated_at_value
+            else:
+                # SQLite returns string, parse it
+                updated_at = datetime.fromisoformat(str(updated_at_value))
+            now = datetime.utcnow()
+            age_seconds = (now - updated_at).total_seconds()
+
+            if age_seconds > SESSION_EXPIRY:
+                # Session expired, clean it up
+                try:
+                    execute_query(db, "DELETE FROM game_states WHERE session_id = ?", (session_id,))
+                    db.commit()
+                    logger.info(f"Cleaned up expired session {session_id[:8]}...")
+                    return False
+                except Exception as delete_error:
+                    # Rollback on error
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                    logger.error(f"Error deleting expired session {session_id[:8]}...: {delete_error}")
+                    return True  # Allow on error
+
+            return True
+        except Exception as e:
+            logger.error(f"Error parsing timestamp in check_session_expiry: {e}")
+            return True  # Allow on error
     except Exception as e:
-        logger.error(f"Error checking session expiry: {e}")
-        return True  # Allow on error
+        # Query failed - likely transaction aborted
+        logger.error(f"Error in check_session_expiry query: {e}")
+        try:
+            db.rollback()
+            logger.info("Rolled back transaction after check_session_expiry error")
+        except Exception:
+            pass
+        return True  # Allow on error - fail open to prevent breaking the game
 
 
 def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
@@ -270,20 +363,44 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                 resource = task_data.get('resource')
                 pending_amount = task_data.get('pending_amount', 0)
                 if resource and pending_amount > 0:
-                    new_state.resources[resource] = new_state.resources.get(resource, 0) + pending_amount
+                    old_total = new_state.resources.get(resource, 0)
+                    new_state.resources[resource] = old_total + pending_amount
+                    new_total = new_state.resources[resource]
+                    
                     # Award practice XP
                     from core.game_logic import award_practice_xp
                     award_practice_xp(new_state, "Kinetic", 2)
+                    
                     # Store completion message in task data for frontend to retrieve
                     if resource == "Shilajit":
-                        task_data['completion_message'] = f"Shilajit sample extracted. Resource +1. Total: {new_state.resources[resource]}"
+                        task_data['completion_message'] = f"Shilajit sample extracted. Resource +1. Total: {new_total}"
                     else:
-                        task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_state.resources[resource]}"
+                        task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_total}"
+                    
+                    # Note: gather.complete event will be emitted when state is saved (after this function returns)
             
             # Complete build_womb if this was a build task
             if task_type == "build_womb":
-                new_state.assembler_built = True
-                task_data['completion_message'] = "Womb built successfully. You can now grow clones."
+                from game.wombs import create_womb
+                # Create new womb with index based on current count
+                new_womb_id = len(new_state.wombs)
+                new_womb = create_womb(new_womb_id)
+                new_state.wombs.append(new_womb)
+                # Also set assembler_built for backward compatibility (if first womb)
+                if len(new_state.wombs) == 1:
+                    new_state.assembler_built = True
+                task_data['completion_message'] = f"Womb {new_womb_id + 1} built successfully. You can now grow clones."
+            
+            # Complete repair_womb if this was a repair task
+            if task_type == "repair_womb":
+                womb_id = task_data.get('womb_id')
+                repair_amount = task_data.get('repair_amount', 0)
+                if womb_id is not None:
+                    target_womb = next((w for w in new_state.wombs if w.id == womb_id), None)
+                    if target_womb:
+                        # Restore durability to full
+                        target_womb.durability = target_womb.max_durability
+                        task_data['completion_message'] = f"Womb {womb_id} repaired to full durability."
             
             # Create clone if this was a grow_clone task
             if task_type == "grow_clone":
@@ -306,6 +423,14 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                     new_state.clones[clone.id] = clone
                     # Store completion message
                     task_data['completion_message'] = f"{clone_data['kind']} clone grown successfully. id={clone.id}"
+                    
+                    # Store clone data in task_data for event emission later
+                    task_data['completed_clone'] = {
+                        "id": clone.id,
+                        "kind": clone.kind,
+                        "xp": clone.xp,
+                        "created_at": clone.created_at
+                    }
             
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
@@ -330,6 +455,14 @@ def calculate_task_duration(task_type: str, state: GameState) -> int:
         resource = state.active_tasks.get(list(state.active_tasks.keys())[0] if state.active_tasks else None, {}).get('resource', 'Tritanium')
         t_min, t_max = CONFIG["GATHER_TIME"].get(resource, (12, 20))
         return state.rng.randint(t_min, t_max)
+    elif task_type == "repair_womb":
+        from game.wombs import calculate_repair_time
+        womb_id = state.active_tasks.get(list(state.active_tasks.keys())[0] if state.active_tasks else None, {}).get('womb_id')
+        if womb_id is not None:
+            target_womb = next((w for w in state.wombs if w.id == womb_id), None)
+            if target_womb:
+                return calculate_repair_time(state, target_womb)
+        return 30  # Fallback
     return 30  # Default fallback
 
 
@@ -347,8 +480,8 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
     
     # Check for conflicting tasks
     if new_state.active_tasks:
-        if task_type in ["build_womb", "grow_clone"]:
-            # Building/growing blocks on ANY active task
+        if task_type in ["build_womb", "grow_clone", "repair_womb"]:
+            # Building/growing/repairing blocks on ANY active task
             raise RuntimeError("A task is already in progress. Please wait.")
         elif task_type == "gather_resource":
             # Gathering can run alongside expeditions, but check for duplicate resource gathering
@@ -358,9 +491,9 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
                 # Can't gather same resource twice, but can gather different resources
                 if existing_task_type == "gather_resource" and task_data.get('resource') == resource:
                     raise RuntimeError(f"Already gathering {resource}. Please wait for completion.")
-                # Can't gather if building/growing (exclusive tasks)
-                if existing_task_type in ["build_womb", "grow_clone"]:
-                    raise RuntimeError("Cannot gather resources while building or growing. Please wait.")
+                # Can't gather if building/growing/repairing (exclusive tasks)
+                if existing_task_type in ["build_womb", "grow_clone", "repair_womb"]:
+                    raise RuntimeError("Cannot gather resources while building, growing, or repairing. Please wait.")
     
     # Calculate duration
     if task_type == "build_womb":
@@ -378,6 +511,17 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
         resource = task_params.get('resource', 'Tritanium')
         t_min, t_max = CONFIG["GATHER_TIME"].get(resource, (12, 20))
         duration = new_state.rng.randint(t_min, t_max)
+    elif task_type == "repair_womb":
+        from game.wombs import calculate_repair_time
+        womb_id = task_params.get('womb_id')
+        if womb_id is not None:
+            target_womb = next((w for w in new_state.wombs if w.id == womb_id), None)
+            if target_womb:
+                duration = calculate_repair_time(new_state, target_womb)
+            else:
+                duration = 30
+        else:
+            duration = 30
     else:
         duration = 30
     
@@ -395,13 +539,15 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
 
 def game_state_to_dict(state: GameState) -> Dict[str, Any]:
     """Convert GameState to dictionary for JSON serialization"""
-    return {
+    from core.models import Womb
+    
+    result = {
         "version": state.version,
         "rng_seed": state.rng_seed,
         "soul_percent": state.soul_percent,
         "soul_xp": state.soul_xp,
         "soul_level": state.soul_level(),  # Add calculated soul level
-        "assembler_built": state.assembler_built,
+        "assembler_built": state.assembler_built,  # Keep for backward compatibility
         "resources": state.resources,
         "applied_clone_id": state.applied_clone_id,
         "practices_xp": state.practices_xp,
@@ -429,14 +575,40 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
             for cid, c in state.clones.items()
         }
     }
+    
+    # Add wombs array if it exists
+    if hasattr(state, 'wombs') and state.wombs:
+        result["wombs"] = [
+            {
+                "id": w.id,
+                "durability": w.durability,
+                "attention": w.attention,
+                "max_durability": w.max_durability,
+                "max_attention": w.max_attention
+            }
+            for w in state.wombs
+        ]
+    else:
+        result["wombs"] = []
+    
+    return result
 
 
 def dict_to_game_state(data: Dict[str, Any]) -> GameState:
-    """Convert dictionary to GameState"""
-    from core.models import Clone
+    """Convert dictionary to GameState, applying migrations if needed"""
+    from core.models import Clone, Womb
+    from game.migrations.migrate import migrate, get_latest_version
+    
+    # Check version and migrate if needed
+    saved_version = data.get("version", 0)  # 0 means pre-versioned
+    latest_version = get_latest_version()
+    
+    if saved_version < latest_version:
+        # Apply migrations
+        data = migrate(data, saved_version, latest_version)
     
     state = GameState(
-        version=data.get("version", get_latest_version()),
+        version=data.get("version", latest_version),
         rng_seed=data.get("rng_seed"),
         soul_percent=data.get("soul_percent", CONFIG["SOUL_START"]),
         soul_xp=data.get("soul_xp", 0),
@@ -449,6 +621,22 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
         active_tasks=data.get("active_tasks", {}),
         ui_layout=data.get("ui_layout", {})
     )
+    
+    # Load wombs
+    wombs_data = data.get("wombs", [])
+    if wombs_data:
+        state.wombs = [
+            Womb(
+                id=w_data.get("id", i),
+                durability=w_data.get("durability", CONFIG["WOMB_MAX_DURABILITY"]),
+                attention=w_data.get("attention", CONFIG["WOMB_MAX_ATTENTION"]),
+                max_durability=w_data.get("max_durability", CONFIG["WOMB_MAX_DURABILITY"]),
+                max_attention=w_data.get("max_attention", CONFIG["WOMB_MAX_ATTENTION"])
+            )
+            for i, w_data in enumerate(wombs_data)
+        ]
+    else:
+        state.wombs = []
     
     # Load clones
     clones_data = data.get("clones", {})
@@ -524,6 +712,7 @@ def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: 
 def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, check_version: bool = False):
     """
     Save game state to database with optional optimistic locking.
+    Applies womb systems (decay, attacks) before saving.
 
     Args:
         db: Database connection
@@ -534,6 +723,10 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
     Raises:
         RuntimeError: If check_version is True and state version doesn't match database
     """
+    # Apply womb systems (decay, attacks) before saving
+    from game.wombs import check_and_apply_womb_systems
+    state = check_and_apply_womb_systems(state)
+    
     if check_version:
         # Optimistic locking: check if version matches
         cursor = execute_query(
@@ -560,14 +753,23 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
     state_dict = game_state_to_dict(state)
     state_json = json.dumps(state_dict)
 
-    execute_query(db, """
-        INSERT INTO game_states (session_id, state_data, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(session_id) DO UPDATE SET
-            state_data = excluded.state_data,
-            updated_at = CURRENT_TIMESTAMP
-    """, (session_id, state_json))
-    db.commit()
+    try:
+        execute_query(db, """
+            INSERT INTO game_states (session_id, state_data, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(session_id) DO UPDATE SET
+                state_data = excluded.state_data,
+                updated_at = CURRENT_TIMESTAMP
+        """, (session_id, state_json))
+        db.commit()
+    except Exception as db_error:
+        # Rollback on error to prevent transaction cascade
+        try:
+            db.rollback()
+        except Exception as rollback_error:
+            logger.error(f"Failed to rollback transaction in save_game_state: {rollback_error}")
+        logger.error(f"Database error saving game state for session {session_id[:8]}...: {db_error}")
+        raise
 
 
 @router.get("/state")
@@ -602,8 +804,38 @@ async def get_game_state(
         save_game_state(db, sid, state)
 
     # Check for completed tasks
+    old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
     state = check_and_complete_tasks(state)
-    if state.active_tasks != (state.active_tasks if True else {}):
+    if state.active_tasks != old_active_tasks:
+        # Tasks were completed - emit completion events
+        for task_id, old_task_data in old_active_tasks.items():
+            if task_id not in state.active_tasks:
+                # Task was completed
+                task_type = old_task_data.get('type')
+                
+                if task_type == "gather_resource":
+                    resource = old_task_data.get('resource')
+                    if resource:
+                        new_total = state.resources.get(resource, 0)
+                        delta = old_task_data.get('pending_amount', 0)
+                        emit_event(db, sid, "gather.complete", {
+                            "resource": resource,
+                            "delta": delta,
+                            "new_total": new_total
+                        })
+                        emit_event(db, sid, "resource.delta", {
+                            "resource": resource,
+                            "delta": delta,
+                            "new_total": new_total
+                        })
+                
+                elif task_type == "grow_clone":
+                    completed_clone = old_task_data.get('completed_clone')
+                    if completed_clone:
+                        emit_event(db, sid, "clone.grow.complete", {
+                            "clone": completed_clone
+                        }, entity_id=completed_clone.get("id"))
+        
         save_game_state(db, sid, state)
 
     # Generate CSRF token for this session
@@ -679,6 +911,9 @@ async def get_task_status(
             elif task_type == "grow_clone":
                 clone_kind = task_data.get('clone_kind', 'Clone')
                 label = f"Growing {clone_kind} Clone"
+            elif task_type == "repair_womb":
+                womb_id = task_data.get('womb_id', '?')
+                label = f"Repairing Womb {womb_id}"
             
             tasks_info.append({
                 "id": task_id,
@@ -692,7 +927,37 @@ async def get_task_status(
 
     # Auto-complete finished tasks
     if completed_tasks:
+        old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
         state = check_and_complete_tasks(state)
+        
+        # Emit completion events for completed tasks
+        for task_id in completed_tasks:
+            old_task_data = old_active_tasks.get(task_id, {})
+            task_type = old_task_data.get('type')
+            
+            if task_type == "gather_resource":
+                resource = old_task_data.get('resource')
+                if resource:
+                    new_total = state.resources.get(resource, 0)
+                    delta = old_task_data.get('pending_amount', 0)
+                    emit_event(db, sid, "gather.complete", {
+                        "resource": resource,
+                        "delta": delta,
+                        "new_total": new_total
+                    })
+                    emit_event(db, sid, "resource.delta", {
+                        "resource": resource,
+                        "delta": delta,
+                        "new_total": new_total
+                    })
+            
+            elif task_type == "grow_clone":
+                completed_clone = old_task_data.get('completed_clone')
+                if completed_clone:
+                    emit_event(db, sid, "clone.grow.complete", {
+                        "clone": completed_clone
+                    }, entity_id=completed_clone.get("id"))
+        
         save_game_state(db, sid, state)
 
     # Return primary task (first one) for backward compatibility, plus all tasks
@@ -786,6 +1051,13 @@ async def gather_resource_endpoint(
         
         # Start task timer with pending resource amount stored
         new_state, task_id = start_task(state, "gather_resource", resource=resource, pending_amount=amount)
+
+        # Emit gather.start event
+        task_data = new_state.active_tasks[task_id]
+        emit_event(db, sid, "gather.start", {
+            "resource": resource,
+            "duration": task_data.get("duration", 0)
+        }, entity_id=task_id)
 
         # Don't add resources yet - they'll be added when task completes
         # Just save state with the active task
@@ -914,6 +1186,14 @@ async def grow_clone_endpoint(
         # Start timer task with clone data stored
         final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind, pending_clone_data=clone_data)
 
+        # Emit clone.grow.start event
+        task_data = final_state.active_tasks[task_id]
+        emit_event(db, sid, "clone.grow.start", {
+            "kind": kind,
+            "clone": None,  # Clone not created yet
+            "duration": task_data.get("duration", 0)
+        }, entity_id=task_id)
+
         # Don't add clone to state yet - it will be added when task completes
         save_game_state(db, sid, final_state)
 
@@ -1036,16 +1316,24 @@ async def run_expedition_endpoint(
         expedition_id = str(uuid.uuid4())
         start_ts = time.time()
 
+        # Emit expedition.start event
+        clone_id = state.applied_clone_id
+        if clone_id:
+            emit_event(db, sid, "expedition.start", {
+                "kind": kind,
+                "clone_id": clone_id,
+                "duration": 0  # Expeditions complete immediately
+            }, entity_id=expedition_id)
+
         # Run expedition with server-authoritative outcome
         new_state, message = run_expedition(state, kind)
 
         # Get clone that ran expedition
-        clone_id = state.applied_clone_id
         clone_survived = new_state.clones.get(clone_id, None).alive if clone_id and clone_id in new_state.clones else True
 
         # Calculate XP gained and loot (extract from state changes)
-        xp_before = state.clones.get(clone_id).xp[kind] if clone_id and clone_id in state.clones else 0
-        xp_after = new_state.clones.get(clone_id).xp[kind] if clone_id and clone_id in new_state.clones else 0
+        xp_before = state.clones.get(clone_id).xp.get(kind, 0) if clone_id and clone_id in state.clones else 0
+        xp_after = new_state.clones.get(clone_id).xp.get(kind, 0) if clone_id and clone_id in new_state.clones else 0
         xp_gained = xp_after - xp_before
 
         # Calculate loot (resource diff)
@@ -1070,39 +1358,75 @@ async def run_expedition_endpoint(
         signature = generate_outcome_signature(sid, expedition_id, start_ts, outcome_data)
 
         # Store outcome in database
+        # Fix: Explicitly cast timestamps to float for PostgreSQL compatibility
         end_ts = time.time()
-        execute_query(db, """
-            INSERT INTO expedition_outcomes
-            (id, session_id, expedition_kind, clone_id, start_ts, end_ts, result, loot_json, xp_gained, survived, signature)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            expedition_id,
-            sid,
-            kind,
-            clone_id or "",
-            start_ts,
-            end_ts,
-            outcome_data["result"],
-            json.dumps(loot),
-            xp_gained,
-            1 if clone_survived else 0,
-            signature
-        ))
-        db.commit()
+        start_ts_float = float(start_ts)
+        end_ts_float = float(end_ts)
+        
+        try:
+            execute_query(db, """
+                INSERT INTO expedition_outcomes
+                (id, session_id, expedition_kind, clone_id, start_ts, end_ts, result, loot_json, xp_gained, survived, signature)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                expedition_id,
+                sid,
+                kind,
+                clone_id or "",
+                start_ts_float,  # Explicitly float for PostgreSQL DOUBLE PRECISION
+                end_ts_float,    # Explicitly float for PostgreSQL DOUBLE PRECISION
+                outcome_data["result"],
+                json.dumps(loot),
+                xp_gained,
+                1 if clone_survived else 0,
+                signature
+            ))
+            db.commit()
+        except Exception as db_error:
+            # Critical: Rollback transaction on error to prevent "transaction aborted" cascade
+            try:
+                db.rollback()
+            except Exception as rollback_error:
+                logger.error(f"Failed to rollback transaction: {rollback_error}")
+            logger.error(f"Database error inserting expedition outcome for session {sid[:8]}...: {db_error}")
+            raise
 
         # Check for anomalies
         anomaly = check_and_flag_anomaly(sid, "expedition")
         if anomaly:
             # Store anomaly flag
-            execute_query(db, """
-                INSERT INTO anomaly_flags (session_id, action_type, anomaly_description, action_rate)
-                VALUES (?, ?, ?, ?)
-            """, (sid, "expedition", anomaly, 0.0))
-            db.commit()
-            logger.warning(f"🚩 Anomaly flagged for session {sid[:8]}...: {anomaly}")
+            try:
+                execute_query(db, """
+                    INSERT INTO anomaly_flags (session_id, action_type, anomaly_description, action_rate)
+                    VALUES (?, ?, ?, ?)
+                """, (sid, "expedition", anomaly, 0.0))
+                db.commit()
+                logger.warning(f"🚩 Anomaly flagged for session {sid[:8]}...: {anomaly}")
+            except Exception as db_error:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.error(f"Failed to store anomaly flag: {db_error}")
+                # Don't fail expedition on anomaly flag error
 
-        # Save state
+        # Save state (with autocommit, each statement commits automatically)
         save_game_state(db, sid, new_state)
+        
+        # Emit expedition.result event
+        clone_xp = {}
+        if clone_id and clone_id in new_state.clones:
+            clone_xp = new_state.clones[clone_id].xp
+        
+        emit_event(db, sid, "expedition.result", {
+            "kind": kind,
+            "clone_id": clone_id or "",
+            "clone_xp": clone_xp,
+            "loot": loot,
+            "message": message,
+            "success": clone_survived,
+            "death": not clone_survived
+        }, entity_id=expedition_id)
 
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
@@ -1155,8 +1479,21 @@ async def upload_clone_endpoint(
         )
 
     try:
+        # Calculate soul changes before upload
+        old_soul_xp = state.soul_xp
+        old_soul_percent = state.soul_percent
+        
         new_state, message = upload_clone(state, clone_id)
         save_game_state(db, sid, new_state)
+
+        # Emit upload.complete event
+        soul_xp_delta = new_state.soul_xp - old_soul_xp
+        soul_percent_delta = new_state.soul_percent - old_soul_percent
+        emit_event(db, sid, "upload.complete", {
+            "clone_id": clone_id,
+            "soul_xp_delta": soul_xp_delta,
+            "soul_percent_delta": soul_percent_delta,
+        }, entity_id=clone_id)
 
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
@@ -1175,3 +1512,284 @@ async def upload_clone_endpoint(
         error_msg = sanitize_error_message(e)
         logger.error(f"Error uploading clone for session {sid[:8]}...: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
+
+
+@router.post("/repair-womb")
+async def repair_womb_endpoint(
+    womb_id: int,
+    request: Request,
+    db: DatabaseConnection = Depends(get_db),
+    session_id: Optional[str] = Cookie(None)
+):
+    """
+    Repair a womb (durability restoration with resource cost and timed task).
+    Rate limit: 10 requests/minute
+    """
+    from game.wombs import calculate_repair_cost, calculate_repair_time, find_active_womb
+    
+    sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "repair_womb")
+    
+    state = load_game_state(db, sid, create_if_missing=True)
+    
+    if state is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
+        )
+    
+    # Find womb to repair
+    target_womb = next((w for w in state.wombs if w.id == womb_id), None)
+    if target_womb is None:
+        raise HTTPException(status_code=400, detail=f"Womb {womb_id} not found.")
+    
+    if target_womb.durability >= target_womb.max_durability:
+        raise HTTPException(status_code=400, detail="Womb is already at full durability.")
+    
+    # Check for active tasks (repair blocks on other tasks)
+    if state.active_tasks:
+        raise HTTPException(status_code=400, detail="A task is already in progress. Please wait.")
+    
+    try:
+        # Calculate repair cost and time
+        repair_cost = calculate_repair_cost(target_womb)
+        repair_time = calculate_repair_time(state, target_womb)
+        
+        # Check if player can afford repair
+        from core.game_logic import can_afford, format_resource_error
+        if not can_afford(state.resources, repair_cost):
+            raise RuntimeError(format_resource_error(state.resources, repair_cost, f"Repair Womb {womb_id}"))
+        
+        # Create new state
+        new_state = state.copy()
+        
+        # Deduct repair cost
+        from core.game_logic import spend
+        spend(new_state.resources, repair_cost)
+        
+        # Start repair task
+        final_state, task_id = start_task(
+            new_state,
+            "repair_womb",
+            womb_id=womb_id,
+            repair_amount=target_womb.max_durability - target_womb.durability
+        )
+        
+        save_game_state(db, sid, final_state)
+        
+        response = JSONResponse(content={
+            "state": game_state_to_dict(final_state),
+            "message": f"Repairing Womb {womb_id}...",
+            "cost": repair_cost,
+            "repair_time": repair_time,
+            "task_id": task_id
+        })
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
+        return response
+    except Exception as e:
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error repairing womb for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+
+@router.get("/events/feed")
+async def get_events_feed(
+    request: Request,
+    after: Optional[float] = None,
+    db: DatabaseConnection = Depends(get_db),
+    session_id: Optional[str] = Cookie(None)
+):
+    """
+    Get events feed for live state sync (B3).
+    Returns incremental events since timestamp with ETag support.
+    
+    Rate limit: None (this is a read-only endpoint, but could add if needed)
+    """
+    from fastapi.responses import Response
+    import hashlib
+    
+    # Log that endpoint is being called (debugging 404 issue)
+    logger.debug(f"Events feed endpoint called: after={after}, session_id={session_id[:8] if session_id else 'None'}...")
+    
+    sid = get_session_id(session_id)
+    
+    # Check session expiry
+    if not check_session_expiry(db, sid):
+        sid = str(uuid.uuid4())
+    
+    try:
+        # Build query to get events since timestamp
+        # Use database-agnostic timestamp comparison
+        if after:
+            # Convert Unix timestamp to datetime for database comparison
+            from datetime import datetime
+            after_dt = datetime.fromtimestamp(after)
+            
+            # Get events after this timestamp
+            # Database adapter handles placeholder conversion, but we need to handle timestamp format
+            # SQLite uses string comparison, PostgreSQL uses timestamp comparison
+            from database import get_db_placeholder
+            placeholder = get_db_placeholder()
+            
+            # For PostgreSQL, pass datetime object directly
+            # For SQLite, convert to ISO string
+            if placeholder == "%s":  # PostgreSQL
+                after_param = after_dt
+            else:  # SQLite
+                after_param = after_dt.isoformat()
+            
+            cursor = execute_query(db, """
+                SELECT id, event_type, event_subtype, payload_json, created_at
+                FROM events
+                WHERE session_id = ? AND created_at > ?
+                ORDER BY created_at ASC
+                LIMIT 100
+            """, (sid, after_param))
+        else:
+            # Get last 50 events (initial load)
+            cursor = execute_query(db, """
+                SELECT id, event_type, event_subtype, payload_json, created_at
+                FROM events
+                WHERE session_id = ?
+                ORDER BY created_at DESC
+                LIMIT 50
+            """, (sid,))
+        
+        rows = cursor.fetchall()
+        
+        # Convert database events to frontend format
+        events = []
+        for row in rows:
+            # Reconstruct event type from database fields
+            event_type_db = row['event_type']
+            event_subtype = row['event_subtype']
+            
+            if event_subtype:
+                event_type = f"{event_type_db}.{event_subtype}"
+            else:
+                event_type = event_type_db
+            
+            # Parse payload
+            try:
+                payload = json.loads(row['payload_json']) if row['payload_json'] else {}
+            except:
+                payload = {}
+            
+            # Parse timestamp
+            created_at = row['created_at']
+            if isinstance(created_at, str):
+                from datetime import datetime
+                timestamp = datetime.fromisoformat(created_at).timestamp()
+            else:
+                timestamp = created_at.timestamp() if hasattr(created_at, 'timestamp') else time.time()
+            
+            events.append({
+                "id": row['id'],
+                "type": event_type,
+                "timestamp": int(timestamp),
+                "data": payload
+            })
+        
+        # Generate ETag from events (hash of event IDs)
+        if events:
+            event_ids = "|".join(sorted([e["id"] for e in events]))
+            etag = hashlib.md5(event_ids.encode()).hexdigest()
+            etag_value = f'"{etag}"'
+        else:
+            etag_value = '"empty"'
+        
+        # Check If-None-Match header
+        if_none_match = request.headers.get("If-None-Match")
+        if if_none_match and if_none_match.strip('"') == etag_value.strip('"'):
+            # No changes, return 304
+            return Response(status_code=304, headers={"ETag": etag_value})
+        
+        response = JSONResponse(content=events)
+        response.headers["ETag"] = etag_value
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error fetching events feed for session {sid[:8]}...: {e}", exc_info=True)
+        # Don't break the game - return empty array
+        # Log full exception for debugging 404 issue
+        import traceback
+        logger.error(f"Events feed exception traceback: {traceback.format_exc()}")
+        return JSONResponse(content=[])
+
+
+@router.get("/limits/status")
+async def get_limits_status(
+    request: Request,
+    session_id: Optional[str] = Cookie(None)
+):
+    """
+    Get rate limit status for fuel bar gamification (B1).
+    Returns remaining counts per endpoint and combined total.
+    """
+    sid = get_session_id(session_id)
+    now = time.time()
+    window_seconds = 60  # 1 minute window
+    
+    # Endpoints to include in fuel bar (action endpoints only)
+    action_endpoints = {
+        "gather_resource": RATE_LIMITS.get("gather_resource", 20),
+        "grow_clone": RATE_LIMITS.get("grow_clone", 10),
+        "run_expedition": RATE_LIMITS.get("run_expedition", 10),
+        "upload_clone": RATE_LIMITS.get("upload_clone", 10),
+    }
+    
+    # Calculate remaining counts per endpoint
+    endpoint_status = {}
+    combined_remaining = 0
+    earliest_reset = now + window_seconds
+    
+    for endpoint_name, limit in action_endpoints.items():
+        # Initialize if needed
+        if sid not in _rate_limit_store:
+            _rate_limit_store[sid] = {}
+        if endpoint_name not in _rate_limit_store[sid]:
+            _rate_limit_store[sid][endpoint_name] = []
+        
+        # Clean old entries
+        timestamps = [
+            t for t in _rate_limit_store[sid][endpoint_name]
+            if now - t < window_seconds
+        ]
+        
+        # Calculate remaining
+        used = len(timestamps)
+        remaining = max(0, limit - used)
+        combined_remaining += remaining
+        
+        # Calculate reset time (when oldest request expires)
+        if timestamps:
+            oldest = min(timestamps)
+            reset_at = oldest + window_seconds
+            if reset_at < earliest_reset:
+                earliest_reset = reset_at
+        else:
+            reset_at = now
+        
+        endpoint_status[f"/{endpoint_name.replace('_', '-')}"] = {
+            "remaining": remaining,
+            "reset_at": int(reset_at)
+        }
+    
+    # Add combined status
+    endpoint_status["combined"] = {
+        "remaining": combined_remaining,
+        "reset_at": int(earliest_reset)
+    }
+    
+    return JSONResponse(content={
+        "window_seconds": window_seconds,
+        "now": int(now),
+        "endpoints": endpoint_status
+    })

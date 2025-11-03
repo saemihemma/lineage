@@ -16,12 +16,22 @@ from core.game_logic import (
 def build_womb(state: GameState) -> Tuple[GameState, str]:
     """
     Build the Womb (assembler).
-    Note: assembler_built is now set when task completes (see check_and_complete_tasks).
-    This function only deducts costs.
+    Supports multiple wombs based on unlock conditions.
+    Womb is actually created when task completes (see check_and_complete_tasks).
+    This function only checks unlock conditions and deducts costs.
     
     Returns:
         Tuple of (new_state, message)
     """
+    from game.wombs import get_unlocked_womb_count, create_womb
+    
+    # Check unlock conditions
+    unlocked_count = get_unlocked_womb_count(state)
+    current_count = len(state.wombs)
+    
+    if current_count >= unlocked_count:
+        raise RuntimeError(f"Cannot build more wombs. Unlocked: {unlocked_count}/{CONFIG.get('WOMB_MAX_COUNT', 4)}")
+    
     level = state.soul_level()
     base_cost = inflate_costs(CONFIG["ASSEMBLER_COST"], level)
     cost_mult = perk_constructive_cost_mult(state)
@@ -32,7 +42,6 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
     
     # Create new state with immutable updates
     new_state = state.copy()
-    # Don't set assembler_built yet - it will be set when task completes
     
     # Deduct resources
     for k, v in cost.items():
@@ -41,18 +50,36 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
     # Award practice XP (modifies practices_xp in place, but on copy)
     award_practice_xp(new_state, "Constructive", 10)
     
-    return new_state, "Building Womb..."
+    # Gain attention on existing wombs (if any)
+    if new_state.wombs:
+        from game.wombs import gain_attention
+        new_state = gain_attention(new_state)
+    
+    womb_num = current_count + 1
+    return new_state, f"Building Womb {womb_num}..."
 
 
 def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, str, Dict]:
     """
     Grow a new clone.
+    Requires at least one functional womb with sufficient durability/attention.
     
     Returns:
         Tuple of (new_state, clone, soul_split_percent, message)
     """
-    if not state.assembler_built:
+    from game.wombs import check_womb_available, find_active_womb
+    
+    # Check if womb is available (using new womb system or fallback to assembler_built)
+    if not check_womb_available(state) and not state.assembler_built:
         raise RuntimeError("Build the Womb first.")
+    
+    # Check if active womb has sufficient attention/durability (optional requirement)
+    active_womb = find_active_womb(state)
+    if active_womb:
+        # Require at least 50% attention for growing (tunable)
+        min_attention = active_womb.max_attention * 0.5
+        if active_womb.attention < min_attention:
+            raise RuntimeError(f"Womb attention too low ({active_womb.attention:.1f}/{active_womb.max_attention:.1f}). Womb needs maintenance.")
     
     level = state.soul_level()
     base_cost = inflate_costs(CONFIG["CLONE_COSTS"][kind], level)
@@ -90,6 +117,11 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     
     # Award practice XP
     award_practice_xp(new_state, "Constructive", 6)
+    
+    # Gain attention on active womb (if any)
+    if new_state.wombs:
+        from game.wombs import gain_attention
+        new_state = gain_attention(new_state)
     
     msg = f"{CLONE_TYPES[kind].display} growing... SELF now {new_state.soul_percent:.1f}% (consumed ~{int(split * 100)}%)."
     # Create a Clone object for return (but don't add to state yet)

@@ -1,6 +1,6 @@
 """Game data models"""
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import random
 from .config import CONFIG
 
@@ -68,13 +68,40 @@ class Clone:
 
 
 @dataclass
+class Womb:
+    """Womb (assembler) data model"""
+    id: int  # Index-based ID (0, 1, 2, ...)
+    durability: float  # Current durability (0 to max_durability)
+    attention: float  # Current attention (0 to max_attention)
+    max_durability: float = 100.0  # Maximum durability
+    max_attention: float = 100.0  # Maximum attention
+    
+    def is_functional(self) -> bool:
+        """Check if womb is functional (durability > 0)"""
+        return self.durability > 0
+    
+    def attention_percent(self) -> float:
+        """Get attention as percentage"""
+        if self.max_attention == 0:
+            return 0.0
+        return (self.attention / self.max_attention) * 100.0
+    
+    def durability_percent(self) -> float:
+        """Get durability as percentage"""
+        if self.max_durability == 0:
+            return 0.0
+        return (self.durability / self.max_durability) * 100.0
+
+
+@dataclass
 class PlayerState:
     """Player game state"""
     version: int = 1  # Schema version for migrations
     rng_seed: int = None  # RNG seed for reproducible behavior
     soul_percent: float = CONFIG["SOUL_START"]
     soul_xp: int = 0
-    assembler_built: bool = False
+    assembler_built: bool = False  # DEPRECATED: Use wombs array instead (kept for migration)
+    wombs: List[Womb] = field(default_factory=list)  # Array of wombs (replaces assembler_built)
     resources: Dict[str, int] = field(default_factory=lambda: {
         "Tritanium": 60,
         "Metal Ore": 40,

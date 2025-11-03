@@ -101,11 +101,37 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-# Create FastAPI app
+# Define lifespan handler before app creation
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup/shutdown events"""
+    # Startup - log registered routes (after all routers are included)
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            methods = ', '.join(sorted(route.methods))
+            routes.append(f"{methods:12} {route.path}")
+    
+    # Log key routes (events feed, limits status)
+    key_routes = [r for r in routes if 'events' in r.lower() or 'limits' in r.lower() or '/api/game' in r.lower()]
+    if key_routes:
+        logger.info(f"Registered {len(key_routes)} key game routes (showing first 10):")
+        for route in key_routes[:10]:
+            logger.info(f"  {route}")
+    else:
+        logger.warning("No game routes found - check router registration!")
+    
+    yield
+    # Shutdown (if needed)
+
+# Create FastAPI app with lifespan handler
 app = FastAPI(
     title="LINEAGE API",
     description="Backend API for LINEAGE game - leaderboard, telemetry, and gameplay",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS configuration - environment-based for security
