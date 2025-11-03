@@ -118,13 +118,19 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     
     # Check if active womb is functional (attention is now global, not per-womb)
     active_womb = find_active_womb(state)
-    if active_womb:
-        # Womb must be functional (durability > 0)
-        if not active_womb.is_functional():
-            raise RuntimeError(f"Womb {active_womb.id} is not functional. Durability: {active_womb.durability:.1f}/{active_womb.max_durability:.1f}")
+    if not active_womb:
+        # If we have assembler_built but no functional wombs, the wombs are broken
+        if state.assembler_built or state.wombs:
+            raise RuntimeError("No functional wombs available. Repair or build a new womb first.")
+        else:
+            raise RuntimeError("Build the Womb first.")
+    
+    # Womb must be functional (durability > 0)
+    if not active_womb.is_functional():
+        raise RuntimeError(f"Womb {active_womb.id} is not functional. Durability: {active_womb.durability:.1f}/{active_womb.max_durability:.1f}. Repair it first.")
     
     # Capture womb_id for deterministic trait generation and RNG seeding
-    womb_id = active_womb.id if active_womb else 0
+    womb_id = active_womb.id
     
     # Systems v1: Capture task_started_at when task is queued (will be persisted with task)
     task_started_at = time.time()
