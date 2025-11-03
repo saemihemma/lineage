@@ -3,14 +3,19 @@ Outcome Engine - Deterministic outcome resolution system
 
 Phase 2: Simple outcome resolver for expeditions to prove the pattern.
 Phase 3: Uses outcomes_config.json for all expedition configuration.
+Phase 7: Add explainability - expose calculation breakdown.
 """
 import random
 import hmac
 import hashlib
+import os
 from typing import Dict, List, Any, Literal, Optional, Tuple
 from dataclasses import dataclass
 from core.models import Clone
 from core.config import CONFIG, OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
+
+# Phase 7: Debug flag for explainability
+DEBUG_OUTCOMES = os.getenv("DEBUG_OUTCOMES", "false").lower() == "true"
 
 
 @dataclass
@@ -160,6 +165,7 @@ class Outcome:
     soul_split_percent: Optional[float] = None  # Phase 6: For grow, soul split percentage
     soul_xp_gained: Optional[int] = None  # Phase 6: For upload, SELF XP gained
     soul_restore_percent: Optional[float] = None  # Phase 6: For upload, soul restoration
+    explanation: Optional[Dict[str, Any]] = None  # Phase 7: Calculation breakdown (guarded by DEBUG_OUTCOMES)
 
 
 @dataclass
@@ -178,6 +184,50 @@ class OutcomeContext:
     config: Dict = None  # From CONFIG (for backward compat, practice levels, etc.)
     outcomes_config: Dict[str, Any] = None  # Phase 3: From outcomes_config.json
     seed_parts: SeedParts = None  # For deterministic RNG
+
+
+def build_explanation(terms: Dict[str, Any], stats: CanonicalStats, mods_applied: List[Mod]) -> Dict[str, Any]:
+    """
+    Phase 7: Build explanation breakdown from terms structure.
+    Returns minimal explanation: base + mods + final per target.
+    """
+    explanation = {}
+    
+    # Build explanation for each canonical stat
+    stat_targets = {
+        'time_mult': stats.time_mult,
+        'success_chance': stats.success_chance,
+        'death_chance': stats.death_chance,
+        'reward_mult': stats.reward_mult,
+        'xp_mult': stats.xp_mult,
+        'cost_mult': stats.cost_mult,
+        'attention_delta': stats.attention_delta
+    }
+    
+    for target, final_value in stat_targets.items():
+        # Get base from terms if available, otherwise use default
+        base_value = 1.0
+        if target in terms:
+            base_value = terms[target].get('base', 1.0)
+        elif target == 'death_chance' and 'death_chance' in terms:
+            base_value = terms['death_chance'].get('base', 0.12)
+        
+        # Get mods for this target
+        target_mods = [{"source": m.source, "op": m.op, "value": m.value} 
+                      for m in mods_applied if m.target == target]
+        
+        explanation[target] = {
+            "base": base_value,
+            "mods": target_mods,
+            "final": final_value
+        }
+    
+    # Add action-specific terms (amount, time, cost, etc.)
+    for key, value in terms.items():
+        if key not in explanation:
+            explanation[key] = value
+    
+    return explanation
 
 
 def trait_mods(clone: Clone, expedition_kind: str, outcomes_config: Dict[str, Any]) -> List[Mod]:
@@ -433,6 +483,11 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
         }
     }
     
+    # Phase 7: Build explanation (guarded by DEBUG_OUTCOMES)
+    explanation = None
+    if DEBUG_OUTCOMES:
+        explanation = build_explanation(terms, final_stats, mods)
+    
     return Outcome(
         result=result,
         stats=final_stats,
@@ -441,7 +496,8 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
         mods_applied=mods,
         terms=terms,
         shilajit_found=shilajit_found,
-        feral_attack=feral_attack  # Phase 4: Feral attack info if occurred
+        feral_attack=feral_attack,  # Phase 4: Feral attack info if occurred
+        explanation=explanation  # Phase 7: Calculation breakdown
     )
 
 
@@ -586,6 +642,11 @@ def resolve_gather(ctx: OutcomeContext) -> Outcome:
         }
     }
     
+    # Phase 7: Build explanation (guarded by DEBUG_OUTCOMES)
+    explanation = None
+    if DEBUG_OUTCOMES:
+        explanation = build_explanation(terms, final_stats, mods)
+    
     return Outcome(
         result='success',
         stats=final_stats,
@@ -594,7 +655,8 @@ def resolve_gather(ctx: OutcomeContext) -> Outcome:
         mods_applied=mods,
         terms=terms,
         feral_attack=feral_attack,
-        time_seconds=final_time
+        time_seconds=final_time,
+        explanation=explanation  # Phase 7: Calculation breakdown
     )
 
 
@@ -728,6 +790,27 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
     
     # Check if sufficient soul
     if ctx.soul_percent is None or ctx.soul_percent - 100.0 * soul_split < 0:
+        # Phase 7: Build explanation even for failure
+        explanation = None
+        if DEBUG_OUTCOMES:
+            terms_failure = {
+                "cost_mult": {
+                    "base": cost_mult_base,
+                    "mods": [{"source": m.source, "op": m.op, "value": m.value} for m in mods if m.target == 'cost_mult'],
+                    "final": final_cost_mult
+                },
+                "cost": {
+                    "base_costs": base_costs,
+                    "final": cost
+                },
+                "soul_split": {
+                    "base": soul_split_base,
+                    "variance": soul_split_variance,
+                    "final": soul_split
+                }
+            }
+            explanation = build_explanation(terms_failure, final_stats, mods)
+        
         return Outcome(
             result='failure',
             stats=final_stats,
@@ -736,7 +819,8 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
             mods_applied=mods,
             terms={},
             cost=cost,
-            soul_split_percent=soul_split
+            soul_split_percent=soul_split,
+            explanation=explanation  # Phase 7: Calculation breakdown
         )
     
     # 10. Calculate deterministic time
@@ -783,6 +867,11 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
         }
     }
     
+    # Phase 7: Build explanation (guarded by DEBUG_OUTCOMES)
+    explanation = None
+    if DEBUG_OUTCOMES:
+        explanation = build_explanation(terms, final_stats, mods)
+    
     return Outcome(
         result=result,
         stats=final_stats,
@@ -793,7 +882,8 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
         feral_attack=feral_attack,
         time_seconds=final_time,
         cost=cost,
-        soul_split_percent=soul_split
+        soul_split_percent=soul_split,
+        explanation=explanation  # Phase 7: Calculation breakdown
     )
 
 
@@ -885,6 +975,11 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
         }
     }
     
+    # Phase 7: Build explanation (guarded by DEBUG_OUTCOMES)
+    explanation = None
+    if DEBUG_OUTCOMES:
+        explanation = build_explanation(terms, base_stats, [])  # No mods for upload
+    
     return Outcome(
         result='success',
         stats=base_stats,  # No mods for upload
@@ -894,6 +989,7 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
         terms=terms,
         feral_attack=feral_attack,
         soul_xp_gained=soul_xp_gained,
-        soul_restore_percent=soul_restore_percent
+        soul_restore_percent=soul_restore_percent,
+        explanation=explanation  # Phase 7: Calculation breakdown
     )
 
