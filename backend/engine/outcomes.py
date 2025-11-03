@@ -342,6 +342,16 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     Phase 2: Proves the pattern for expeditions only.
     Phase 3: Reads all expedition config from outcomes_config.json.
     """
+    # Phase 7: Hardening - validate context
+    if not ctx.clone:
+        raise ValueError("Clone required for expedition")
+    if not ctx.expedition_kind:
+        raise ValueError("expedition_kind required")
+    if not ctx.outcomes_config:
+        raise ValueError("outcomes_config required")
+    if not ctx.seed_parts:
+        raise ValueError("seed_parts required for deterministic RNG")
+    
     # 1. Compute RNG from seed_parts (HMAC recipe)
     rng = random.Random(compute_rng_seed(ctx.seed_parts))
     
