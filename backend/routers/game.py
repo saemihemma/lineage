@@ -234,7 +234,7 @@ def sanitize_error_message(error: Exception) -> str:
 
 
 def emit_event(
-    db: DatabaseConnection,
+    db: Optional[DatabaseConnection],
     session_id: str,
     event_type: str,
     event_data: Dict[str, Any],
@@ -243,7 +243,12 @@ def emit_event(
     """
     Emit an event to the events feed.
     Events are stored in the database for the events feed endpoint.
+    DB is optional - gracefully degrades if DB is unavailable.
     """
+    if db is None:
+        # No DB connection available - skip event emission
+        return
+    
     try:
         event_id = str(uuid.uuid4())
         event_subtype = None
@@ -1116,7 +1121,12 @@ async def gather_resource_endpoint(
         # Start task timer with pending resource amount stored
         new_state, task_id = start_task(state, "gather_resource", resource=resource, pending_amount=amount)
 
-        # Emit gather.start event
+        # Emit gather.start event (optional - events need DB)
+        try:
+            from database import get_db
+            db = get_db()
+        except:
+            db = None
         task_data = new_state.active_tasks[task_id]
         emit_event(db, sid, "gather.start", {
             "resource": resource,
@@ -1140,14 +1150,7 @@ async def gather_resource_endpoint(
             "amount": amount,
             "task_id": task_id
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
@@ -1271,7 +1274,12 @@ async def grow_clone_endpoint(
         # Start timer task with clone data stored
         final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind, pending_clone_data=clone_data)
 
-        # Emit clone.grow.start event
+        # Emit clone.grow.start event (optional - events need DB)
+        try:
+            from database import get_db
+            db = get_db()
+        except:
+            db = None
         task_data = final_state.active_tasks[task_id]
         emit_event(db, sid, "clone.grow.start", {
             "kind": kind,
@@ -1289,14 +1297,7 @@ async def grow_clone_endpoint(
             "message": message,
             "task_id": task_id
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
@@ -1350,14 +1351,7 @@ async def apply_clone_endpoint(
             "state": game_state_to_dict(new_state),
             "message": message
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
@@ -1537,14 +1531,7 @@ async def run_expedition_endpoint(
             "expedition_id": expedition_id,
             "signature": signature  # Return signature for client verification (optional)
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
@@ -1611,14 +1598,7 @@ async def upload_clone_endpoint(
             "state": game_state_to_dict(new_state),
             "message": message
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
@@ -1706,14 +1686,7 @@ async def repair_womb_endpoint(
             "repair_time": repair_time,
             "task_id": task_id
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
@@ -1845,14 +1818,7 @@ async def get_events_feed(
         response = JSONResponse(content=events)
         response.headers["ETag"] = etag_value
         # Always set session cookie to ensure persistence
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
         
     except Exception as e:
@@ -1863,14 +1829,7 @@ async def get_events_feed(
         logger.error(f"Events feed exception traceback: {traceback.format_exc()}")
         response = JSONResponse(content=[])
         # Still set cookie even on error
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
 
 
