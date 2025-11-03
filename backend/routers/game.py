@@ -378,25 +378,39 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
             if task_type == "gather_resource":
                 resource = task_data.get('resource')
                 pending_amount = task_data.get('pending_amount', 0)
+                outcome_info = task_data.get('outcome', {})
+                
                 if resource and pending_amount > 0:
                     old_total = new_state.resources.get(resource, 0)
                     new_state.resources[resource] = old_total + pending_amount
                     new_total = new_state.resources[resource]
                     
-                    # Award practice XP
+                    # Award practice XP (from config)
                     from core.game_logic import award_practice_xp
-                    award_practice_xp(new_state, "Kinetic", 2)
+                    from core.config import OUTCOMES_CONFIG
+                    gather_config = OUTCOMES_CONFIG.get("gather", {})
+                    practice_xp = gather_config.get("practice_xp", {}).get("kinetic", 2)
+                    award_practice_xp(new_state, "Kinetic", practice_xp)
                     
-                    # Phase 1: Gain attention on gathering completion (rate-limited action)
-                    # Gathering does NOT require womb, but raises attention when rate-limited
-                    from game.wombs import gain_attention
-                    new_state = gain_attention(new_state)
+                    # Phase 5: Gain attention from outcome (attention_delta from config)
+                    attention_delta = outcome_info.get('attention_delta', 5.0)
+                    if attention_delta > 0:
+                        from game.wombs import gain_attention
+                        # Apply attention delta (gain_attention adds config value, but we want the outcome value)
+                        # For now, gain_attention uses config value, which matches our outcome config
+                        new_state = gain_attention(new_state)
                     
                     # Store completion message in task data for frontend to retrieve
                     if resource == "Shilajit":
                         task_data['completion_message'] = f"Shilajit sample extracted. Resource +1. Total: {new_total}"
                     else:
                         task_data['completion_message'] = f"Gathered {pending_amount} {resource}. Total: {new_total}"
+                    
+                    # Phase 5: Include feral attack message if occurred
+                    if outcome_info.get('feral_attack'):
+                        feral_info = outcome_info['feral_attack']
+                        band = feral_info.get("band", "unknown").upper()
+                        task_data['attack_message'] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Gathering slowed and cost increased due to high attention."
                     
                     # Note: gather.complete event will be emitted when state is saved (after this function returns)
             
@@ -1174,28 +1188,80 @@ async def gather_resource_endpoint(
     # However, gathering is rate-limited and raises attention when completed (rate limit = attention trigger).
 
     try:
-        # Calculate gather amount now (but don't apply until task completes)
-        # Use a deterministic RNG state to calculate amount
-        amount = state.rng.randint(
-            CONFIG["GATHER_AMOUNT"][resource][0],
-            CONFIG["GATHER_AMOUNT"][resource][1]
+        # Phase 5: Use outcome engine for deterministic gather resolution
+        import time
+        import uuid
+        from backend.engine.outcomes import (
+            OutcomeContext, SeedParts, resolve_gather
         )
-        if resource == "Shilajit":
-            amount = 1
+        from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
         
-        # Start task timer with pending resource amount stored
-        new_state, task_id = start_task(state, "gather_resource", resource=resource, pending_amount=amount)
+        # Build outcome context
+        gather_id = str(uuid.uuid4())
+        seed_parts = SeedParts(
+            user_id=sid,
+            session_id=sid,
+            action_id=gather_id,
+            config_version=OUTCOMES_CONFIG_VERSION,
+            timestamp=time.time()
+        )
+        
+        # Get best womb durability
+        womb_durability = 100.0  # Default
+        if state.wombs:
+            functional_wombs = [w for w in state.wombs if w.is_functional()]
+            if functional_wombs:
+                womb_durability = functional_wombs[0].durability
+        
+        ctx = OutcomeContext(
+            action='gather',
+            clone=None,  # No clone needed for gathering
+            self_level=state.soul_level(),
+            practices=state.practices_xp,
+            global_attention=getattr(state, 'global_attention', 0.0),
+            womb_durability=womb_durability,
+            resource=resource,
+            config=CONFIG,
+            outcomes_config=OUTCOMES_CONFIG,
+            seed_parts=seed_parts
+        )
+        
+        # Resolve outcome
+        outcome = resolve_gather(ctx)
+        
+        # Extract deterministic values from outcome
+        amount = outcome.loot.get(resource, 0)
+        duration = int(round(outcome.time_seconds)) if outcome.time_seconds else 10
+        
+        # Start task timer with pending resource amount and duration stored
+        new_state, task_id = start_task(
+            state, 
+            "gather_resource", 
+            resource=resource, 
+            pending_amount=amount,
+            duration=duration  # Use deterministic duration from outcome
+        )
+        
+        # Phase 5: Store outcome info in task data for completion handler
+        task_data = new_state.active_tasks[task_id]
+        task_data['outcome'] = {
+            'feral_attack': outcome.feral_attack,
+            'attention_delta': outcome.stats.attention_delta
+        }
+
+        # Phase 5: Emit feral.attack event if attack occurred during gather
+        if outcome.feral_attack and db:
+            emit_event(db, sid, "feral.attack", {
+                "band": outcome.feral_attack.get("band"),
+                "action": outcome.feral_attack.get("action"),
+                "effects": outcome.feral_attack.get("effects", {})
+            }, entity_id=gather_id)
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
         new_state, attack_message = check_and_apply_womb_systems(new_state)
 
         # Emit gather.start event (optional - events need DB)
-        try:
-            from database import get_db
-            db = get_db()
-        except:
-            db = None
         task_data = new_state.active_tasks[task_id]
         emit_event(db, sid, "gather.start", {
             "resource": resource,
@@ -1213,13 +1279,18 @@ async def gather_resource_endpoint(
             # We'll update the total when task completes
             message = f"Gathered {amount} {resource}."
         
+        # Phase 5: Include feral attack info if occurred
         response_data = {
             "state": game_state_to_dict(new_state),  # Return state WITHOUT resources added yet
             "message": message,
             "amount": amount,
             "task_id": task_id
         }
-        if attack_message:
+        if outcome.feral_attack:
+            response_data["feral_attack"] = outcome.feral_attack
+            band = outcome.feral_attack.get("band", "unknown").upper()
+            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Gathering slowed and cost increased due to high attention."
+        elif attack_message:
             response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)

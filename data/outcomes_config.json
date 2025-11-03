@@ -9,6 +9,61 @@
         "Metal Ore": [6, 12]
       },
       "trait_effects": {
+        "PWC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.008,
+            "notes": "Faster temporal harmonics = more efficient = safer"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.02,
+            "notes": "Faster execution = more rewards collected"
+          }
+        },
+        "SSC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.012,
+            "notes": "Stronger structural integrity = more resilient under stress"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.01,
+            "notes": "Less breakage = more intact rewards"
+          }
+        },
+        "MGC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.01,
+            "notes": "Stable growth channels = less bio-loss = safer"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.015,
+            "notes": "Less bio-loss = more rewards retained"
+          }
+        },
+        "DLT": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.005,
+            "notes": "Only applies when clone kind is incompatible with expedition type"
+          }
+        },
+        "ENF": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": 0.008,
+            "notes": "Low noise (0-4) = predictable/safer; High noise (6-10) = anomalies = riskier but can yield windfalls"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.03,
+            "notes": "High noise anomalies can yield unexpected windfalls (but also more risk). Low noise = standard rewards."
+          }
+        },
         "ELK": {
           "death_chance": {
             "op": "add",
@@ -19,13 +74,6 @@
           "death_chance": {
             "op": "add",
             "value_per_point": 0.01
-          }
-        },
-        "DLT": {
-          "death_chance": {
-            "op": "add",
-            "value_per_point": -0.005,
-            "notes": "Only applies when clone kind is incompatible with expedition type"
           }
         }
       }
@@ -38,6 +86,61 @@
         "Synthetic": [2, 5]
       },
       "trait_effects": {
+        "PWC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.008,
+            "notes": "Faster temporal harmonics = more efficient = safer"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.02,
+            "notes": "Faster execution = more rewards collected"
+          }
+        },
+        "SSC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.012,
+            "notes": "Stronger structural integrity = more resilient under stress"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.01,
+            "notes": "Less breakage = more intact rewards"
+          }
+        },
+        "MGC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.01,
+            "notes": "Stable growth channels = less bio-loss = safer"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.015,
+            "notes": "Less bio-loss = more rewards retained"
+          }
+        },
+        "DLT": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.005,
+            "notes": "Only applies when clone kind is incompatible with expedition type"
+          }
+        },
+        "ENF": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": 0.008,
+            "notes": "Low noise (0-4) = predictable/safer; High noise (6-10) = anomalies = riskier but can yield windfalls"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.03,
+            "notes": "High noise anomalies can yield unexpected windfalls (but also more risk). Low noise = standard rewards."
+          }
+        },
         "ELK": {
           "death_chance": {
             "op": "add",
@@ -48,13 +151,6 @@
           "death_chance": {
             "op": "add",
             "value_per_point": 0.01
-          }
-        },
-        "DLT": {
-          "death_chance": {
-            "op": "add",
-            "value_per_point": -0.005,
-            "notes": "Only applies when clone kind is incompatible with expedition type"
           }
         }
       }
@@ -69,6 +165,61 @@
       },
       "shilajit_chance": 0.15,
       "trait_effects": {
+        "PWC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.008,
+            "notes": "Faster temporal harmonics = more efficient = safer"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.02,
+            "notes": "Faster execution = more rewards collected"
+          }
+        },
+        "SSC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.012,
+            "notes": "Stronger structural integrity = more resilient under stress"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.01,
+            "notes": "Less breakage = more intact rewards"
+          }
+        },
+        "MGC": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.01,
+            "notes": "Stable growth channels = less bio-loss = safer"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.015,
+            "notes": "Less bio-loss = more rewards retained"
+          }
+        },
+        "DLT": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.005,
+            "notes": "Only applies when clone kind is incompatible with expedition type"
+          }
+        },
+        "ENF": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": 0.008,
+            "notes": "Low noise (0-4) = predictable/safer; High noise (6-10) = anomalies = riskier but can yield windfalls"
+          },
+          "reward_mult": {
+            "op": "add",
+            "value_per_point": 0.03,
+            "notes": "High noise anomalies can yield unexpected windfalls (but also more risk). Low noise = standard rewards."
+          }
+        },
         "ELK": {
           "death_chance": {
             "op": "add",
@@ -79,13 +230,6 @@
           "death_chance": {
             "op": "add",
             "value_per_point": 0.01
-          }
-        },
-        "DLT": {
-          "death_chance": {
-            "op": "add",
-            "value_per_point": -0.005,
-            "notes": "Only applies when clone kind is incompatible with expedition type"
           }
         }
       }
@@ -150,6 +294,44 @@
       "upload": {
         "notes": "No mechanical change; warning event only"
       }
+    }
+  },
+  "gather": {
+    "resources": {
+      "Tritanium": {
+        "base_amount": [5, 12],
+        "base_time": [12, 20],
+        "attention_delta": 5.0
+      },
+      "Metal Ore": {
+        "base_amount": [4, 10],
+        "base_time": [10, 16],
+        "attention_delta": 5.0
+      },
+      "Biomass": {
+        "base_amount": [3, 8],
+        "base_time": [6, 12],
+        "attention_delta": 5.0
+      },
+      "Synthetic": {
+        "base_amount": [2, 6],
+        "base_time": [16, 24],
+        "attention_delta": 5.0
+      },
+      "Organic": {
+        "base_amount": [3, 7],
+        "base_time": [8, 14],
+        "attention_delta": 5.0
+      },
+      "Shilajit": {
+        "base_amount": [1, 1],
+        "base_time": [58, 73],
+        "attention_delta": 5.0,
+        "notes": "Always 1, but time varies"
+      }
+    },
+    "practice_xp": {
+      "kinetic": 2
     }
   }
 }
