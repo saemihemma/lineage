@@ -366,6 +366,7 @@ def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
     """
     Get or create session ID from cookie.
     Note: Caller must ensure cookie is set in response if new session is created.
+    Session ID is used for rate limiting and CSRF tokens (short-term tracking).
     """
     if not session_id:
         session_id = str(uuid.uuid4())
@@ -373,6 +374,39 @@ def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
     else:
         logger.debug(f"📋 Existing session: {session_id[:8]}...")
     return session_id
+
+
+def get_player_id(player_id: Optional[str] = None, session_id: Optional[str] = None) -> str:
+    """
+    Get or create player ID.
+    
+    Priority:
+    1. Use provided player_id (from frontend localStorage)
+    2. Fall back to session_id if player_id not provided (backward compatibility)
+    
+    Player ID is persistent and stored in localStorage on frontend.
+    It's used for saving/loading game state (long-term persistence).
+    
+    Args:
+        player_id: Player ID from frontend (preferred)
+        session_id: Session ID as fallback (backward compatibility)
+    
+    Returns:
+        Player ID string
+    """
+    if player_id:
+        logger.debug(f"📋 Using provided player_id: {player_id[:8]}...")
+        return player_id
+    
+    # Fallback to session_id for backward compatibility
+    if session_id:
+        logger.debug(f"📋 Falling back to session_id as player_id: {session_id[:8]}...")
+        return session_id
+    
+    # Generate new player_id if neither provided
+    new_player_id = str(uuid.uuid4())
+    logger.info(f"🆕 Generated new player_id: {new_player_id[:8]}...")
+    return new_player_id
 
 
 def check_and_complete_tasks(state: GameState) -> GameState:
@@ -387,6 +421,8 @@ def check_and_complete_tasks(state: GameState) -> GameState:
     new_state = state.copy()
     completed_tasks = []
     
+    logger.debug(f"🔍 check_and_complete_tasks: Checking {len(new_state.active_tasks)} task(s) at time {current_time:.2f}")
+    
     for task_id, task_data in list(new_state.active_tasks.items()):
         start_time = task_data.get('start_time', 0)
         duration = task_data.get('duration', 0)
@@ -395,6 +431,9 @@ def check_and_complete_tasks(state: GameState) -> GameState:
         # Debug: log task timing details
         elapsed = current_time - start_time
         remaining = max(0, (start_time + duration) - current_time)
+        
+        logger.debug(f"📋 Task {task_id}: type={task_type}, start={start_time:.2f}, duration={duration}, elapsed={elapsed:.2f}, remaining={remaining:.2f}")
+        
         if duration <= 0:
             logger.warning(f"⚠️ Task {task_id} ({task_type}) has invalid duration: {duration}. start_time: {start_time}, current: {current_time}")
         elif remaining <= 0:
@@ -402,7 +441,9 @@ def check_and_complete_tasks(state: GameState) -> GameState:
         
         if current_time >= start_time + duration:
             # Task is complete
+            logger.info(f"🔔 Task {task_id} ({task_type}) is COMPLETE - entering completion handler")
             task_type = task_data.get('type')
+            logger.debug(f"🔍 Processing completion for task_type='{task_type}'")
             
             # Apply resource gathering if this was a gather task
             if task_type == "gather_resource":
@@ -427,19 +468,34 @@ def check_and_complete_tasks(state: GameState) -> GameState:
             
             # Complete build_womb if this was a build task
             if task_type == "build_womb":
+                logger.info(f"🏗️ Entering build_womb completion handler")
                 from game.wombs import create_womb
                 # Create new womb with index based on current count
                 old_womb_count = len(new_state.wombs) if new_state.wombs else 0
+                logger.debug(f"🏗️ build_womb: old_womb_count={old_womb_count}, wombs array exists={new_state.wombs is not None}")
                 new_womb_id = old_womb_count
-                new_womb = create_womb(new_womb_id)
+                try:
+                    new_womb = create_womb(new_womb_id)
+                    logger.debug(f"🏗️ build_womb: Created womb object, id={new_womb.id}, durability={new_womb.durability}")
+                except Exception as e:
+                    logger.error(f"❌ build_womb: Failed to create_womb: {e}")
+                    raise
+                
                 if not new_state.wombs:
+                    logger.debug(f"🏗️ build_womb: Initializing wombs array (was None)")
                     new_state.wombs = []
                 new_state.wombs.append(new_womb)
+                logger.debug(f"🏗️ build_womb: Appended womb, new count={len(new_state.wombs)}")
+                
                 # Also set assembler_built for backward compatibility (if first womb)
                 if len(new_state.wombs) == 1:
                     new_state.assembler_built = True
+                    logger.debug(f"🏗️ build_womb: Set assembler_built=True (first womb)")
+                
                 task_data['completion_message'] = f"Womb {new_womb_id + 1} built successfully. You can now grow clones."
                 logger.info(f"🏗️ Womb created: ID={new_womb_id}, total wombs={len(new_state.wombs)}, durability={new_womb.durability}/{new_womb.max_durability}, assembler_built={new_state.assembler_built}")
+            else:
+                logger.debug(f"🔍 Task {task_id} type '{task_type}' is not 'build_womb', skipping womb creation")
             
             # Complete repair_womb if this was a repair task
             if task_type == "repair_womb":
@@ -484,6 +540,12 @@ def check_and_complete_tasks(state: GameState) -> GameState:
             
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
+            logger.info(f"🗑️ Removed completed task {task_id} ({task_type}) from active_tasks. Remaining: {len(new_state.active_tasks)}")
+    
+    if completed_tasks:
+        logger.info(f"✅ check_and_complete_tasks: Completed {len(completed_tasks)} task(s): {[t[1] for t in completed_tasks]}")
+    else:
+        logger.debug(f"ℹ️ check_and_complete_tasks: No tasks completed")
     
     return new_state
 
@@ -705,35 +767,61 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
     return state
 
 
-def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: bool = False) -> Optional[GameState]:
+def load_game_state(db: DatabaseConnection, player_id: str, session_id: Optional[str] = None, create_if_missing: bool = False) -> Optional[GameState]:
     """
-    Load game state from database.
+    Load game state from database using player_id (persistent identifier).
     
     Args:
         db: Database connection
-        session_id: Session identifier
+        player_id: Player identifier (from localStorage, persistent)
+        session_id: Optional session identifier (for logging/migration)
         create_if_missing: If True, create new state if not found (for recovery after redeploy)
     
     Returns:
         GameState if found or created, None otherwise
     """
-    logger.debug(f"🔍 Loading state for session: {session_id[:8]}...")
+    logger.debug(f"🔍 Loading state for player_id: {player_id[:8]}...")
+    
+    # Try to load by player_id first (new system)
     cursor = execute_query(
         db,
-        "SELECT state_data FROM game_states WHERE session_id = ?",
-        (session_id,)
+        "SELECT state_data FROM game_states WHERE player_id = ?",
+        (player_id,)
     )
     row = cursor.fetchone()
+    
+    # Fallback: if no player_id match and session_id provided, try legacy session_id lookup
+    if row is None and session_id:
+        logger.debug(f"⚠️ No state found for player_id {player_id[:8]}..., trying legacy session_id {session_id[:8]}...")
+        cursor = execute_query(
+            db,
+            "SELECT state_data FROM game_states WHERE session_id = ?",
+            (session_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            # Found by session_id - migrate to player_id
+            logger.info(f"🔄 Migrating state from session_id to player_id: {session_id[:8]}... → {player_id[:8]}...")
+            try:
+                execute_query(
+                    db,
+                    "UPDATE game_states SET player_id = ? WHERE session_id = ?",
+                    (player_id, session_id)
+                )
+                logger.info(f"✅ Migration complete: state now uses player_id {player_id[:8]}...")
+            except Exception as migrate_error:
+                logger.warning(f"⚠️ Migration failed: {migrate_error}")
+    
     if row is None:
-        logger.debug(f"❌ No state found for session: {session_id[:8]}..., create_if_missing={create_if_missing}")
+        logger.debug(f"❌ No state found for player_id: {player_id[:8]}..., create_if_missing={create_if_missing}")
         if create_if_missing:
             # Auto-recover: create new state after redeploy/database wipe
-            logger.info(f"Auto-recovering: creating new state for session {session_id[:8]}... (likely after redeploy)")
+            logger.info(f"Auto-recovering: creating new state for player_id {player_id[:8]}... (likely after redeploy)")
             state = GameState()
             state.version = get_latest_version()
             state.assembler_built = False
             state.last_saved_ts = time.time()
-            save_game_state(db, session_id, state)
+            save_game_state(db, player_id, state, session_id=session_id)
             return state
         return None
     
@@ -748,33 +836,34 @@ def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: 
         state = check_and_complete_tasks(state)
         if state.active_tasks != data.get("active_tasks", {}):
             # Tasks were completed, save updated state
-            logger.info(f"🔄 Tasks completed during load, saving updated state for session {session_id[:8]}...")
-            save_game_state(db, session_id, state)
+            logger.info(f"🔄 Tasks completed during load, saving updated state for player_id {player_id[:8]}...")
+            save_game_state(db, player_id, state, session_id=session_id)
         
         return state
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         # Corrupted state - auto-recover
-        logger.error(f"Corrupted state for session {session_id[:8]}..., recovering: {e}")
+        logger.error(f"Corrupted state for player_id {player_id[:8]}..., recovering: {e}")
         if create_if_missing:
             state = GameState()
             state.version = get_latest_version()
             state.assembler_built = False
             state.last_saved_ts = time.time()
-            save_game_state(db, session_id, state)
+            save_game_state(db, player_id, state, session_id=session_id)
             return state
         return None
 
 
-def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, check_version: bool = False):
+def save_game_state(db: DatabaseConnection, player_id: str, state: GameState, check_version: bool = False, session_id: Optional[str] = None):
     """
-    Save game state to database with optional optimistic locking.
+    Save game state to database using player_id (persistent identifier).
     Applies womb systems (decay, attacks) before saving.
 
     Args:
         db: Database connection
-        session_id: Session identifier
+        player_id: Player identifier (from localStorage, persistent)
         state: Game state to save
         check_version: If True, verify version matches before saving (prevents conflicts)
+        session_id: Optional session identifier (for logging/migration)
 
     Raises:
         RuntimeError: If check_version is True and state version doesn't match database
@@ -787,8 +876,8 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
         # Optimistic locking: check if version matches
         cursor = execute_query(
             db,
-            "SELECT state_data FROM game_states WHERE session_id = ?",
-            (session_id,)
+            "SELECT state_data FROM game_states WHERE player_id = ?",
+            (player_id,)
         )
         row = cursor.fetchone()
         if row:
@@ -796,7 +885,7 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
             existing_version = existing_data.get("version", 1)
             if existing_version != state.version:
                 logger.warning(
-                    f"State conflict for session {session_id[:8]}...: "
+                    f"State conflict for player_id {player_id[:8]}...: "
                     f"expected v{state.version}, found v{existing_version}"
                 )
                 raise RuntimeError(
@@ -811,16 +900,18 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
     
     # Log save details
     womb_count = len(state.wombs) if state.wombs else 0
-    logger.debug(f"💾 Saving state - Session: {session_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}, Version: {state.version}")
+    logger.debug(f"💾 Saving state - Player: {player_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}, Version: {state.version}")
 
     try:
+        # Use player_id as primary key, store session_id for migration/backward compatibility
         execute_query(db, """
-            INSERT INTO game_states (session_id, state_data, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(session_id) DO UPDATE SET
+            INSERT INTO game_states (player_id, session_id, state_data, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(player_id) DO UPDATE SET
+                session_id = excluded.session_id,
                 state_data = excluded.state_data,
                 updated_at = CURRENT_TIMESTAMP
-        """, (session_id, state_json))
+        """, (player_id, session_id, state_json))
         db.commit()
     except Exception as db_error:
         # Rollback on error to prevent transaction cascade
@@ -828,7 +919,7 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
             db.rollback()
         except Exception as rollback_error:
             logger.error(f"Failed to rollback transaction in save_game_state: {rollback_error}")
-        logger.error(f"Database error saving game state for session {session_id[:8]}...: {db_error}")
+        logger.error(f"Database error saving game state for player_id {player_id[:8]}...: {db_error}")
         raise
 
 
@@ -875,9 +966,16 @@ async def get_game_state(
 
     # Check for completed tasks
     old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
+    old_womb_count = len(state.wombs) if state.wombs else 0
+    logger.debug(f"🔍 Before check_and_complete_tasks: active_tasks={len(old_active_tasks)}, wombs={old_womb_count}")
     state = check_and_complete_tasks(state)
+    new_womb_count = len(state.wombs) if state.wombs else 0
+    logger.debug(f"🔍 After check_and_complete_tasks: active_tasks={len(state.active_tasks) if state.active_tasks else 0}, wombs={new_womb_count}")
+    
     if state.active_tasks != old_active_tasks:
         # Tasks were completed - emit completion events
+        logger.info(f"🔄 Tasks completed during load, saving updated state for session {session_id[:8]}... (wombs: {old_womb_count} → {new_womb_count})")
+        save_game_state(db, session_id, state)
         for task_id, old_task_data in old_active_tasks.items():
             if task_id not in state.active_tasks:
                 # Task was completed
