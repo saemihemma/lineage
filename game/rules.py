@@ -159,9 +159,18 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     """
     Run an expedition with the applied clone.
     
+    Phase 2: Uses new outcome engine for deterministic resolution.
+    Keeps backward-compatible signature.
+    
     Returns:
         Tuple of (new_state, message)
     """
+    import time
+    import uuid
+    from backend.engine.outcomes import (
+        OutcomeContext, SeedParts, resolve_expedition as resolve_expedition_outcome
+    )
+    
     cid = state.applied_clone_id
     if not cid or cid not in state.clones or not state.clones[cid].alive:
         return state, "No clone applied to the spaceship. Apply one first."
@@ -170,101 +179,47 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     new_state = state.copy()
     new_clone = new_state.clones[cid]
     
-    loot = {}
-    yield_mult = perk_exploration_yield_mult(state) if kind == "EXPLORATION" else 1.0
-    for res, (a, b) in CONFIG["REWARDS"][kind].items():
-        base_amt = state.rng.randint(a, b)
-        loot[res] = int(round(base_amt * yield_mult))
-        new_state.resources[res] = new_state.resources.get(res, 0) + loot[res]
+    # Phase 2: Build outcome context for deterministic resolution
+    # Note: session_id should be passed from endpoint for proper seed generation
+    # For now, use a fallback (will be improved when endpoint passes it)
+    expedition_id = str(uuid.uuid4())
+    seed_parts = SeedParts(
+        user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
+        session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
+        action_id=expedition_id,
+        config_version="legacy",  # Will be replaced in Phase 3
+        timestamp=time.time()
+    )
     
-    base_xp = {"MINING": 10, "COMBAT": 12, "EXPLORATION": 8}[kind]
-    mult = 1.0
-    if kind == "MINING" and c.kind == "MINER":
-        mult *= CONFIG["MINER_XP_MULT"]
-    if kind in ["MINING", "COMBAT"]:
-        mult *= perk_mining_xp_mult(state)
+    # Get best womb durability
+    womb_durability = 100.0  # Default
+    if new_state.wombs:
+        functional_wombs = [w for w in new_state.wombs if w.is_functional()]
+        if functional_wombs:
+            womb_durability = functional_wombs[0].durability
     
-    gained = int(round(base_xp * mult))
-    new_clone.xp[kind] = new_clone.xp.get(kind, 0) + gained
+    ctx = OutcomeContext(
+        action='expedition',
+        clone=c,
+        self_level=state.soul_level(),
+        practices=state.practices_xp,
+        global_attention=getattr(state, 'global_attention', 0.0),
+        womb_durability=womb_durability,
+        expedition_kind=kind,
+        config=CONFIG,
+        seed_parts=seed_parts
+    )
     
-    # Award practice XP
-    if kind in ["MINING", "COMBAT"]:
-        award_practice_xp(new_state, "Kinetic", 5)
-    elif kind == "EXPLORATION":
-        award_practice_xp(new_state, "Cognitive", 5)
+    # Resolve outcome using deterministic engine
+    outcome = resolve_expedition_outcome(ctx)
     
-    shilajit_found = False
-    if kind == "EXPLORATION":
-        if state.rng.random() < 0.15:
-            new_state.resources["Shilajit"] = new_state.resources.get("Shilajit", 0) + 1
-            shilajit_found = True
-    
-    # Calculate death probability based on clone traits, XP, and mission compatibility
-    # IMPORTANT: Check death BEFORE incrementing survived_runs
-    def calculate_death_probability(clone, expedition_kind: str, base_prob: float) -> float:
-        """
-        Calculate adjusted death probability based on:
-        - Clone XP (higher XP = lower death chance)
-        - Clone kind vs expedition compatibility
-        - Clone traits (ELK reduces, FRK increases, DLT helps with incompatible missions)
-        """
-        prob = base_prob
-        
-        # XP reduces death chance (each 100 XP = -2% death probability, capped at -10%)
-        total_xp = clone.total_xp()
-        xp_reduction = min(0.10, total_xp / 100.0 * 0.02)
-        prob -= xp_reduction
-        
-        # Clone kind vs expedition compatibility
-        if expedition_kind == "MINING" and clone.kind == "MINER":
-            prob *= 0.5  # MINER on MINING = 50% safer
-        elif expedition_kind == "COMBAT" and clone.kind == "VOLATILE":
-            prob *= 0.6  # VOLATILE on COMBAT = 40% safer
-        elif expedition_kind == "EXPLORATION" and clone.kind == "BASIC":
-            prob *= 0.8  # BASIC slightly better for EXPLORATION
-        
-        # Incompatible missions are more dangerous
-        incompatible = False
-        if expedition_kind == "MINING" and clone.kind == "VOLATILE":
-            prob *= 1.5  # VOLATILE on MINING = 50% more dangerous
-            incompatible = True
-        elif expedition_kind == "COMBAT" and clone.kind == "MINER":
-            prob *= 1.3  # MINER on COMBAT = 30% more dangerous
-            incompatible = True
-        
-        # Trait effects
-        traits = clone.traits or {}
-        elk = traits.get("ELK", 5)  # Entropic Luck (default 5 = neutral)
-        frk = traits.get("FRK", 5)  # Feralization Risk (default 5 = neutral)
-        dlt = traits.get("DLT", 5)  # Differential-Drift Tolerance (default 5 = neutral)
-        
-        # ELK reduces death (each point above 5 = -1% probability)
-        elk_bonus = (elk - 5) / 100.0  # Range: -5% to +5%
-        prob -= elk_bonus
-        
-        # FRK increases death (each point above 5 = +1% probability)
-        frk_penalty = (frk - 5) / 100.0  # Range: -5% to +5%
-        prob += frk_penalty
-        
-        # DLT helps with incompatible missions (reduces penalty)
-        if incompatible:
-            dlt_bonus = (dlt - 5) / 200.0  # Range: -2.5% to +2.5%
-            prob -= dlt_bonus
-        
-        # Clamp probability between 0.5% and 50%
-        prob = max(0.005, min(0.50, prob))
-        
-        return prob
-    
-    # Calculate adjusted death probability
-    adjusted_death_prob = calculate_death_probability(new_clone, kind, CONFIG["DEATH_PROB"])
-    
-    # Check for clone death with adjusted probability
-    death_roll = state.rng.random()
-    
-    if death_roll < adjusted_death_prob:
+    # Apply outcome to state
+    if outcome.result == 'death':
         # Clone died - reduce XP and mark as dead
-        frac = state.rng.uniform(0.25, 0.75)
+        # Note: XP loss fraction uses non-deterministic random (acceptable per plan)
+        # In future phases, we can make this deterministic if needed
+        import random
+        frac = random.uniform(0.25, 0.75)
         for k in new_clone.xp:
             new_clone.xp[k] = int(new_clone.xp[k] * (1.0 - frac))
         new_clone.alive = False
@@ -273,17 +228,32 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
         # Do NOT increment survived_runs - clone died
         return new_state, f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes."
     
-    # Clone survived - increment survived_runs
+    # Clone survived - apply rewards and XP
+    for res, amount in outcome.loot.items():
+        new_state.resources[res] = new_state.resources.get(res, 0) + amount
+    
+    for xp_kind, xp_amount in outcome.xp_gained.items():
+        new_clone.xp[xp_kind] = new_clone.xp.get(xp_kind, 0) + xp_amount
+    
+    # Increment survived_runs
     new_clone.survived_runs += 1
+    
+    # Award practice XP
+    if kind in ["MINING", "COMBAT"]:
+        award_practice_xp(new_state, "Kinetic", 5)
+    elif kind == "EXPLORATION":
+        award_practice_xp(new_state, "Cognitive", 5)
     
     # Gain attention on active womb after successful expedition
     if new_state.wombs:
         from game.wombs import gain_attention
         new_state = gain_attention(new_state)
     
-    loot_str = ", ".join([f"{k}+{v}" for k, v in loot.items()])
+    # Build message
+    loot_str = ", ".join([f"{k}+{v}" for k, v in outcome.loot.items()])
+    gained = outcome.xp_gained.get(kind, 0)
     msg = f"{kind.title()} expedition complete: {loot_str}. {kind.title()} XP +{gained}. Survived runs: {new_clone.survived_runs}."
-    if shilajit_found:
+    if outcome.shilajit_found:
         msg += " Recovered Shilajit fragment from exploration site."
     return new_state, msg
 

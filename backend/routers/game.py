@@ -1461,8 +1461,16 @@ async def run_expedition_endpoint(
         expedition_id = str(uuid.uuid4())
         start_ts = time.time()
 
+        # Phase 2: Store session_id in state for seed generation (temporary approach)
+        # This ensures deterministic RNG seed includes session_id
+        state._session_id = sid
+
         # Run expedition (no DB required)
         new_state, message = run_expedition(state, kind)
+        
+        # Clean up temporary attribute
+        if hasattr(new_state, '_session_id'):
+            delattr(new_state, '_session_id')
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
