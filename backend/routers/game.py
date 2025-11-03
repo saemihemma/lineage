@@ -287,113 +287,15 @@ def emit_event(
 
 
 def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
-    """Check if session has expired. Returns True if valid, False if expired."""
-    # Check if transaction is in error state (PostgreSQL specific)
-    # If so, force connection recreation to get a clean connection
-    try:
-        if hasattr(db, 'status'):
-            # PostgreSQL connection status check
-            import psycopg2
-            from psycopg2.extensions import STATUS_READY, STATUS_IN_TRANSACTION
-            
-            status = db.status
-            # If connection is in transaction state (shouldn't happen with autocommit),
-            # or connection is closed/invalid, force connection recreation
-            if status < 0 or status == STATUS_IN_TRANSACTION:
-                # Connection is in bad state - force recreation by closing global connection
-                try:
-                    from backend.database import _db_instance
-                    if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
-                        _db_instance.adapter.close()  # Force close to trigger recreation
-                        if hasattr(_db_instance.adapter, 'conn'):
-                            _db_instance.adapter.conn = None
-                        if hasattr(_db_instance, 'conn'):
-                            _db_instance.conn = None
-                        logger.warning("Closed bad PostgreSQL connection, will recreate on next use")
-                except Exception as e:
-                    logger.debug(f"Could not force close connection: {e}")
-                # Try rollback as fallback
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-    except Exception:
-        # Not PostgreSQL or status check failed, continue
-        pass
+    """
+    DEPRECATED: Session expiry check no longer needed since game state is in localStorage.
+    Sessions are managed client-side and don't require database-based expiry.
     
-    try:
-        cursor = execute_query(
-            db,
-            "SELECT updated_at FROM game_states WHERE session_id = ?",
-            (session_id,)
-        )
-        row = cursor.fetchone()
-
-        if row is None:
-            return True  # New session is valid
-
-        # Parse updated_at timestamp
-        # PostgreSQL returns datetime objects, SQLite returns strings
-        updated_at_value = row['updated_at']
-        try:
-            from datetime import datetime
-            if isinstance(updated_at_value, datetime):
-                # PostgreSQL returns datetime object directly
-                updated_at = updated_at_value
-            else:
-                # SQLite returns string, parse it
-                updated_at = datetime.fromisoformat(str(updated_at_value))
-            now = datetime.utcnow()
-            age_seconds = (now - updated_at).total_seconds()
-
-            if age_seconds > SESSION_EXPIRY:
-                # Session expired, clean it up
-                try:
-                    execute_query(db, "DELETE FROM game_states WHERE session_id = ?", (session_id,))
-                    # Don't need commit() with autocommit, but harmless if called
-                    try:
-                        db.commit()
-                    except Exception:
-                        pass  # Ignore commit errors with autocommit
-                    logger.info(f"Cleaned up expired session {session_id[:8]}...")
-                    return False
-                except Exception as delete_error:
-                    # Rollback on error
-                    try:
-                        db.rollback()
-                    except Exception:
-                        pass
-                    logger.error(f"Error deleting expired session {session_id[:8]}...: {delete_error}")
-                    return True  # Allow on error
-
-            return True
-        except Exception as e:
-            logger.error(f"Error parsing timestamp in check_session_expiry: {e}")
-            return True  # Allow on error
-    except Exception as e:
-        # Query failed - likely transaction aborted or connection issue
-        # Force connection recreation
-        error_str = str(e).lower()
-        if ("current transaction is aborted" in error_str or 
-            "transaction" in error_str and "aborted" in error_str):
-            try:
-                from backend.database import _db_instance
-                if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
-                    _db_instance.adapter.close()
-                    if hasattr(_db_instance.adapter, 'conn'):
-                        _db_instance.adapter.conn = None
-                    if hasattr(_db_instance, 'conn'):
-                        _db_instance.conn = None
-                    logger.warning("Closed bad connection after transaction abort error, will recreate")
-            except Exception as close_error:
-                logger.debug(f"Could not force close connection after error: {close_error}")
-        # Try rollback as fallback
-        try:
-            db.rollback()
-            logger.info("Rolled back transaction after check_session_expiry error")
-        except Exception:
-            pass
-        return True  # Allow on error - fail open to prevent breaking the game
+    This function is kept for backward compatibility but always returns True (session valid).
+    """
+    # Game state is now in localStorage, so sessions don't expire on the server side
+    # Always return True to indicate session is valid
+    return True
 
 
 def get_session_id(session_id: Optional[str] = Cookie(None), request: Optional[Request] = None) -> str:
@@ -1840,9 +1742,8 @@ async def get_events_feed(
     
     sid = get_session_id(session_id)
     
-    # Check session expiry
-    if not check_session_expiry(db, sid):
-        sid = str(uuid.uuid4())
+    # Session expiry check removed - sessions are managed client-side via localStorage
+    # No need to check or regenerate session IDs
     
     try:
         # Build query to get events since timestamp
