@@ -72,19 +72,12 @@ class Womb:
     """Womb (assembler) data model"""
     id: int  # Index-based ID (0, 1, 2, ...)
     durability: float  # Current durability (0 to max_durability)
-    attention: float  # Current attention (0 to max_attention)
     max_durability: float = 100.0  # Maximum durability
-    max_attention: float = 100.0  # Maximum attention
+    # Note: attention is now global (stored in PlayerState.global_attention), not per-womb
     
     def is_functional(self) -> bool:
         """Check if womb is functional (durability > 0)"""
         return self.durability > 0
-    
-    def attention_percent(self) -> float:
-        """Get attention as percentage"""
-        if self.max_attention == 0:
-            return 0.0
-        return (self.attention / self.max_attention) * 100.0
     
     def durability_percent(self) -> float:
         """Get durability as percentage"""
@@ -103,9 +96,9 @@ class PlayerState:
     assembler_built: bool = False  # DEPRECATED: Use wombs array instead (kept for migration)
     wombs: List[Womb] = field(default_factory=list)  # Array of wombs (replaces assembler_built)
     resources: Dict[str, int] = field(default_factory=lambda: {
-        "Tritanium": 60,
-        "Metal Ore": 40,
-        "Biomass": 8,
+        "Tritanium": 0,
+        "Metal Ore": 5,
+        "Biomass": 1,
         "Synthetic": 8,
         "Organic": 8,
         "Shilajit": 0
@@ -117,6 +110,7 @@ class PlayerState:
     })
     last_saved_ts: float = 0.0
     self_name: str = ""
+    global_attention: float = 0.0  # Global attention (0-100), shared across all wombs
 
     def soul_level(self) -> int:
         """Calculate current SELF level"""

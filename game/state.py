@@ -49,5 +49,10 @@ class GameState(PlayerState):
         # Copy wombs if they exist (for backward compatibility, check if attribute exists)
         if hasattr(self, 'wombs'):
             new_state.wombs = [copy.deepcopy(w) for w in self.wombs]
+        # Copy ftue if it exists
+        if hasattr(self, 'ftue') and self.ftue is not None:
+            new_state.ftue = copy.deepcopy(self.ftue)
+        elif hasattr(self, 'ftue'):
+            new_state.ftue = {}
         return new_state
 

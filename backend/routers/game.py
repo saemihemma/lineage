@@ -619,14 +619,21 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
             {
                 "id": w.id,
                 "durability": w.durability,
-                "attention": w.attention,
-                "max_durability": w.max_durability,
-                "max_attention": w.max_attention
+                "max_durability": w.max_durability
+                # Note: attention is now global (stored in global_attention), not per-womb
             }
             for w in state.wombs
         ]
     else:
         result["wombs"] = []
+    
+    # Add ftue if it exists
+    if hasattr(state, 'ftue'):
+        result["ftue"] = state.ftue
+    elif 'ftue' in dir(state):
+        result["ftue"] = getattr(state, 'ftue', {})
+    else:
+        result["ftue"] = {}
     
     return result
 
@@ -666,9 +673,8 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
             Womb(
                 id=w_data.get("id", i),
                 durability=w_data.get("durability", CONFIG["WOMB_MAX_DURABILITY"]),
-                attention=w_data.get("attention", CONFIG["WOMB_MAX_ATTENTION"]),
-                max_durability=w_data.get("max_durability", CONFIG["WOMB_MAX_DURABILITY"]),
-                max_attention=w_data.get("max_attention", CONFIG["WOMB_MAX_ATTENTION"])
+                max_durability=w_data.get("max_durability", CONFIG["WOMB_MAX_DURABILITY"])
+                # Note: attention is now global (not per-womb), ignore old attention/max_attention fields
             )
             for i, w_data in enumerate(wombs_data)
         ]
@@ -688,6 +694,25 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
             uploaded=c_data.get("uploaded", False),
             created_at=c_data.get("created_at", 0.0)
         )
+    
+    # Load ftue flags
+    ftue_data = data.get("ftue", {})
+    if ftue_data:
+        state.ftue = ftue_data
+    else:
+        # Initialize empty ftue dict if not present
+        state.ftue = {}
+    
+    # Retroactively set FTUE flags for existing saves if conditions are met
+    # This helps players who had saves before FTUE was implemented
+    if not state.ftue.get('step_first_expedition', False):
+        # Check if any clone has expedition XP
+        for clone in state.clones.values():
+            xp = clone.xp or {}
+            total_xp = (xp.get("MINING", 0) + xp.get("COMBAT", 0) + xp.get("EXPLORATION", 0))
+            if total_xp > 0:
+                state.ftue['step_first_expedition'] = True
+                break
     
     return state
 
@@ -723,7 +748,7 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
     """
     # Apply womb systems (decay, attacks) before returning state
     from game.wombs import check_and_apply_womb_systems
-    state = check_and_apply_womb_systems(state)
+    state, _ = check_and_apply_womb_systems(state)
     
     # Log that we would have saved (for debugging)
     womb_count = len(state.wombs) if state.wombs else 0
@@ -1103,7 +1128,7 @@ async def gather_resource_endpoint(
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
-        new_state = check_and_apply_womb_systems(new_state)
+        new_state, attack_message = check_and_apply_womb_systems(new_state)
 
         # Emit gather.start event (optional - events need DB)
         try:
@@ -1128,12 +1153,16 @@ async def gather_resource_endpoint(
             # We'll update the total when task completes
             message = f"Gathered {amount} {resource}."
         
-        response = JSONResponse(content={
+        response_data = {
             "state": game_state_to_dict(new_state),  # Return state WITHOUT resources added yet
             "message": message,
             "amount": amount,
             "task_id": task_id
-        })
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
@@ -1188,7 +1217,7 @@ async def build_womb_endpoint(
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
-        final_state = check_and_apply_womb_systems(final_state)
+        final_state, attack_message = check_and_apply_womb_systems(final_state)
 
         # State is saved to localStorage by frontend - no DB save needed
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
@@ -1196,11 +1225,15 @@ async def build_womb_endpoint(
         new_womb_count = len(final_state.wombs) if final_state.wombs else 0
         logger.info(f"✅ build_womb saved - Session: {sid[:8]}..., Wombs: {new_womb_count}, Task: {task_id}, Assembler: {final_state.assembler_built}")
 
-        response = JSONResponse(content={
+        response_data = {
             "state": game_state_to_dict(final_state),
             "message": message,
             "task_id": task_id
-        })
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
@@ -1261,7 +1294,7 @@ async def grow_clone_endpoint(
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
-        final_state = check_and_apply_womb_systems(final_state)
+        final_state, attack_message = check_and_apply_womb_systems(final_state)
 
         # Emit clone.grow.start event (optional - events need DB)
         try:
@@ -1279,13 +1312,17 @@ async def grow_clone_endpoint(
         # Don't add clone to state yet - it will be added when task completes
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
 
-        response = JSONResponse(content={
+        response_data = {
             "state": game_state_to_dict(final_state),  # Return state WITHOUT clone added yet
             "clone": None,  # Clone not created yet - will appear when task completes
             "soul_split": soul_split,
             "message": message,
             "task_id": task_id
-        })
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
@@ -1394,7 +1431,7 @@ async def run_expedition_endpoint(
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
-        new_state = check_and_apply_womb_systems(new_state)
+        new_state, attack_message = check_and_apply_womb_systems(new_state)
 
         # Get clone that ran expedition
         clone_id = state.applied_clone_id
@@ -1404,6 +1441,13 @@ async def run_expedition_endpoint(
         xp_before = state.clones.get(clone_id).xp.get(kind, 0) if clone_id and clone_id in state.clones else 0
         xp_after = new_state.clones.get(clone_id).xp.get(kind, 0) if clone_id and clone_id in new_state.clones else 0
         xp_gained = xp_after - xp_before
+        
+        # Set FTUE flag for first expedition if XP was gained
+        if xp_gained > 0:
+            if not hasattr(new_state, 'ftue') or new_state.ftue is None:
+                new_state.ftue = {}
+            if not new_state.ftue.get('step_first_expedition', False):
+                new_state.ftue['step_first_expedition'] = True
 
         # Calculate loot (resource diff)
         loot = {}
@@ -1481,12 +1525,17 @@ async def run_expedition_endpoint(
                 "death": not clone_survived
             }, entity_id=expedition_id)
 
-        response = JSONResponse(content={
+        # Include attack message if one occurred
+        response_data = {
             "state": game_state_to_dict(new_state),
             "message": message,
             "expedition_id": expedition_id,
             "signature": signature  # Optional - only if DB available
-        })
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
@@ -1540,7 +1589,7 @@ async def upload_clone_endpoint(
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
-        new_state = check_and_apply_womb_systems(new_state)
+        new_state, attack_message = check_and_apply_womb_systems(new_state)
         
         # Optional: Emit upload.complete event if DB available
         try:
@@ -1559,10 +1608,14 @@ async def upload_clone_endpoint(
                 "soul_percent_delta": soul_percent_delta,
             }, entity_id=clone_id)
 
-        response = JSONResponse(content={
+        response_data = {
             "state": game_state_to_dict(new_state),
             "message": message
-        })
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
@@ -1644,17 +1697,21 @@ async def repair_womb_endpoint(
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
-        final_state = check_and_apply_womb_systems(final_state)
+        final_state, attack_message = check_and_apply_womb_systems(final_state)
         
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
         
-        response = JSONResponse(content={
+        response_data = {
             "state": game_state_to_dict(final_state),
             "message": f"Repairing Womb {womb_id}...",
             "cost": repair_cost,
             "repair_time": repair_time,
             "task_id": task_id
-        })
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:

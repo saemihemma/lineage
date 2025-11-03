@@ -63,7 +63,8 @@ export function OnboardingChecklist({ state }: OnboardingChecklistProps) {
         const clones = state.clones || {};
         return Object.values(clones).some((clone: any) => {
           const xp = clone.xp || {};
-          return (xp.Mining || 0) + (xp.Combat || 0) + (xp.Exploration || 0) > 0;
+          // Backend uses uppercase keys: MINING, COMBAT, EXPLORATION
+          return (xp.MINING || 0) + (xp.COMBAT || 0) + (xp.EXPLORATION || 0) > 0;
         });
       },
     },
@@ -129,7 +130,7 @@ export function OnboardingChecklist({ state }: OnboardingChecklistProps) {
 
           {currentStep && (
             <div className="checklist-hint">
-              <strong>Current:</strong> {currentStep.label}
+              <strong>After that:</strong> Level your SELF
             </div>
           )}
         </div>
