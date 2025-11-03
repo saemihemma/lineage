@@ -1,7 +1,9 @@
 /**
  * Clone Details Panel - shows selected clone information and actions
  */
+import { useState, useEffect } from 'react';
 import type { Clone } from '../types/game';
+import { fetchGameplayConfig, type GameplayConfig } from '../api/config';
 import './CloneDetailsPanel.css';
 
 interface CloneDetailsPanelProps {
@@ -19,6 +21,15 @@ export function CloneDetailsPanel({
   onUpload,
   disabled,
 }: CloneDetailsPanelProps) {
+  const [traitsConfig, setTraitsConfig] = useState<GameplayConfig | null>(null);
+
+  // Fetch traits config on mount
+  useEffect(() => {
+    fetchGameplayConfig().then(setTraitsConfig).catch(err => {
+      console.error('Failed to load traits config:', err);
+    });
+  }, []);
+
   if (!clone) {
     return (
       <div className="panel clone-details-panel">
@@ -31,6 +42,10 @@ export function CloneDetailsPanel({
   }
 
   const totalXp = (clone.xp.MINING || 0) + (clone.xp.COMBAT || 0) + (clone.xp.EXPLORATION || 0);
+  
+  // Canonical trait order
+  const traitOrder = ['PWC', 'SSC', 'MGC', 'DLT', 'ENF', 'ELK', 'FRK'];
+  const cloneTraits = clone.traits || {};
 
   return (
     <div className="panel clone-details-panel">
@@ -101,10 +116,36 @@ export function CloneDetailsPanel({
               <span className="value">{clone.biological_days.toFixed(2)}</span>
             </div>
           )}
-          <div className="xp-breakdown">
-            <div className="xp-item">Mining: {clone.xp.MINING || 0}</div>
-            <div className="xp-item">Combat: {clone.xp.COMBAT || 0}</div>
-            <div className="xp-item">Exploration: {clone.xp.EXPLORATION || 0}</div>
+          <div className="xp-traits-row">
+            <div className="xp-breakdown">
+              <div className="xp-item">Mining: {clone.xp.MINING || 0}</div>
+              <div className="xp-item">Combat: {clone.xp.COMBAT || 0}</div>
+              <div className="xp-item">Exploration: {clone.xp.EXPLORATION || 0}</div>
+            </div>
+            
+            {/* Compact traits section on the right */}
+            {cloneTraits && Object.keys(cloneTraits).length > 0 && (
+              <div className="traits-compact">
+                {traitOrder.map(traitId => {
+                  const value = cloneTraits[traitId];
+                  if (value === undefined) return null;
+                  const traitDef = traitsConfig?.traits?.[traitId];
+                  const traitName = traitDef?.name || traitId;
+                  const traitDesc = traitDef?.desc || '';
+                  
+                  return (
+                    <div
+                      key={traitId}
+                      className="trait-compact-item"
+                      title={traitDesc ? `${traitId}: ${traitName} - ${traitDesc}` : `${traitId}: ${traitName}`}
+                    >
+                      <span className="trait-compact-id">{traitId}</span>
+                      <span className="trait-compact-value">{value}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

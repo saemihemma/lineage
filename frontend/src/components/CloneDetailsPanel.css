@@ -43,16 +43,52 @@
   color: #00ffff;
 }
 
-.xp-breakdown {
+.xp-traits-row {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #333333;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.xp-breakdown {
+  flex: 1;
+  min-width: 0;
 }
 
 .xp-item {
   font-size: 12px;
   color: #cccccc;
   padding: 2px 0;
+}
+
+.traits-compact {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 4px 8px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.trait-compact-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+  white-space: nowrap;
+}
+
+.trait-compact-id {
+  color: #ff7a00;
+  font-weight: bold;
+  font-size: 10px;
+}
+
+.trait-compact-value {
+  color: #e7e7e7;
+  font-weight: bold;
 }
 
 .clone-actions-top {
@@ -151,5 +187,51 @@
   text-align: center;
   color: #9aa4ad;
   font-size: 14px;
+}
+
+.traits-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #333333;
+}
+
+.traits-header {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ff7a00;
+  margin-bottom: 8px;
+}
+
+.traits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trait-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+  cursor: help;
+}
+
+.trait-id {
+  color: #ff7a00;
+  font-weight: bold;
+  min-width: 40px;
+}
+
+.trait-name {
+  color: #cccccc;
+  flex: 1;
+}
+
+.trait-value {
+  color: #e7e7e7;
+  font-weight: bold;
+  min-width: 24px;
+  text-align: right;
 }
 
