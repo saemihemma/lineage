@@ -363,7 +363,10 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
 
 
 def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
-    """Get or create session ID from cookie"""
+    """
+    Get or create session ID from cookie.
+    Note: Caller must ensure cookie is set in response if new session is created.
+    """
     if not session_id:
         session_id = str(uuid.uuid4())
     return session_id
@@ -830,10 +833,14 @@ async def get_game_state(
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "get_state")
 
+    # Check if this is a new session (no cookie provided)
+    is_new_session = not session_id
+    
     # Check session expiry
     if not check_session_expiry(db, sid):
         # Session expired, create new one
         sid = str(uuid.uuid4())
+        is_new_session = True
 
     state = load_game_state(db, sid)
     if state is None:
@@ -843,6 +850,7 @@ async def get_game_state(
         state.assembler_built = False
         state.last_saved_ts = time.time()
         save_game_state(db, sid, state)
+        is_new_session = True  # Mark as new since we just created state
 
     # Check for completed tasks
     old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
@@ -1030,14 +1038,43 @@ async def save_game_state_endpoint(
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "save_state")
 
+    # Check if this is a new session (no cookie provided)
+    is_new_session = not session_id
+
     try:
         state = dict_to_game_state(state_data)
         state.last_saved_ts = time.time()
         # Use optimistic locking to prevent overwriting newer backend state
         # This protects against race conditions where frontend auto-save sends stale state
-        save_game_state(db, sid, state, check_version=True)
+        try:
+            save_game_state(db, sid, state, check_version=True)
+        except RuntimeError as version_error:
+            # Version conflict - likely frontend has stale state
+            # Reload latest state from database and return it
+            logger.warning(f"Version conflict for session {sid[:8]}...: {version_error}")
+            latest_state = load_game_state(db, sid, create_if_missing=True)
+            if latest_state:
+                # Return latest state so frontend can refresh
+                response = JSONResponse(content={
+                    "status": "conflict",
+                    "state": game_state_to_dict(latest_state),
+                    "message": "Your game state was updated. Please refresh."
+                })
+            else:
+                # Shouldn't happen, but handle gracefully
+                response = JSONResponse(content={"status": "error", "message": str(version_error)})
+            response.set_cookie(
+                key="session_id",
+                value=sid,
+                httponly=True,
+                samesite="lax",
+                secure=IS_PRODUCTION,
+                max_age=SESSION_EXPIRY
+            )
+            return response
 
         response = JSONResponse(content={"status": "saved"})
+        # Always set cookie (even if not new session, ensures cookie is refreshed)
         response.set_cookie(
             key="session_id",
             value=sid,
