@@ -427,6 +427,11 @@ export function SimulationScreen() {
           // Immediate action (no timer) - show message right away
           addTerminalMessage(result.message);
         }
+        
+        // Show attack message if feral drone attack occurred
+        if ((result as any).attack_message) {
+          addTerminalMessage((result as any).attack_message);
+        }
       }
     } catch (err) {
       // Enhanced error handling

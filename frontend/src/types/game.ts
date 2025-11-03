@@ -17,9 +17,8 @@ export interface Clone {
 export interface Womb {
   id: number;  // Index-based ID (0, 1, 2, ...)
   durability: number;  // Current durability (0 to max_durability)
-  attention: number;  // Current attention (0 to max_attention)
   max_durability: number;  // Maximum durability
-  max_attention: number;  // Maximum attention
+  // Note: attention is now global (stored in GameState.global_attention), not per-womb
 }
 
 export interface GameState {
@@ -40,6 +39,7 @@ export interface GameState {
   };
   last_saved_ts: number;
   self_name: string;
+  global_attention: number;  // Global attention (0-100), shared across all wombs
   clones: Record<string, Clone>;
   active_tasks?: Record<string, any>;
   ui_layout?: Record<string, any>;

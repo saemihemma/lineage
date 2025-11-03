@@ -4,9 +4,19 @@ Handles womb creation, attacks, attention decay, repair, and unlock conditions
 """
 from typing import List, Optional, Tuple
 import time
+import random
+import json
+from pathlib import Path
 from core.models import Womb
 from core.config import CONFIG
+from data.loader import load_data
 from game.state import GameState
+
+# Load feral drone messages
+_feral_messages_data = load_data().get("feral_drone_messages", {})
+_FERAL_DRONE_MESSAGES = _feral_messages_data.get("messages", [
+    "Feral drone swarm detected. Womb integrity compromised."
+])
 
 
 def get_unlocked_womb_count(state: GameState) -> int:
@@ -55,15 +65,16 @@ def get_unlocked_womb_count(state: GameState) -> int:
 
 def find_active_womb(state: GameState) -> Optional[Womb]:
     """
-    Find an active (functional) womb with highest attention.
-    Returns None if no functional womb exists.
+    Find an active (functional) womb.
+    Returns the first functional womb (or None if none exist).
+    Note: Attention is now global, so we just need any functional womb.
     """
     functional_wombs = [w for w in state.wombs if w.is_functional()]
     if not functional_wombs:
         return None
     
-    # Return womb with highest attention
-    return max(functional_wombs, key=lambda w: w.attention)
+    # Return first functional womb (attention is global, not per-womb)
+    return functional_wombs[0]
 
 
 def check_womb_available(state: GameState) -> bool:
@@ -112,31 +123,27 @@ def get_repair_cost_multiplier(state: GameState) -> float:
 
 def gain_attention(state: GameState, womb_id: Optional[int] = None) -> GameState:
     """
-    Gain attention on a womb (typically called after actions like grow_clone, build_womb).
-    If womb_id is None, applies to highest attention functional womb.
+    Gain global attention (typically called after actions like grow_clone, build_womb, expeditions).
+    Attention is global (shared across all wombs), not per-womb.
     
-    Returns new state with updated attention.
+    Returns new state with updated global attention.
     """
     new_state = state.copy()
     
-    # Find target womb
-    if womb_id is not None:
-        target_womb = next((w for w in new_state.wombs if w.id == womb_id), None)
-    else:
-        target_womb = find_active_womb(new_state)
-    
-    if target_womb is None:
-        return new_state
+    # Initialize global_attention if not present (migration)
+    if not hasattr(new_state, 'global_attention'):
+        new_state.global_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)
     
     # Calculate attention gain with synergy
     base_gain = CONFIG.get("WOMB_ATTENTION_GAIN_ON_ACTION", 5.0)
     mult = get_attention_gain_multiplier(new_state)
     gain = base_gain * mult
     
-    # Increase attention (cap at max)
-    target_womb.attention = min(
-        target_womb.max_attention,
-        target_womb.attention + gain
+    # Increase global attention (cap at max)
+    max_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_MAX", 100.0)
+    new_state.global_attention = min(
+        max_attention,
+        new_state.global_attention + gain
     )
     
     return new_state
@@ -144,17 +151,18 @@ def gain_attention(state: GameState, womb_id: Optional[int] = None) -> GameState
 
 def decay_attention(state: GameState) -> GameState:
     """
-    Apply attention decay based on idle time.
+    Apply global attention decay based on idle time.
     Called on state changes to simulate idle decay.
     
-    Returns new state with decayed attention.
+    Returns new state with decayed global attention.
     """
     new_state = state.copy()
     
-    if not new_state.wombs:
-        return new_state
+    # Initialize global_attention if not present (migration)
+    if not hasattr(new_state, 'global_attention'):
+        new_state.global_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)
     
-    # Calculate hours since last save (or use a fixed decay per check)
+    # Calculate hours since last save
     current_time = time.time()
     hours_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 3600.0)
     
@@ -162,22 +170,22 @@ def decay_attention(state: GameState) -> GameState:
     decay_per_hour = CONFIG.get("WOMB_ATTENTION_DECAY_PER_HOUR", 1.0)
     total_decay = decay_per_hour * hours_elapsed
     
-    # Apply decay to all wombs
-    for womb in new_state.wombs:
-        if womb.is_functional():
-            # Cognitive synergy reduces decay
-            mult = get_attention_gain_multiplier(new_state)
-            # Inverse: if mult < 1.0, decay is reduced
-            decay_mult = 2.0 - mult  # If mult=0.95, decay_mult=1.05 (reduced decay)
-            actual_decay = total_decay * decay_mult
-            womb.attention = max(0.0, womb.attention - actual_decay)
+    # Cognitive synergy reduces decay
+    mult = get_attention_gain_multiplier(new_state)
+    # Inverse: if mult < 1.0, decay is reduced
+    decay_mult = 2.0 - mult  # If mult=0.95, decay_mult=1.05 (reduced decay)
+    actual_decay = total_decay * decay_mult
+    
+    # Apply decay to global attention
+    new_state.global_attention = max(0.0, new_state.global_attention - actual_decay)
     
     return new_state
 
 
 def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[str]]:
     """
-    Randomly attack a womb (called on state changes).
+    Check for feral drone attack based on global attention level.
+    Attack probability scales linearly with attention (0% attention = 0% chance, 100% attention = max_chance).
     
     Returns:
         (new_state, attacked_womb_id, message)
@@ -188,15 +196,31 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     if not new_state.wombs:
         return new_state, None, None
     
-    # Check attack chance with Kinetic synergy
-    base_chance = CONFIG.get("WOMB_ATTACK_CHANCE", 0.15)
-    mult = get_attack_chance_multiplier(new_state)
-    attack_chance = base_chance * mult
+    # Initialize global_attention if not present (migration)
+    if not hasattr(new_state, 'global_attention'):
+        new_state.global_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)
     
+    # Calculate attack probability based on global attention
+    # Linear scaling: 0% attention = 0% chance, 100% attention = max_chance
+    max_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_MAX", 100.0)
+    max_attack_chance = CONFIG.get("WOMB_FERAL_ATTACK_CHANCE_AT_MAX", 0.25)
+    
+    if max_attention <= 0:
+        return new_state, None, None
+    
+    # Calculate attack chance based on attention percentage
+    attention_percent = new_state.global_attention / max_attention
+    base_attack_chance = attention_percent * max_attack_chance
+    
+    # Apply Kinetic synergy (reduces attack chance)
+    mult = get_attack_chance_multiplier(new_state)
+    attack_chance = base_attack_chance * mult
+    
+    # Roll for attack
     if new_state.rng.random() >= attack_chance:
         return new_state, None, None  # No attack
     
-    # Select random womb to attack
+    # Select random functional womb to attack
     functional_wombs = [w for w in new_state.wombs if w.is_functional()]
     if not functional_wombs:
         return new_state, None, None
@@ -209,10 +233,23 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     base_damage = new_state.rng.uniform(damage_min, damage_max)
     damage = base_damage * mult  # Kinetic reduces damage
     
-    # Apply damage
+    # Apply damage to womb
     attacked_womb.durability = max(0.0, attacked_womb.durability - damage)
     
-    message = f"Womb {attacked_womb.id} took {damage:.1f} damage! Durability: {attacked_womb.durability:.1f}/{attacked_womb.max_durability:.1f}"
+    # Reduce global attention after attack (10% ± variance)
+    reduction_base = CONFIG.get("WOMB_ATTACK_ATTENTION_REDUCTION_BASE", 10.0)
+    reduction_variance = CONFIG.get("WOMB_ATTACK_ATTENTION_REDUCTION_VARIANCE", 2.0)
+    reduction = reduction_base + new_state.rng.uniform(-reduction_variance, reduction_variance)
+    new_state.global_attention = max(0.0, new_state.global_attention - reduction)
+    
+    # Select random thematic message
+    if _FERAL_DRONE_MESSAGES:
+        message = new_state.rng.choice(_FERAL_DRONE_MESSAGES)
+    else:
+        message = "Feral drone swarm detected. Womb integrity compromised."
+    
+    # Add damage info to message
+    message += f" Womb {attacked_womb.id} took {damage:.1f} damage. Durability: {attacked_womb.durability:.1f}/{attacked_womb.max_durability:.1f}"
     
     return new_state, attacked_womb.id, message
 
@@ -258,20 +295,17 @@ def calculate_repair_time(state: GameState, womb: Womb) -> int:
 
 
 def create_womb(womb_id: int) -> Womb:
-    """Create a new womb with max durability and attention"""
+    """Create a new womb with max durability (attention is global, not per-womb)"""
     max_durability = CONFIG.get("WOMB_MAX_DURABILITY", 100.0)
-    max_attention = CONFIG.get("WOMB_MAX_ATTENTION", 100.0)
     
     return Womb(
         id=womb_id,
         durability=max_durability,
-        attention=max_attention,
-        max_durability=max_durability,
-        max_attention=max_attention
+        max_durability=max_durability
     )
 
 
-def check_and_apply_womb_systems(state: GameState) -> GameState:
+def check_and_apply_womb_systems(state: GameState) -> Tuple[GameState, Optional[str]]:
     """
     Check and apply womb systems on state changes:
     - Decay attention
@@ -279,6 +313,10 @@ def check_and_apply_womb_systems(state: GameState) -> GameState:
     
     This should be called after state-changing operations.
     Updates last_saved_ts to current time for accurate decay calculation.
+    
+    Returns:
+        (new_state, attack_message)
+        attack_message is None if no attack occurred, otherwise contains the thematic message
     """
     import time
     # Update last_saved_ts to current time so decay is calculated from now
@@ -289,6 +327,5 @@ def check_and_apply_womb_systems(state: GameState) -> GameState:
     new_state = decay_attention(new_state)
     new_state, attacked_id, attack_msg = attack_womb(new_state)
     
-    # Note: Attack message can be logged/emitted by caller if needed
-    return new_state
+    return new_state, attack_msg
 

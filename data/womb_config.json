@@ -1,0 +1,36 @@
+{
+  "womb_config": {
+    "max_durability": 100.0,
+    "attention": {
+      "max": 100.0,
+      "initial": 0.0,
+      "gain_on_action": 5.0,
+      "decay_per_hour": 1.0
+    },
+    "feral_drone_attacks": {
+      "base_chance_at_max_attention": 0.25,
+      "damage_min": 5.0,
+      "damage_max": 15.0,
+      "attention_reduction_on_attack": {
+        "base": 10.0,
+        "variance": 2.0
+      }
+    },
+    "repair": {
+      "cost_per_durability": {
+        "Tritanium": 0.5,
+        "Metal Ore": 0.3
+      },
+      "time_min": 20,
+      "time_max": 40
+    },
+    "max_count": 4,
+    "synergies": {
+      "cognitive_attention_mult": 0.95,
+      "kinetic_attack_mult": 0.90,
+      "constructive_repair_mult": 0.85,
+      "threshold": 3
+    }
+  }
+}
+

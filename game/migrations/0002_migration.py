@@ -25,16 +25,14 @@ def migrate(state_dict: dict) -> dict:
     # Convert assembler_built to first womb if needed
     # Only migrate if we have assembler_built and no wombs yet
     if state_dict.get('assembler_built', False) and len(state_dict.get('wombs', [])) == 0:
-        # Create first womb with max durability and attention
+        # Create first womb with max durability (attention is now global, not per-womb)
         max_durability = CONFIG.get("WOMB_MAX_DURABILITY", 100.0)
-        max_attention = CONFIG.get("WOMB_MAX_ATTENTION", 100.0)
         
         womb_data = {
             "id": 0,
             "durability": max_durability,
-            "attention": max_attention,
-            "max_durability": max_durability,
-            "max_attention": max_attention
+            "max_durability": max_durability
+            # Note: attention is now global (stored in global_attention), not per-womb
         }
         state_dict['wombs'] = [womb_data]
     

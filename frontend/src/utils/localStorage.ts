@@ -54,6 +54,7 @@ export function createDefaultState(): GameState {
     },
     last_saved_ts: Date.now() / 1000,
     self_name: "",
+    global_attention: 0.0,  // Start at 0, grows with actions
     clones: {},
     active_tasks: {},
     ui_layout: {}

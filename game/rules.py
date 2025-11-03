@@ -73,13 +73,12 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     if not check_womb_available(state) and not state.assembler_built:
         raise RuntimeError("Build the Womb first.")
     
-    # Check if active womb has sufficient attention/durability (optional requirement)
+    # Check if active womb is functional (attention is now global, not per-womb)
     active_womb = find_active_womb(state)
     if active_womb:
-        # Require at least 50% attention for growing (tunable)
-        min_attention = active_womb.max_attention * 0.5
-        if active_womb.attention < min_attention:
-            raise RuntimeError(f"Womb attention too low ({active_womb.attention:.1f}/{active_womb.max_attention:.1f}). Womb needs maintenance.")
+        # Womb must be functional (durability > 0)
+        if not active_womb.is_functional():
+            raise RuntimeError(f"Womb {active_womb.id} is not functional. Durability: {active_womb.durability:.1f}/{active_womb.max_durability:.1f}")
     
     level = state.soul_level()
     base_cost = inflate_costs(CONFIG["CLONE_COSTS"][kind], level)
@@ -186,7 +185,7 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
         mult *= perk_mining_xp_mult(state)
     
     gained = int(round(base_xp * mult))
-    new_clone.xp[kind] += gained
+    new_clone.xp[kind] = new_clone.xp.get(kind, 0) + gained
     
     # Award practice XP
     if kind in ["MINING", "COMBAT"]:
@@ -263,6 +262,7 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     
     # Check for clone death with adjusted probability
     death_roll = state.rng.random()
+    
     if death_roll < adjusted_death_prob:
         frac = state.rng.uniform(0.25, 0.75)
         for k in new_clone.xp:
