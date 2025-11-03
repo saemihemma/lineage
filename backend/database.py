@@ -600,11 +600,16 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
             "connection timed out",
             "terminating connection",
             "session error",
-            "server closed the connection unexpectedly"
+            "server closed the connection unexpectedly",
+            "connection already closed",
+            "connection not available",
+            "operationalerror"
         ]
         
-        if any(err in error_str for err in connection_errors):
-            logger.warning(f"⚠️ PostgreSQL connection lost: {error_str[:100]}. Will force reconnection on next query.")
+        is_connection_error = any(err in error_str for err in connection_errors) or "operationalerror" in error_type.lower()
+        
+        if is_connection_error:
+            logger.warning(f"⚠️ PostgreSQL connection lost: {error_str[:100]}. Forcing reconnection and retrying query...")
             # Force connection recreation by closing global connection
             try:
                 global _db_instance
@@ -613,26 +618,63 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
                     _db_instance.adapter.conn = None
                     if hasattr(_db_instance, 'conn'):
                         _db_instance.conn = None
-                    logger.info("🔄 Closed stale PostgreSQL connection, will recreate")
-            except Exception as close_error:
-                logger.debug(f"Could not force close connection: {close_error}")
+                    logger.info("🔄 Closed stale PostgreSQL connection, recreating...")
+                    
+                    # Immediately recreate connection and retry query
+                    new_conn = _db_instance.connect()
+                    cursor = new_conn.cursor()
+                    cursor.execute(sql, params)
+                    logger.info("✅ Successfully reconnected and retried query")
+                    return cursor
+            except Exception as reconnect_error:
+                logger.error(f"❌ Failed to reconnect and retry: {reconnect_error}")
+                raise
         
         # Check if this is a PostgreSQL "transaction aborted" error
         if ("current transaction is aborted" in error_str or 
             "infailedsqltransaction" in error_type.lower() or
             "transaction" in error_str and "aborted" in error_str):
-            # Rollback the aborted transaction
+            # With autocommit=True, this shouldn't happen, but handle it anyway
             try:
-                conn.rollback()
-                logger.warning(f"Rolled back aborted transaction before retry: {sql[:50]}...")
-                # Retry the query after rollback
-                cursor = conn.cursor()
-                cursor.execute(sql, params)
-                return cursor
+                # Check if connection is still valid
+                try:
+                    test_cursor = conn.cursor()
+                    test_cursor.execute("SELECT 1")
+                    test_cursor.close()
+                except Exception:
+                    # Connection is dead, recreate it
+                    global _db_instance
+                    if _db_instance and hasattr(_db_instance, 'adapter'):
+                        _db_instance.adapter.close()
+                        _db_instance.adapter.conn = None
+                        if hasattr(_db_instance, 'conn'):
+                            _db_instance.conn = None
+                        new_conn = _db_instance.connect()
+                        conn = new_conn
+                
+                try:
+                    conn.rollback()
+                    logger.warning(f"Rolled back aborted transaction before retry: {sql[:50]}...")
+                    # Retry the query after rollback
+                    cursor = conn.cursor()
+                    cursor.execute(sql, params)
+                    return cursor
+                except Exception as rollback_error:
+                    # Rollback failed, connection is likely dead - recreate
+                    global _db_instance
+                    if _db_instance and hasattr(_db_instance, 'adapter'):
+                        _db_instance.adapter.close()
+                        _db_instance.adapter.conn = None
+                        if hasattr(_db_instance, 'conn'):
+                            _db_instance.conn = None
+                        new_conn = _db_instance.connect()
+                        cursor = new_conn.cursor()
+                        cursor.execute(sql, params)
+                        return cursor
             except Exception as retry_error:
                 logger.error(f"Failed to retry query after rollback: {retry_error}")
                 raise
         else:
-            # Not a transaction error, re-raise
+            # Not a connection or transaction error, re-raise
             logger.error(f"Database query error: {error_type}: {error_str[:200]}")
             raise
