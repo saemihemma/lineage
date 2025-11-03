@@ -2,6 +2,7 @@
  * Frontend API client for LINEAGE game
  * Uses async methods from the backend API client
  */
+import { getOrCreateSessionId } from '../utils/localStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -36,12 +37,15 @@ class APIClient {
     options?: RequestInit
   ): Promise<T | null> {
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     try {
+      const sessionId = getOrCreateSessionId();
+
       const response = await fetch(url, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
+          'X-Session-ID': sessionId, // Send persistent session ID for rate limiting
           ...options?.headers,
         },
         credentials: 'include', // Important for cookies/sessions

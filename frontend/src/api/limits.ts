@@ -1,6 +1,8 @@
 /**
  * Rate limits / Fuel status API client
  */
+import { getOrCreateSessionId } from '../utils/localStorage';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export interface EndpointLimit {
@@ -29,10 +31,13 @@ export class LimitsAPI {
    */
   async getStatus(): Promise<LimitsStatus | null> {
     try {
+      const sessionId = getOrCreateSessionId();
+
       const response = await fetch(`${this.baseUrl}/api/game/limits/status`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'X-Session-ID': sessionId, // Send persistent session ID for rate limiting
         },
         credentials: 'include',
       });

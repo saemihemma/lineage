@@ -16,7 +16,7 @@
 .mission-control-grid {
   display: grid;
   grid-template-columns: 320px 1fr 360px;
-  grid-template-rows: 1fr 30%;
+  grid-template-rows: 1fr minmax(200px, auto);
   grid-template-areas:
     "left center right"
     "bottom-left bottom bottom-right";
@@ -65,6 +65,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 10px 10px 0;
 }
 
 /* Preserve existing flexbox styles as fallback */

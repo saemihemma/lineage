@@ -287,17 +287,25 @@ def check_session_expiry(db: DatabaseConnection, session_id: str) -> bool:
 
 def get_session_id(session_id: Optional[str] = Cookie(None), request: Optional[Request] = None) -> str:
     """
-    Get or create session ID from cookie.
+    Get or create session ID from X-Session-ID header or cookie.
+    Priority: X-Session-ID header > Cookie > Generate new
     Note: Caller must ensure cookie is set in response if new session is created.
     Session ID is used for rate limiting and CSRF tokens (short-term tracking).
     """
+    # First, check for X-Session-ID header (persistent localStorage session)
+    if request and "X-Session-ID" in request.headers:
+        session_id = request.headers["X-Session-ID"]
+        logger.debug(f"Session from X-Session-ID header: {session_id[:8]}...")
+        return session_id
+
+    # Fallback to cookie
     if not session_id:
         session_id = str(uuid.uuid4())
         # Log more details about why new session was created
         cookie_header = request.headers.get("Cookie", "") if request else "N/A"
         logger.debug(f"New session created: {session_id[:8]}...")
     else:
-        logger.debug(f"Existing session: {session_id[:8]}...")
+        logger.debug(f"Session from cookie: {session_id[:8]}...")
     return session_id
 
 

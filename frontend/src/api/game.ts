@@ -2,7 +2,7 @@
  * Game API client - handles game state and actions
  */
 import type { GameState } from '../types/game';
-import { loadStateFromLocalStorage } from '../utils/localStorage';
+import { loadStateFromLocalStorage, getOrCreateSessionId } from '../utils/localStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -35,10 +35,13 @@ export class GameAPI {
     });
     
     try {
+      const sessionId = getOrCreateSessionId();
+
       const response = await fetch(url, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
+          'X-Session-ID': sessionId, // Send persistent session ID for rate limiting
           ...options?.headers,
         },
         credentials: 'include', // Important for cookies

@@ -121,59 +121,97 @@
 }
 
 /* Center column panel sizing */
+.mission-control-center {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .mission-control-center #womb {
   flex: 0 0 auto;
-  max-height: 280px;
-  min-height: 200px;
+  max-height: 180px;
+  min-height: 120px;
   overflow: hidden;
 }
 
 .mission-control-center #womb .collapsible-panel-content {
   overflow-y: auto;
-  max-height: 240px;
+  max-height: 140px;
 }
 
 .mission-control-center #clones {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .mission-control-center #clones .collapsible-panel-content {
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
-/* Right column: Give more space to Clone Details and SELF */
+/* Right column: 50/50 split between Clone Details and SELF */
+.mission-control-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .mission-control-right #cloneDetails {
   flex: 1;
   min-height: 0;
+  max-height: 50%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .mission-control-right #cloneDetails .collapsible-panel-content {
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .mission-control-right #self {
   flex: 1;
   min-height: 0;
+  max-height: 50%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .mission-control-right #self .collapsible-panel-content {
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
-/* Bottom right: Make gather resources smaller and push down */
+/* Bottom right: Gather resources - fixed compact size, positioned at bottom */
+.mission-control-bottom-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  position: relative;
+}
+
 .mission-control-bottom-right #gather {
-  margin-top: auto;
   flex: 0 0 auto;
-  max-height: 180px;
+  height: 160px;
+  max-height: 160px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .mission-control-bottom-right #gather .collapsible-panel-content {
   overflow-y: auto;
-  max-height: 140px;
+  max-height: 120px;
+  height: 120px;
 }
 
 .facilities-container {

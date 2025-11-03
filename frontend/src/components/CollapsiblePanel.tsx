@@ -33,7 +33,7 @@ export function CollapsiblePanel({
   };
 
   return (
-    <div className={`collapsible-panel ${className} ${!isOpen ? 'collapsed' : ''}`}>
+    <div id={id} className={`collapsible-panel ${className} ${!isOpen ? 'collapsed' : ''}`}>
       <div className="panel-header collapsible-panel-header">
         <div className="panel-header-title">{title}</div>
         <button

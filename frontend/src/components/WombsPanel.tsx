@@ -1,5 +1,5 @@
 /**
- * Wombs Panel - displays single womb with attention meter and teaser (before 2nd womb)
+ * Wombs Panel - displays single womb with durability status and teaser (before 2nd womb)
  */
 import type { GameState } from '../types/game';
 import { getWombCount, getUnlockedWombCount, getNextUnlockHint } from '../utils/wombs';

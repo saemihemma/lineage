@@ -49,10 +49,10 @@ export function FuelBar() {
   const minutesUntilReset = Math.floor(timeUntilReset / 60);
   const secondsUntilReset = timeUntilReset % 60;
 
-  // Calculate percentage (assuming max of 20 actions per window, configurable)
-  // If we don't know max, estimate from reset_at window
-  const estimatedMax = fuelStatus.window_seconds > 0 ? 20 : 20; // Default assumption
-  const percentage = Math.min(100, (remaining / estimatedMax) * 100);
+  // Calculate percentage based on combined max actions per window
+  // Combined max = gather(20) + grow(10) + expedition(10) + upload(10) = 50
+  const maxActions = 50;
+  const percentage = Math.min(100, (remaining / maxActions) * 100);
 
   // Color states
   let colorClass = 'fuel-ok';

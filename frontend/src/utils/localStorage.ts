@@ -4,6 +4,7 @@
 import type { GameState } from '../types/game';
 
 const STORAGE_KEY = 'lineage_game_state';
+const SESSION_ID_KEY = 'lineage_session_id';
 
 /**
  * Calculate soul level from soul_xp
@@ -142,5 +143,39 @@ export function saveStateToLocalStorage(state: GameState): void {
  */
 export function clearStateFromLocalStorage(): void {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+/**
+ * Generate a random UUID v4
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
+ * Get or create persistent session ID for rate limiting
+ * This ensures all API calls from this browser use the same session ID
+ */
+export function getOrCreateSessionId(): string {
+  try {
+    let sessionId = localStorage.getItem(SESSION_ID_KEY);
+
+    if (!sessionId) {
+      // Generate new session ID
+      sessionId = generateUUID();
+      localStorage.setItem(SESSION_ID_KEY, sessionId);
+      console.log('🆔 Generated new session ID:', sessionId.substring(0, 8) + '...');
+    }
+
+    return sessionId;
+  } catch (error) {
+    console.error('Failed to get/create session ID from localStorage:', error);
+    // Fallback to in-memory session ID (won't persist across page reloads)
+    return generateUUID();
+  }
 }
 
