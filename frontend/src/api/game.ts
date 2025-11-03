@@ -2,6 +2,7 @@
  * Game API client - handles game state and actions
  */
 import type { GameState } from '../types/game';
+import { loadStateFromLocalStorage } from '../utils/localStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -10,6 +11,13 @@ export class GameAPI {
 
   constructor() {
     this.baseUrl = API_BASE_URL.replace(/\/$/, '');
+  }
+
+  /**
+   * Get current state from localStorage (for sending with actions)
+   */
+  private getCurrentState(): GameState | null {
+    return loadStateFromLocalStorage();
   }
 
   private async makeRequest<T>(
@@ -68,14 +76,18 @@ export class GameAPI {
   }
 
   async gatherResource(resource: string): Promise<{ state: GameState; message: string; amount: number }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest(`/api/game/gather-resource?resource=${encodeURIComponent(resource)}`, {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 
   async buildWomb(): Promise<{ state: GameState; message: string }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest('/api/game/build-womb', {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 
@@ -85,26 +97,34 @@ export class GameAPI {
     soul_split: number; 
     message: string 
   }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest(`/api/game/grow-clone?kind=${encodeURIComponent(kind)}`, {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 
   async applyClone(cloneId: string): Promise<{ state: GameState; message: string }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest(`/api/game/apply-clone?clone_id=${encodeURIComponent(cloneId)}`, {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 
   async runExpedition(kind: string): Promise<{ state: GameState; message: string }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest(`/api/game/run-expedition?kind=${encodeURIComponent(kind)}`, {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 
   async uploadClone(cloneId: string): Promise<{ state: GameState; message: string }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest(`/api/game/upload-clone?clone_id=${encodeURIComponent(cloneId)}`, {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 
@@ -115,8 +135,10 @@ export class GameAPI {
     repair_time: number;
     task_id: string;
   }> {
+    const currentState = this.getCurrentState();
     return this.makeRequest(`/api/game/repair-womb?womb_id=${wombId}`, {
       method: 'POST',
+      body: JSON.stringify(currentState || {}),
     });
   }
 

@@ -1,0 +1,99 @@
+/* Mission Control Layout - CSS Grid overlay */
+
+:root {
+  --left-width: 320px;
+  --right-width: 360px;
+  --terminal-height: 30%;
+}
+
+.mission-control-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.mission-control-hud {
+  grid-area: hud;
+  flex-shrink: 0;
+}
+
+.mission-control-grid {
+  display: grid;
+  grid-template-columns: var(--left-width, 320px) 1fr var(--right-width, 360px);
+  grid-template-rows: 1fr var(--terminal-height, 30%);
+  grid-template-areas:
+    "left center right"
+    "bottom bottom bottom";
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Grid areas */
+.mission-control-left {
+  grid-area: left;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mission-control-center {
+  grid-area: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mission-control-right {
+  grid-area: right;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mission-control-terminal {
+  grid-area: bottom;
+  overflow: hidden;
+}
+
+/* Preserve existing flexbox styles as fallback */
+.mission-control-grid .panel {
+  /* Existing panel styles still apply */
+}
+
+/* Resize handle positioning on grid borders */
+.mission-control-grid {
+  position: relative;
+}
+
+/* Smooth transitions for size changes */
+.mission-control-grid {
+  transition: grid-template-columns 0.2s ease, grid-template-rows 0.2s ease;
+}
+
+/* Column resize handles positioned on grid borders */
+.resize-handle-column {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 100;
+  background-color: transparent;
+  cursor: col-resize;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle-left {
+  left: var(--left-width, 320px);
+  margin-left: -2px; /* Center on border */
+}
+
+.resize-handle-right {
+  right: var(--right-width, 360px);
+  margin-right: -2px; /* Center on border */
+}
+
+.resize-handle-column:hover,
+.resize-handle-column:active {
+  background-color: rgba(74, 158, 255, 0.3);
+}
+

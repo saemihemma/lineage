@@ -5,12 +5,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GameState } from '../types/game';
 import { loadStateFromLocalStorage, saveStateToLocalStorage, createDefaultState } from '../utils/localStorage';
+import { checkAndCompleteTasks } from '../utils/tasks';
 
 export function useGameState() {
   const [state, setState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const taskCheckIntervalRef = useRef<number | null>(null);
+  const completedTaskMessagesRef = useRef<Map<string, string>>(new Map());
 
   // Load initial state from localStorage
   useEffect(() => {
@@ -67,34 +69,38 @@ export function useGameState() {
 
     console.log(`🔵 Starting task completion checking: ${Object.keys(activeTasks).length} active task(s)`);
 
-    // Check every second for completed tasks
+    // Check every second for completed tasks and process them
     taskCheckIntervalRef.current = setInterval(() => {
       setState((prevState) => {
-        if (!prevState || !prevState.active_tasks) return prevState;
-        
-        const now = Date.now() / 1000; // Current time in seconds
-        const updatedTasks = { ...prevState.active_tasks };
-        let tasksChanged = false;
-        
-        // Check each active task for completion
-        for (const [taskId, taskData] of Object.entries(updatedTasks)) {
-          const endTime = taskData.end_time;
-          if (endTime && now >= endTime) {
-            // Task completed - remove it
-            console.log(`✅ Task completed: ${taskId}`);
-            delete updatedTasks[taskId];
-            tasksChanged = true;
-          }
+        if (!prevState || !prevState.active_tasks || Object.keys(prevState.active_tasks).length === 0) {
+          return prevState;
         }
         
-        if (tasksChanged) {
-          const newState = {
-            ...prevState,
-            active_tasks: updatedTasks,
-          };
+        // Check and complete any finished tasks
+        const { state: updatedState, completedMessages } = checkAndCompleteTasks(prevState);
+        
+        // If tasks were completed, update state and save
+        if (completedMessages.length > 0) {
+          // Store completion messages before tasks are removed
+          // Find which tasks were completed by comparing active_tasks
+          const prevTaskIds = Object.keys(prevState.active_tasks || {});
+          const newTaskIds = Object.keys(updatedState.active_tasks || {});
+          const completedTaskIds = prevTaskIds.filter(id => !newTaskIds.includes(id));
+          
+          // Store messages for completed tasks
+          completedTaskIds.forEach(taskId => {
+            const taskData = prevState.active_tasks?.[taskId];
+            if (taskData?.completion_message) {
+              completedTaskMessagesRef.current.set(taskId, taskData.completion_message);
+            }
+          });
+          
+          // Log completion messages for debugging
+          completedMessages.forEach(msg => console.log(`📢 ${msg}`));
+          
           // Auto-save when tasks complete
-          saveStateToLocalStorage(newState);
-          return newState;
+          saveStateToLocalStorage(updatedState);
+          return updatedState;
         }
         
         return prevState;
@@ -130,12 +136,20 @@ export function useGameState() {
     saveStateToLocalStorage(newState);
   }, []);
 
+  // Get completion messages for tasks that were just completed
+  const getCompletedTaskMessages = useCallback(() => {
+    const messages = Array.from(completedTaskMessagesRef.current.values());
+    completedTaskMessagesRef.current.clear(); // Clear after retrieving
+    return messages;
+  }, []);
+
   return {
     state,
     loading,
     error,
     saveState,
     updateState,
+    getCompletedTaskMessages,
   };
 }
 

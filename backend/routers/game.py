@@ -17,7 +17,7 @@ import time
 import logging
 import os
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Cookie, Request
+from fastapi import APIRouter, Depends, HTTPException, Cookie, Request, Body
 from fastapi.responses import JSONResponse
 from database import get_db, DatabaseConnection, execute_query
 from game.state import GameState
@@ -807,129 +807,43 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
 
 def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: bool = False) -> Optional[GameState]:
     """
-    Load game state from database using session_id.
+    DEPRECATED: Game state is now stored in localStorage on frontend.
+    This function returns a default state for action endpoints.
     
-    Args:
-        db: Database connection
-        session_id: Session identifier
-        create_if_missing: If True, create new state if not found (for recovery after redeploy)
-    
-    Returns:
-        GameState if found or created, None otherwise
+    Action endpoints should receive state from frontend request body instead.
+    For now, returns default state to keep endpoints working.
     """
-    logger.debug(f"🔍 Loading state for session: {session_id[:8]}...")
-    cursor = execute_query(
-        db,
-        "SELECT state_data FROM game_states WHERE session_id = ?",
-        (session_id,)
-    )
-    row = cursor.fetchone()
-    if row is None:
-        logger.debug(f"❌ No state found for session: {session_id[:8]}..., create_if_missing={create_if_missing}")
-        if create_if_missing:
-            # Auto-recover: create new state after redeploy/database wipe
-            logger.info(f"Auto-recovering: creating new state for session {session_id[:8]}... (likely after redeploy)")
-            state = GameState()
-            state.version = get_latest_version()
-            state.assembler_built = False
-            state.last_saved_ts = time.time()
-            save_game_state(db, session_id, state)
-            return state
-        return None
+    logger.warning(f"⚠️ load_game_state called but state is in localStorage - returning default state for session {session_id[:8]}...")
     
-    try:
-        data = json.loads(row['state_data'])
-        state = dict_to_game_state(data)
-        
-        womb_count = len(state.wombs) if state.wombs else 0
-        logger.debug(f"✅ State loaded for session {session_id[:8]}... - Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}")
-        
-        # Check and complete any finished tasks
-        state = check_and_complete_tasks(state)
-        if state.active_tasks != data.get("active_tasks", {}):
-            # Tasks were completed, save updated state
-            logger.info(f"🔄 Tasks completed during load, saving updated state for session {session_id[:8]}...")
-            save_game_state(db, session_id, state)
-        
+    if create_if_missing:
+        # Return default state so action endpoints don't fail
+        state = GameState()
+        state.version = get_latest_version()
+        state.assembler_built = False
+        state.last_saved_ts = time.time()
         return state
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        # Corrupted state - auto-recover
-        logger.error(f"Corrupted state for session {session_id[:8]}..., recovering: {e}")
-        if create_if_missing:
-            state = GameState()
-            state.version = get_latest_version()
-            state.assembler_built = False
-            state.last_saved_ts = time.time()
-            save_game_state(db, session_id, state)
-            return state
-        return None
+    
+    # Return None to indicate no saved state (frontend should send state in request)
+    return None
 
 
 def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, check_version: bool = False):
     """
-    Save game state to database with optional optimistic locking.
-    Applies womb systems (decay, attacks) before saving.
-
-    Args:
-        db: Database connection
-        session_id: Session identifier
-        state: Game state to save
-        check_version: If True, verify version matches before saving (prevents conflicts)
-
-    Raises:
-        RuntimeError: If check_version is True and state version doesn't match database
+    DEPRECATED: Game state is now stored in localStorage on frontend.
+    This function is a no-op - state is not saved to database.
+    
+    Action endpoints return updated state and frontend saves to localStorage.
     """
-    # Apply womb systems (decay, attacks) before saving
+    # Apply womb systems (decay, attacks) before returning state
     from game.wombs import check_and_apply_womb_systems
     state = check_and_apply_womb_systems(state)
     
-    if check_version:
-        # Optimistic locking: check if version matches
-        cursor = execute_query(
-            db,
-            "SELECT state_data FROM game_states WHERE session_id = ?",
-            (session_id,)
-        )
-        row = cursor.fetchone()
-        if row:
-            existing_data = json.loads(row['state_data'])
-            existing_version = existing_data.get("version", 1)
-            if existing_version != state.version:
-                logger.warning(
-                    f"State conflict for session {session_id[:8]}...: "
-                    f"expected v{state.version}, found v{existing_version}"
-                )
-                raise RuntimeError(
-                    "State conflict detected. Your game state may have been updated in another tab. "
-                    "Please refresh the page."
-                )
-
-    # Increment version on save to track changes
-    state.version += 1
-    state_dict = game_state_to_dict(state)
-    state_json = json.dumps(state_dict)
-    
-    # Log save details
+    # Log that we would have saved (for debugging)
     womb_count = len(state.wombs) if state.wombs else 0
-    logger.debug(f"💾 Saving state - Session: {session_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}, Version: {state.version}")
-
-    try:
-        execute_query(db, """
-            INSERT INTO game_states (session_id, state_data, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(session_id) DO UPDATE SET
-                state_data = excluded.state_data,
-                updated_at = CURRENT_TIMESTAMP
-        """, (session_id, state_json))
-        db.commit()
-    except Exception as db_error:
-        # Rollback on error to prevent transaction cascade
-        try:
-            db.rollback()
-        except Exception as rollback_error:
-            logger.error(f"Failed to rollback transaction in save_game_state: {rollback_error}")
-        logger.error(f"Database error saving game state for session {session_id[:8]}...: {db_error}")
-        raise
+    logger.debug(f"💾 (Would save state - Session: {session_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}) - State now in localStorage")
+    
+    # Don't actually save - frontend handles persistence
+    # Don't increment version - frontend manages that
 
 
 # DEPRECATED: State endpoints removed - game state is now managed via localStorage on frontend
@@ -1060,121 +974,127 @@ async def get_game_state_deprecated():
 
 
 @router.get("/tasks/status")
-async def get_task_status(
-    request: Request,
-    db: DatabaseConnection = Depends(get_db),
-    session_id: Optional[str] = Cookie(None)
-):
-    """
-    Get current task status (for polling).
-    Returns status of all active tasks, or primary task if only one.
-    Rate limit: 120 requests/minute
-    """
-    sid = get_session_id(session_id)
-    enforce_rate_limit(sid, "task_status")
+async def get_task_status_deprecated():
+    """Task status endpoint deprecated - tasks now completed client-side via localStorage"""
+    raise HTTPException(status_code=410, detail="Task status endpoint deprecated - tasks are now managed client-side via localStorage")
 
-    state = load_game_state(db, sid, create_if_missing=True)
-
-    if state is None or not state.active_tasks:
-        # Still set cookie even when no active tasks
-        response = JSONResponse(content={"active": False, "task": None, "tasks": []})
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
-        return response
-
-    current_time = time.time()
-    tasks_info = []
-    completed_tasks = []
-
-    # Check all tasks
-    for task_id, task_data in state.active_tasks.items():
-        start_time = task_data.get('start_time', 0)
-        duration = task_data.get('duration', 0)
-        elapsed = current_time - start_time
-        remaining = max(0, duration - elapsed)
-        progress = min(100, int((elapsed / duration * 100)) if duration > 0 else 0)
-        is_complete = current_time >= start_time + duration
-
-        if is_complete:
-            completed_tasks.append(task_id)
-        else:
-            task_type = task_data.get('type', 'unknown')
-            label = task_type.replace('_', ' ').title()
-            if task_type == "build_womb":
-                label = "Building Womb"
-            elif task_type == "gather_resource":
-                resource = task_data.get('resource', 'Resource')
-                label = f"Gathering {resource}"
-            elif task_type == "grow_clone":
-                clone_kind = task_data.get('clone_kind', 'Clone')
-                label = f"Growing {clone_kind} Clone"
-            elif task_type == "repair_womb":
-                womb_id = task_data.get('womb_id', '?')
-                label = f"Repairing Womb {womb_id}"
-            
-            tasks_info.append({
-                "id": task_id,
-                "type": task_type,
-                "progress": progress,
-                "elapsed": int(elapsed),
-                "remaining": int(remaining),
-                "duration": duration,
-                "label": label
-            })
-
-    # Auto-complete finished tasks
-    if completed_tasks:
-        old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
-        state = check_and_complete_tasks(state)
-        
-        # Emit completion events for completed tasks
-        for task_id in completed_tasks:
-            old_task_data = old_active_tasks.get(task_id, {})
-            task_type = old_task_data.get('type')
-            
-            if task_type == "gather_resource":
-                resource = old_task_data.get('resource')
-                if resource:
-                    new_total = state.resources.get(resource, 0)
-                    delta = old_task_data.get('pending_amount', 0)
-                    emit_event(db, sid, "gather.complete", {
-                        "resource": resource,
-                        "delta": delta,
-                        "new_total": new_total
-                    })
-                    emit_event(db, sid, "resource.delta", {
-                        "resource": resource,
-                        "delta": delta,
-                        "new_total": new_total
-                    })
-            
-            elif task_type == "grow_clone":
-                completed_clone = old_task_data.get('completed_clone')
-                if completed_clone:
-                    emit_event(db, sid, "clone.grow.complete", {
-                        "clone": completed_clone
-                    }, entity_id=completed_clone.get("id"))
-        
-        save_game_state(db, sid, state)
-
-    # Return primary task (first one) for backward compatibility, plus all tasks
-    primary_task = tasks_info[0] if tasks_info else None
-    
-    response = JSONResponse(content={
-        "active": len(tasks_info) > 0,
-        "task": primary_task,  # Primary task for backward compatibility
-        "tasks": tasks_info,   # All active tasks
-        "completed": len(completed_tasks) > 0
-    })
-    # Always set session cookie to ensure persistence
-    set_session_cookie(response, sid, "session_id")
-    return response
+# OLD IMPLEMENTATION - KEPT FOR REFERENCE
+# @router.get("/tasks/status")
+# async def get_task_status_OLD(
+#     request: Request,
+#     db: DatabaseConnection = Depends(get_db),
+#     session_id: Optional[str] = Cookie(None)
+# ):
+#     """
+#     Get current task status (for polling).
+#     Returns status of all active tasks, or primary task if only one.
+#     Rate limit: 120 requests/minute
+#     """
+#     sid = get_session_id(session_id)
+#     enforce_rate_limit(sid, "task_status")
+#
+#     state = load_game_state(db, sid, create_if_missing=True)
+#
+#     if state is None or not state.active_tasks:
+#         # Still set cookie even when no active tasks
+#         response = JSONResponse(content={"active": False, "task": None, "tasks": []})
+#         response.set_cookie(
+#             key="session_id",
+#             value=sid,
+#             httponly=True,
+#             samesite="lax",
+#             secure=IS_PRODUCTION,
+#             max_age=SESSION_EXPIRY
+#         )
+#         return response
+#
+#     current_time = time.time()
+#     tasks_info = []
+#     completed_tasks = []
+#
+#     # Check all tasks
+#     for task_id, task_data in state.active_tasks.items():
+#         start_time = task_data.get('start_time', 0)
+#         duration = task_data.get('duration', 0)
+#         elapsed = current_time - start_time
+#         remaining = max(0, duration - elapsed)
+#         progress = min(100, int((elapsed / duration * 100)) if duration > 0 else 0)
+#         is_complete = current_time >= start_time + duration
+#
+#         if is_complete:
+#             completed_tasks.append(task_id)
+#         else:
+#             task_type = task_data.get('type', 'unknown')
+#             label = task_type.replace('_', ' ').title()
+#             if task_type == "build_womb":
+#                 label = "Building Womb"
+#             elif task_type == "gather_resource":
+#                 resource = task_data.get('resource', 'Resource')
+#                 label = f"Gathering {resource}"
+#             elif task_type == "grow_clone":
+#                 clone_kind = task_data.get('clone_kind', 'Clone')
+#                 label = f"Growing {clone_kind} Clone"
+#             elif task_type == "repair_womb":
+#                 womb_id = task_data.get('womb_id', '?')
+#                 label = f"Repairing Womb {womb_id}"
+#             
+#             tasks_info.append({
+#                 "id": task_id,
+#                 "type": task_type,
+#                 "progress": progress,
+#                 "elapsed": int(elapsed),
+#                 "remaining": int(remaining),
+#                 "duration": duration,
+#                 "label": label
+#             })
+#
+#     # Auto-complete finished tasks
+#     if completed_tasks:
+#         old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
+#         state = check_and_complete_tasks(state)
+#         
+#         # Emit completion events for completed tasks
+#         for task_id in completed_tasks:
+#             old_task_data = old_active_tasks.get(task_id, {})
+#             task_type = old_task_data.get('type')
+#             
+#             if task_type == "gather_resource":
+#                 resource = old_task_data.get('resource')
+#                 if resource:
+#                     new_total = state.resources.get(resource, 0)
+#                     delta = old_task_data.get('pending_amount', 0)
+#                     emit_event(db, sid, "gather.complete", {
+#                         "resource": resource,
+#                         "delta": delta,
+#                         "new_total": new_total
+#                     })
+#                     emit_event(db, sid, "resource.delta", {
+#                         "resource": resource,
+#                         "delta": delta,
+#                         "new_total": new_total
+#                     })
+#             
+#             elif task_type == "grow_clone":
+#                 completed_clone = old_task_data.get('completed_clone')
+#                 if completed_clone:
+#                     emit_event(db, sid, "clone.grow.complete", {
+#                         "clone": completed_clone
+#                     }, entity_id=completed_clone.get("id"))
+#         
+#         # save_game_state(db, sid, state)  # DEPRECATED: State in localStorage
+#
+#     # Return primary task (first one) for backward compatibility, plus all tasks
+#     primary_task = tasks_info[0] if tasks_info else None
+#     
+#     response = JSONResponse(content={
+#         "active": len(tasks_info) > 0,
+#         "task": primary_task,  # Primary task for backward compatibility
+#         "tasks": tasks_info,   # All active tasks
+#         "completed": len(completed_tasks) > 0
+#     })
+#     # Always set session cookie to ensure persistence
+#     set_session_cookie(response, sid, "session_id")
+#     return response
 
 
 @router.post("/state")
@@ -1243,11 +1163,13 @@ async def save_game_state_endpoint_deprecated():
 async def gather_resource_endpoint(
     resource: str,
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Gather a resource (starts timer, completes immediately but UI waits).
+    State should be provided in request body (localStorage-based).
     Rate limit: 20 requests/minute
     """
     sid = get_session_id(session_id)
@@ -1259,14 +1181,22 @@ async def gather_resource_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid, create_if_missing=True)
-    
-    if state is None:
-        # This should rarely happen now (auto-recovery), but handle it gracefully
-        raise HTTPException(
-            status_code=404, 
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        # Fallback: create default state (shouldn't happen if frontend sends state)
+        logger.warning(f"⚠️ No state provided in request body for gather-resource - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
 
     # Note: Task conflict checking is now done in start_task()
     # Gathering can run alongside expeditions, but blocks on build/grow tasks
@@ -1292,8 +1222,8 @@ async def gather_resource_endpoint(
         }, entity_id=task_id)
 
         # Don't add resources yet - they'll be added when task completes
-        # Just save state with the active task
-        save_game_state(db, sid, new_state)
+        # State is saved to localStorage by frontend - no DB save needed
+        # save_game_state(db, sid, new_state)  # DEPRECATED: State in localStorage
 
         # Create message for when task completes (but don't show yet)
         if resource == "Shilajit":
@@ -1326,27 +1256,38 @@ async def gather_resource_endpoint(
 @router.post("/build-womb")
 async def build_womb_endpoint(
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Build the Womb (assembler) - starts timer.
+    State should be provided in request body (localStorage-based).
     Rate limit: 5 requests/minute
     """
     sid = get_session_id(session_id, request)
     logger.info(f"🔨 POST /build-womb - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
     enforce_rate_limit(sid, "build_womb")
 
-    state = load_game_state(db, sid, create_if_missing=True)
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        # Fallback: create default state (shouldn't happen if frontend sends state)
+        logger.warning(f"⚠️ No state provided in request body for build-womb - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
+    
     current_womb_count = len(state.wombs) if state.wombs else 0
     logger.info(f"📊 Before build_womb - Session: {sid[:8]}..., Wombs: {current_womb_count}, Assembler: {state.assembler_built}")
-    
-    if state is None:
-        # This should rarely happen now (auto-recovery), but handle it gracefully
-        raise HTTPException(
-            status_code=404, 
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
 
     # Check for active tasks
     if state.active_tasks:
@@ -1359,7 +1300,8 @@ async def build_womb_endpoint(
         # Start timer task
         final_state, task_id = start_task(new_state, "build_womb")
 
-        save_game_state(db, sid, final_state)
+        # State is saved to localStorage by frontend - no DB save needed
+        # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
         
         new_womb_count = len(final_state.wombs) if final_state.wombs else 0
         logger.info(f"✅ build_womb saved - Session: {sid[:8]}..., Wombs: {new_womb_count}, Task: {task_id}, Assembler: {final_state.assembler_built}")
@@ -1381,11 +1323,13 @@ async def build_womb_endpoint(
 async def grow_clone_endpoint(
     kind: str,
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Grow a new clone - starts timer.
+    State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
     """
     sid = get_session_id(session_id)
@@ -1397,14 +1341,22 @@ async def grow_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid, create_if_missing=True)
-    
-    if state is None:
-        # This should rarely happen now (auto-recovery), but handle it gracefully
-        raise HTTPException(
-            status_code=404, 
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        # Fallback: create default state (shouldn't happen if frontend sends state)
+        logger.warning(f"⚠️ No state provided in request body for grow-clone - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
 
     # Check for active tasks
     if state.active_tasks:
@@ -1426,7 +1378,7 @@ async def grow_clone_endpoint(
         }, entity_id=task_id)
 
         # Don't add clone to state yet - it will be added when task completes
-        save_game_state(db, sid, final_state)
+        # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
 
         response = JSONResponse(content={
             "state": game_state_to_dict(final_state),  # Return state WITHOUT clone added yet
@@ -1454,11 +1406,13 @@ async def grow_clone_endpoint(
 async def apply_clone_endpoint(
     clone_id: str,
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Apply a clone (activate it).
+    State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
     """
     sid = get_session_id(session_id)
@@ -1470,18 +1424,25 @@ async def apply_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid, create_if_missing=True)
-    
-    if state is None:
-        # This should rarely happen now (auto-recovery), but handle it gracefully
-        raise HTTPException(
-            status_code=404, 
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        logger.warning(f"⚠️ No state provided in request body for apply-clone - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
 
     try:
         new_state, message = apply_clone(state, clone_id)
-        save_game_state(db, sid, new_state)
+        # save_game_state(db, sid, new_state)  # DEPRECATED: State in localStorage
 
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
@@ -1506,11 +1467,13 @@ async def apply_clone_endpoint(
 async def run_expedition_endpoint(
     kind: str,
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Run an expedition (Mining, Combat, or Exploration) with server-authoritative outcomes.
+    State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
 
     Anti-cheat measures:
@@ -1533,14 +1496,21 @@ async def run_expedition_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid, create_if_missing=True)
-
-    if state is None:
-        # This should rarely happen now (auto-recovery), but handle it gracefully
-        raise HTTPException(
-            status_code=404,
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        logger.warning(f"⚠️ No state provided in request body for run-expedition - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
 
     try:
         # Generate unique expedition ID
@@ -1642,7 +1612,7 @@ async def run_expedition_endpoint(
                 # Don't fail expedition on anomaly flag error
 
         # Save state (with autocommit, each statement commits automatically)
-        save_game_state(db, sid, new_state)
+        # save_game_state(db, sid, new_state)  # DEPRECATED: State in localStorage
         
         # Emit expedition.result event
         clone_xp = {}
@@ -1684,11 +1654,13 @@ async def run_expedition_endpoint(
 async def upload_clone_endpoint(
     clone_id: str,
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Upload a clone to SELF.
+    State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
     """
     sid = get_session_id(session_id)
@@ -1700,14 +1672,21 @@ async def upload_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    state = load_game_state(db, sid, create_if_missing=True)
-    
-    if state is None:
-        # This should rarely happen now (auto-recovery), but handle it gracefully
-        raise HTTPException(
-            status_code=404, 
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        logger.warning(f"⚠️ No state provided in request body for upload-clone - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
 
     try:
         # Calculate soul changes before upload
@@ -1715,7 +1694,7 @@ async def upload_clone_endpoint(
         old_soul_percent = state.soul_percent
         
         new_state, message = upload_clone(state, clone_id)
-        save_game_state(db, sid, new_state)
+        # save_game_state(db, sid, new_state)  # DEPRECATED: State in localStorage
 
         # Emit upload.complete event
         soul_xp_delta = new_state.soul_xp - old_soul_xp
@@ -1749,11 +1728,13 @@ async def upload_clone_endpoint(
 async def repair_womb_endpoint(
     womb_id: int,
     request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
     db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Repair a womb (durability restoration with resource cost and timed task).
+    State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
     """
     from game.wombs import calculate_repair_cost, calculate_repair_time, find_active_womb
@@ -1761,13 +1742,21 @@ async def repair_womb_endpoint(
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "repair_womb")
     
-    state = load_game_state(db, sid, create_if_missing=True)
-    
-    if state is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Game state not found. Your session may have been lost during a backend restart. Please refresh the page."
-        )
+    # Get state from request body (frontend localStorage) or fallback to default
+    if state_data:
+        try:
+            state = dict_to_game_state(state_data)
+        except Exception as e:
+            logger.error(f"Failed to parse state from request body: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    else:
+        logger.warning(f"⚠️ No state provided in request body for repair-womb - using default state")
+        state = load_game_state(db, sid, create_if_missing=True)
+        if state is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="Game state required in request body. Please refresh the page."
+            )
     
     # Find womb to repair
     target_womb = next((w for w in state.wombs if w.id == womb_id), None)
@@ -1806,7 +1795,7 @@ async def repair_womb_endpoint(
             repair_amount=target_womb.max_durability - target_womb.durability
         )
         
-        save_game_state(db, sid, final_state)
+        # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
         
         response = JSONResponse(content={
             "state": game_state_to_dict(final_state),

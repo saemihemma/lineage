@@ -20,11 +20,16 @@ import { FuelBar } from '../components/FuelBar';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { WombsPanel } from '../components/WombsPanel';
 import { FacilitiesPanel } from '../components/FacilitiesPanel';
+import { MissionControlLayout } from '../components/MissionControlLayout';
+import { CollapsiblePanel } from '../components/CollapsiblePanel';
+import { ExpeditionPanel } from '../components/ExpeditionPanel';
+import { usePanelState } from '../stores/usePanelState';
 import type { GameState } from '../types/game';
 import { hasWomb, getWombCount, getUnlockedWombCount, getAverageAttentionPercent } from '../utils/wombs';
 
 export function SimulationScreen() {
-  const { state, loading, error, updateState } = useGameState();
+  const { state, loading, error, updateState, getCompletedTaskMessages } = useGameState();
+  const { setPanelOpen, togglePanel } = usePanelState();
   const stateRef = useRef<GameState | null>(state);
   const [selectedCloneId, setSelectedCloneId] = useState<string | null>(null);
   const [terminalMessages, setTerminalMessages] = useState<string[]>([]);
@@ -38,6 +43,7 @@ export function SimulationScreen() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
+  const prevClonesRef = useRef<Record<string, any>>({});
   
   // Calculate primary progress (for single progress bar display)
   // Show the most recently started task, or first active task if none specified
@@ -150,7 +156,7 @@ export function SimulationScreen() {
     }
   }, [state, hasShownWelcome]);
 
-  // Poll all active tasks - support concurrent tasks (gathering + expeditions)
+  // Track task progress locally (no backend polling needed)
   useEffect(() => {
     if (!state || !state.active_tasks || Object.keys(state.active_tasks).length === 0) {
       // No active tasks - clear all progress
@@ -173,8 +179,10 @@ export function SimulationScreen() {
             value: 0,
             label: task.type === 'gather_resource' ? `Gathering ${task.resource}...` : 
                    task.type === 'build_womb' ? 'Building Womb...' :
-                   task.type === 'grow_clone' ? `Growing ${task.kind} clone...` : 'Processing...',
-            startTime: task.start_time || Date.now(),
+                   task.type === 'grow_clone' ? `Growing ${task.kind} clone...` :
+                   task.type === 'repair_womb' ? `Repairing Womb ${(task.womb_id || 0) + 1}...` :
+                   'Processing...',
+            startTime: task.start_time || Date.now() / 1000,
           };
         }
       });
@@ -189,92 +197,93 @@ export function SimulationScreen() {
 
     setIsBusy(true);
 
-    // Poll all tasks - get status for each
-    const pollInterval = setInterval(async () => {
-      try {
-        // Poll task status (backend returns status for the primary/active task)
-        const status = await gameAPI.getTaskStatus();
-        
-        if (status.active && status.task) {
-          // Update progress for this task (merge, don't replace all)
-          // Also initialize if task exists in backend but not yet in frontend progress tracking
-          setActiveTaskProgress((prev) => {
-            const updated = { ...prev };
-            if (status.task) {
-              // Initialize task if it doesn't exist yet (handles race condition)
-              if (!updated[status.task.id]) {
-                updated[status.task.id] = {
-                  value: status.task.progress,
-                  label: status.task.label,
-                  startTime: Date.now() - (status.task.elapsed * 1000), // Estimate start time
-                };
-              } else {
-                // Update existing task progress
-                updated[status.task.id] = {
-                  ...updated[status.task.id],
-                  value: status.task.progress,
-                  label: `${status.task.label}… ${status.task.remaining}s remaining`,
-                };
-              }
+    // Update progress locally based on task timing
+    const progressInterval = setInterval(() => {
+      if (!state || !state.active_tasks) {
+        return;
+      }
+
+      const now = Date.now() / 1000;
+      setActiveTaskProgress((prev) => {
+        const updated = { ...prev };
+        let allComplete = true;
+
+        for (const [taskId, taskData] of Object.entries(state.active_tasks)) {
+          const startTime = taskData.start_time || 0;
+          const duration = taskData.duration || 0;
+          
+          if (duration <= 0) continue;
+          
+          const elapsed = now - startTime;
+          const remaining = Math.max(0, duration - elapsed);
+          const progress = Math.min(100, Math.floor((elapsed / duration) * 100));
+          
+          if (remaining > 0) {
+            allComplete = false;
+            // Update progress
+            if (updated[taskId]) {
+              const taskType = taskData.type || 'unknown';
+              const labelBase = taskType === 'gather_resource' ? `Gathering ${taskData.resource}...` : 
+                               taskType === 'build_womb' ? 'Building Womb...' :
+                               taskType === 'grow_clone' ? `Growing ${taskData.kind} clone...` :
+                               taskType === 'repair_womb' ? `Repairing Womb ${((taskData.womb_id || 0) + 1)}...` :
+                               'Processing...';
+              
+              updated[taskId] = {
+                ...updated[taskId],
+                value: progress,
+                label: `${labelBase} ${Math.ceil(remaining)}s remaining`,
+              };
             }
-            return updated;
-          });
-        } else if (status.completed && status.task) {
-          // Task completed - remove from active progress
-          const completedTaskId = status.task.id;
-          
-          setActiveTaskProgress((prev) => {
-            const updated = { ...prev };
-            delete updated[completedTaskId];
-            return updated;
-          });
-          
-          // Show pending message if any
-          setPendingMessages((prev) => {
-            if (prev.has(completedTaskId)) {
-              const message = prev.get(completedTaskId)!;
-              addTerminalMessage(message);
-              const newMap = new Map(prev);
-              newMap.delete(completedTaskId);
-              return newMap;
-            }
-            return prev;
-          });
-          
-          // Reload state to get updates (events feed will also update, but this ensures sync)
-          const updatedState = await gameAPI.getState();
-          updateState(updatedState);
-          
-          // Auto-select newly created clone if this was a grow_clone task
-          const completedTask = state.active_tasks?.[completedTaskId];
-          if (completedTask?.type === 'grow_clone' && updatedState.clones) {
-            const cloneIds = Object.keys(updatedState.clones);
-            if (cloneIds.length > 0) {
-              const newestCloneId = cloneIds[cloneIds.length - 1];
-              setSelectedCloneId(newestCloneId);
-              addTerminalMessage(`Tip: Apply this clone (click "Apply Clone" button) to run expeditions.`);
-            }
-          }
-          
-          // Check if there are any remaining active tasks
-          if (Object.keys(updatedState.active_tasks || {}).length === 0) {
-            setIsBusy(false);
-          }
-        } else {
-          // No active task in response - but check state to be sure
-          const hasActiveTasks = state.active_tasks && Object.keys(state.active_tasks).length > 0;
-          if (!hasActiveTasks) {
-            setActiveTaskProgress({});
-            setIsBusy(false);
+          } else {
+            // Task complete - will be removed by useGameState task checker
+            // Just remove from progress tracking
+            delete updated[taskId];
           }
         }
-      } catch (err) {
-        console.error('Failed to poll task status:', err);
-      }
-    }, 1000); // Poll every second
 
-    return () => clearInterval(pollInterval);
-  }, [state?.active_tasks, updateState]);
+        if (allComplete && Object.keys(state.active_tasks).length === 0) {
+          setIsBusy(false);
+        }
+
+        return updated;
+      });
+    }, 500); // Update every 500ms for smoother progress
+
+    return () => clearInterval(progressInterval);
+  }, [state?.active_tasks]);
+
+  // Listen for task completion and show messages
+  useEffect(() => {
+    if (!state) return;
+
+    // Get completion messages from completed tasks
+    const completedMessages = getCompletedTaskMessages();
+    if (completedMessages.length > 0) {
+      completedMessages.forEach(message => {
+        addTerminalMessage(message);
+      });
+    }
+
+    // Auto-select newly created clone if one was just grown
+    // Check if clones count increased
+    if (state.clones && Object.keys(state.clones).length > Object.keys(prevClonesRef.current).length) {
+      const cloneIds = Object.keys(state.clones);
+      const newCloneIds = cloneIds.filter(id => !prevClonesRef.current[id]);
+      if (newCloneIds.length > 0) {
+        const newestCloneId = newCloneIds[newCloneIds.length - 1];
+        setSelectedCloneId(newestCloneId);
+        addTerminalMessage(`Tip: Apply this clone (click "Apply Clone" button) to run expeditions.`);
+      }
+    }
+    prevClonesRef.current = state.clones || {};
+
+    // Check if no more active tasks
+    const currentTaskIds = Object.keys(state.active_tasks || {});
+    if (currentTaskIds.length === 0) {
+      setIsBusy(false);
+    }
+  }, [state, getCompletedTaskMessages, addTerminalMessage, setSelectedCloneId]);
 
   const handleAction = async (action: () => Promise<any>, actionName: string, allowDuringTasks: boolean = false) => {
     // Expeditions and immediate actions can run during gathering tasks
@@ -460,10 +469,9 @@ export function SimulationScreen() {
     );
   }
 
-  return (
-    <div className="simulation-screen">
-      {/* Top Bar */}
-      <div className="simulation-topbar">
+  // Top HUD component (defined after early returns to ensure state is available)
+  const topHud = (
+    <div className="simulation-topbar">
         <div className="topbar-left">
           <h1 className="game-title">LINEAGE</h1>
           <div className="self-stats">
@@ -539,29 +547,73 @@ export function SimulationScreen() {
           </button>
         </div>
       </div>
+  );
 
-      {/* Main Content */}
-      <div className="simulation-content">
-        {/* Top Row - 3 Columns */}
-        <div className="top-row">
-          {/* Column 1: Resources and Clones */}
-          <div className="col-1">
+  // Check if FTUE is complete (for auto-collapse)
+  const ftueComplete = state.ftue?.step_build_womb && 
+    state.ftue?.step_grow_clone && 
+    (state.applied_clone_id && state.applied_clone_id in state.clones) &&
+    state.ftue?.step_first_expedition;
+
+  // Auto-collapse FTUE when complete
+  useEffect(() => {
+    if (ftueComplete) {
+      setPanelOpen('leftOpen', 'ftue', false);
+    }
+  }, [ftueComplete, setPanelOpen]);
+
+  // Auto-expand Progress when tasks start
+  useEffect(() => {
+    if (state.active_tasks && Object.keys(state.active_tasks).length > 0) {
+      setPanelOpen('rightOpen', 'progress', true);
+    }
+  }, [state.active_tasks, setPanelOpen]);
+
+  // Keyboard shortcut: Ctrl+/ or F12 toggles Terminal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === '/') || e.key === 'F12') {
+        e.preventDefault();
+        togglePanel('terminalOpen', 'terminal');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePanel]);
+
+  return (
+    <div className="simulation-screen">
+      <MissionControlLayout topHud={topHud}>
+        {/* Left Column */}
+        <div className="mission-control-left">
+          <CollapsiblePanel
+            id="ftue"
+            category="leftOpen"
+            title="Getting Started"
+            defaultOpen={true}
+          >
             <OnboardingChecklist state={state} />
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="resources"
+            category="leftOpen"
+            title="Resources"
+            defaultOpen={false}
+          >
             <ResourcesPanel resources={state.resources} />
-            <ClonesPanel 
-              clones={state.clones}
-              selectedId={selectedCloneId}
-              onSelect={setSelectedCloneId}
-            />
-          </div>
+          </CollapsiblePanel>
+        </div>
 
-          {/* Column 2: Costs, Gather, and Wombs/Facilities */}
-          <div className="col-2">
-            <CostsPanel state={state} />
-            <GatherPanel 
-              onGather={handleGatherResource}
-              disabled={isBusy}
-            />
+        {/* Center Column */}
+        <div className="mission-control-center">
+          <CollapsiblePanel
+            id="womb"
+            category="centerOpen"
+            title="Womb"
+            defaultOpen={true}
+          >
             {getWombCount(state) < 2 && <WombsPanel state={state} />}
             {getWombCount(state) >= 2 && (
               <FacilitiesPanel 
@@ -570,10 +622,64 @@ export function SimulationScreen() {
                 disabled={isBusy}
               />
             )}
-          </div>
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="clones"
+            category="centerOpen"
+            title="Clones"
+            defaultOpen={true}
+          >
+            <ClonesPanel 
+              clones={state.clones}
+              selectedId={selectedCloneId}
+              onSelect={setSelectedCloneId}
+            />
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="expeditions"
+            category="centerOpen"
+            title="Expeditions"
+            defaultOpen={true}
+          >
+            <ExpeditionPanel 
+              state={state}
+              onRunExpedition={handleRunExpedition}
+              disabled={isBusy}
+            />
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="costs"
+            category="centerOpen"
+            title="Costs"
+            defaultOpen={true}
+          >
+            <CostsPanel state={state} />
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="gather"
+            category="centerOpen"
+            title="Gather Resources"
+            defaultOpen={true}
+          >
+            <GatherPanel 
+              onGather={handleGatherResource}
+              disabled={isBusy}
+            />
+          </CollapsiblePanel>
+        </div>
 
-          {/* Column 3: Clone Details and Progress */}
-          <div className="col-3">
+        {/* Right Column */}
+        <div className="mission-control-right">
+          <CollapsiblePanel
+            id="cloneDetails"
+            category="rightOpen"
+            title="Clone Details"
+            defaultOpen={true}
+          >
             <CloneDetailsPanel 
               clone={selectedCloneId ? state.clones[selectedCloneId] : null}
               appliedCloneId={state.applied_clone_id || null}
@@ -581,20 +687,47 @@ export function SimulationScreen() {
               onUpload={() => selectedCloneId && handleUploadClone(selectedCloneId)}
               disabled={isBusy}
             />
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="progress"
+            category="rightOpen"
+            title="Progress"
+            defaultOpen={false}
+          >
             <ProgressPanel progress={primaryProgress} />
-          </div>
+          </CollapsiblePanel>
+          
+          <CollapsiblePanel
+            id="self"
+            category="rightOpen"
+            title="SELF & Practices"
+            defaultOpen={true}
+          >
+            <PracticesPanel
+              practicesXp={state.practices_xp}
+              practiceLevels={state.practice_levels}
+              state={state}
+            />
+          </CollapsiblePanel>
         </div>
 
-        {/* Bottom Row - Terminal and Practices */}
-        <div className="bottom-row">
-          <TerminalPanel messages={terminalMessages} />
-          <PracticesPanel
-            practicesXp={state.practices_xp}
-            practiceLevels={state.practice_levels}
-            state={state}
-          />
+        {/* Terminal (Bottom) */}
+        <div className="mission-control-terminal">
+          <CollapsiblePanel
+            id="terminal"
+            category="terminalOpen"
+            title="Terminal"
+            defaultOpen={true}
+            resizable={true}
+            resizeDirection="horizontal"
+            minSize={10}
+            className="terminal-panel"
+          >
+            <TerminalPanel messages={terminalMessages} />
+          </CollapsiblePanel>
         </div>
-      </div>
+      </MissionControlLayout>
 
       {/* Grow Clone Dialog */}
       <GrowCloneDialog

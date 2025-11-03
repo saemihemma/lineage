@@ -1,0 +1,118 @@
+/* CollapsiblePanel wrapper styles */
+
+.collapsible-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.collapsible-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.panel-header-title {
+  flex: 1;
+}
+
+.panel-toggle-btn {
+  background: none;
+  border: none;
+  color: #e7e7e7;
+  cursor: pointer;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.panel-toggle-btn:hover {
+  color: #ffffff;
+}
+
+.panel-toggle-btn:focus {
+  outline: 2px solid #4a9eff;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 10px;
+}
+
+.chevron.open {
+  transform: rotate(0deg);
+}
+
+.chevron.closed {
+  transform: rotate(-90deg);
+}
+
+.collapsible-panel-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  flex: 1;
+  min-height: 0;
+}
+
+.collapsible-panel.collapsed .collapsible-panel-content {
+  max-height: 0 !important;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Hide nested panel headers when wrapped in CollapsiblePanel */
+.collapsible-panel-children > .panel > .panel-header {
+  display: none;
+}
+
+/* Resize handle */
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle-vertical {
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+}
+
+.resize-handle-vertical:hover,
+.resize-handle-vertical:active {
+  background-color: rgba(74, 158, 255, 0.3);
+}
+
+/* Left column: resize handle on right edge */
+.collapsible-panel:has(.resize-handle-vertical) {
+  position: relative;
+}
+
+.resize-handle-horizontal {
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: row-resize;
+}
+
+.resize-handle-horizontal:hover,
+.resize-handle-horizontal:active {
+  background-color: rgba(74, 158, 255, 0.3);
+}
+
+/* Terminal: resize handle on top edge */
+.collapsible-panel.terminal-panel .resize-handle-horizontal {
+  top: 0;
+  bottom: auto;
+}
+
