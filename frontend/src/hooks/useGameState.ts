@@ -55,39 +55,39 @@ export function useGameState() {
     console.log(`🔵 Starting task polling: ${Object.keys(activeTasks).length} active task(s)`);
 
     // Start polling every 1 second to check for task completion
+    // CRITICAL: Always use backend state - backend is source of truth for resources, XP, etc.
     pollingIntervalRef.current = setInterval(async () => {
       try {
         const updatedState = await gameAPI.getState();
         
-        // Update state to reflect task completion (only if active_tasks changed)
+        // Always update state from backend (backend is source of truth)
+        // This ensures resources, practices XP, and other changes are reflected immediately
         setState((prevState) => {
-          if (!prevState) return prevState;
+          if (!prevState) return updatedState;
           
           const prevTasks = prevState.active_tasks || {};
           const newTasks = updatedState.active_tasks || {};
           
-          // Check if active_tasks changed (tasks completed)
+          // Check if active_tasks changed (tasks completed or new tasks added)
           const prevTaskKeys = Object.keys(prevTasks);
           const newTaskKeys = Object.keys(newTasks);
-          
-          // Only update if tasks actually changed (completed or new tasks appeared)
           const tasksChanged = prevTaskKeys.length !== newTaskKeys.length || 
                               prevTaskKeys.some(id => !newTasks[id]) ||
                               newTaskKeys.some(id => !prevTasks[id]) ||
                               JSON.stringify(prevTasks) !== JSON.stringify(newTasks);
           
+          // Always use backend state when polling - it has the latest resources, XP, etc.
+          // The backend saves state after every action, so polling should always sync
           if (tasksChanged) {
-            console.log(`🟢 Tasks changed: ${prevTaskKeys.length} → ${newTaskKeys.length}`);
-            // Tasks changed - update state to reflect completion or new tasks
-            return updatedState;
+            console.log(`🟢 Tasks changed: ${prevTaskKeys.length} → ${newTaskKeys.length}, syncing state from backend`);
           }
           
-          // No change - keep previous state (prevents unnecessary re-renders)
-          return prevState;
+          // Always return backend state - it's the source of truth
+          // Even if tasks didn't change, backend might have updated resources, XP, etc.
+          return updatedState;
         });
 
         // Check if we should stop polling (no more active tasks)
-        // Use updatedState to check if tasks still exist (don't rely on stale closure state)
         const stillHasActiveTasks = updatedState.active_tasks && Object.keys(updatedState.active_tasks).length > 0;
         if (!stillHasActiveTasks && pollingIntervalRef.current) {
           console.log(`🔴 No more active tasks - stopping polling`);
