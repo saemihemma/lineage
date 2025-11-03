@@ -31,13 +31,10 @@ export function WombsPanel({ state }: WombsPanelProps) {
   
   // Show single womb view (before 2nd womb)
   const firstWomb = wombs[0];
-  // Attention is now global, not per-womb (0-100 scale)
-  const attentionPercent = Math.min(100, Math.max(0, state.global_attention || 0));
   const durabilityPercent = firstWomb.max_durability > 0
     ? (firstWomb.durability / firstWomb.max_durability) * 100
     : 0;
-  
-  const attentionColor = attentionPercent >= 50 ? 'good' : attentionPercent >= 25 ? 'warning' : 'critical';
+
   const durabilityColor = durabilityPercent >= 50 ? 'good' : durabilityPercent >= 25 ? 'warning' : 'critical';
   
   return (
@@ -58,21 +55,7 @@ export function WombsPanel({ state }: WombsPanelProps) {
               </div>
             </div>
           </div>
-          
-          {/* Attention (Global) */}
-          <div className="womb-stat">
-            <div className="womb-stat-label">Attention (Global)</div>
-            <div className="womb-stat-bar">
-              <div 
-                className={`womb-stat-fill ${attentionColor}`}
-                style={{ width: `${attentionPercent}%` }}
-              />
-              <div className="womb-stat-text">
-                {attentionPercent.toFixed(1)} / 100.0
-              </div>
-            </div>
-          </div>
-          
+
           {/* Status */}
           <div className="womb-status-info">
             {firstWomb.durability <= 0 && (
@@ -80,12 +63,7 @@ export function WombsPanel({ state }: WombsPanelProps) {
                 Womb is damaged and non-functional. Repair required.
               </div>
             )}
-            {firstWomb.durability > 0 && attentionPercent < 50 && (
-              <div className="womb-status-warning">
-                Attention is low. Womb may not function optimally.
-              </div>
-            )}
-            {firstWomb.durability > 0 && attentionPercent >= 50 && (
+            {firstWomb.durability > 0 && (
               <div className="womb-status-ok">
                 Womb is operational
               </div>
