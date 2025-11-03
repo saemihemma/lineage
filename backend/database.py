@@ -577,6 +577,9 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
     import logging
     logger = logging.getLogger(__name__)
     
+    # Declare global at function scope (required before any use)
+    global _db_instance
+    
     placeholder = get_db_placeholder()
     
     # Convert placeholders if needed (SQLite uses '?', PostgreSQL uses '%s')
@@ -612,7 +615,6 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
             logger.warning(f"⚠️ PostgreSQL connection lost: {error_str[:100]}. Forcing reconnection and retrying query...")
             # Force connection recreation by closing global connection
             try:
-                global _db_instance
                 if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
                     _db_instance.adapter.close()
                     _db_instance.adapter.conn = None
@@ -643,7 +645,6 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
                     test_cursor.close()
                 except Exception:
                     # Connection is dead, recreate it
-                    global _db_instance
                     if _db_instance and hasattr(_db_instance, 'adapter'):
                         _db_instance.adapter.close()
                         _db_instance.adapter.conn = None
@@ -661,7 +662,6 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
                     return cursor
                 except Exception as rollback_error:
                     # Rollback failed, connection is likely dead - recreate
-                    global _db_instance
                     if _db_instance and hasattr(_db_instance, 'adapter'):
                         _db_instance.adapter.close()
                         _db_instance.adapter.conn = None
