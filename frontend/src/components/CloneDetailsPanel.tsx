@@ -3,7 +3,8 @@
  */
 import { useState, useEffect } from 'react';
 import type { Clone } from '../types/game';
-import { fetchGameplayConfig, type GameplayConfig } from '../api/config';
+import { fetchGameplayConfig } from '../api/config';
+import type { GameplayConfig } from '../api/config';
 import './CloneDetailsPanel.css';
 
 interface CloneDetailsPanelProps {
@@ -127,7 +128,7 @@ export function CloneDetailsPanel({
             {cloneTraits && Object.keys(cloneTraits).length > 0 && (
               <div className="traits-compact">
                 {traitOrder.map((traitId: string) => {
-                  const value = cloneTraits[traitId];
+                  const value: number | undefined = cloneTraits[traitId];
                   if (value === undefined) return null;
                   const traitDef = traitsConfig?.traits?.[traitId];
                   const traitName = traitDef?.name || traitId;
