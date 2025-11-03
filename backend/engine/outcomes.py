@@ -154,6 +154,7 @@ class Outcome:
     mods_applied: List[Mod]  # For explainability (Phase 7)
     terms: Dict[str, Any]  # Internal structure for Phase 7 explainability
     shilajit_found: bool = False
+    feral_attack: Optional[Dict[str, Any]] = None  # Phase 4: Feral attack info if occurred
 
 
 @dataclass
@@ -322,6 +323,55 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     # Final clamp: death probability between 0.5% and 50%
     final_stats.death_chance = max(0.005, min(0.50, final_stats.death_chance))
     
+    # Phase 4: Check for feral attack (after aggregate+clamp, before final roll)
+    feral_attack = None
+    attention_config = ctx.outcomes_config.get("attention", {})
+    bands = attention_config.get("bands", {})
+    yellow_threshold = bands.get("yellow", 30)
+    red_threshold = bands.get("red", 60)
+    
+    # Determine attention band
+    attention_band = None
+    if ctx.global_attention >= red_threshold:
+        attention_band = "red"
+    elif ctx.global_attention >= yellow_threshold:
+        attention_band = "yellow"
+    
+    # If in yellow or red band, roll for feral attack
+    if attention_band:
+        feral_attack_probs = attention_config.get("feral_attack_prob", {})
+        attack_prob = feral_attack_probs.get(attention_band, 0.0)
+        
+        if attack_prob > 0 and rng.random() < attack_prob:
+            # Feral attack occurred - apply per-action penalties as mods
+            action_effects = attention_config.get("effects", {}).get("expedition", {})
+            death_add = action_effects.get("death_add", {}).get(attention_band, 0.0)
+            
+            if death_add > 0:
+                feral_mod = Mod(
+                    target='death_chance',
+                    op='add',
+                    value=death_add,
+                    source=f'FeralAttack:{attention_band.upper()}'
+                )
+                mods.append(feral_mod)
+                # Re-apply mod to stats (just the feral mod)
+                final_stats.death_chance += death_add
+                # Re-clamp after feral attack
+                final_stats.death_chance = max(0.005, min(0.50, final_stats.death_chance))
+                # Ensure success + death ≤ 1
+                if final_stats.success_chance + final_stats.death_chance > 1.0:
+                    final_stats.success_chance = max(0.0, 1.0 - final_stats.death_chance)
+            
+            # Store attack info for event emission
+            feral_attack = {
+                "band": attention_band,
+                "action": "expedition",
+                "effects": {
+                    "death_chance": death_add
+                }
+            }
+    
     # 6. Roll for death/success
     roll = rng.random()
     if roll < final_stats.death_chance:
@@ -382,6 +432,7 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
         xp_gained=xp_gained,
         mods_applied=mods,
         terms=terms,
-        shilajit_found=shilajit_found
+        shilajit_found=shilajit_found,
+        feral_attack=feral_attack  # Phase 4: Feral attack info if occurred
     )
 

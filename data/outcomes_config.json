@@ -122,6 +122,35 @@
   "xp_modifiers": {
     "MINER_XP_MULT": 1.25,
     "notes": "MINER clone gets 25% bonus XP on MINING expeditions"
+  },
+  "attention": {
+    "bands": {
+      "yellow": 30,
+      "red": 60
+    },
+    "feral_attack_prob": {
+      "yellow": 0.08,
+      "red": 0.18
+    },
+    "effects": {
+      "expedition": {
+        "death_add": {
+          "yellow": 0.02,
+          "red": 0.05
+        }
+      },
+      "gather": {
+        "time_mult": 1.10,
+        "cost_mult": 1.05
+      },
+      "grow": {
+        "time_mult": 1.10,
+        "cost_mult": 1.05
+      },
+      "upload": {
+        "notes": "No mechanical change; warning event only"
+      }
+    }
   }
 }
 

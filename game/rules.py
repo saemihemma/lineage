@@ -1,7 +1,7 @@
 """Pure game rules functions - immutable state updates"""
 import random
 import uuid
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 from game.state import GameState
 from core.models import Clone, CLONE_TYPES, TRAIT_LIST
 from core.config import CONFIG
@@ -80,6 +80,9 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
         if not active_womb.is_functional():
             raise RuntimeError(f"Womb {active_womb.id} is not functional. Durability: {active_womb.durability:.1f}/{active_womb.max_durability:.1f}")
     
+    # Capture womb_id for deterministic trait generation
+    womb_id = active_womb.id if active_womb else 0
+    
     level = state.soul_level()
     base_cost = inflate_costs(CONFIG["CLONE_COSTS"][kind], level)
     cost_mult = perk_constructive_cost_mult(state)
@@ -102,16 +105,35 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     
     # Prepare clone data (but don't add to state yet - will be added when task completes)
     import time
-    traits = random_traits(level, state.rng)
+    # Capture deterministic timestamp for trait generation
+    deterministic_timestamp = time.time()
+    # Generate clone ID first (needed for trait generation)
+    clone_id = str(uuid.uuid4())[:8]
+    
+    # Generate deterministic traits using HMAC-seeded RNG
+    from core.game_logic import generate_deterministic_traits
+    traits = generate_deterministic_traits(
+        self_name=state.self_name or "",
+        womb_id=womb_id,
+        clone_id=clone_id,
+        timestamp=deterministic_timestamp
+    )
+    
     clone_data = {
-        "id": str(uuid.uuid4())[:8],
+        "id": clone_id,
         "kind": kind,
         "traits": traits,
         "xp": {"MINING": 0, "COMBAT": 0, "EXPLORATION": 0},
         "survived_runs": 0,
         "alive": True,
         "uploaded": False,
-        "created_at": 0.0  # Will be set when task completes
+        "created_at": 0.0,  # Will be set when task completes
+        # Store trait generation metadata for persistence/debugging
+        "trait_generation_metadata": {
+            "womb_id": womb_id,
+            "timestamp": deterministic_timestamp,
+            "self_name": state.self_name or ""
+        }
     }
     
     # Award practice XP
@@ -155,15 +177,17 @@ def apply_clone(state: GameState, cid: str) -> Tuple[GameState, str]:
     return new_state, f"Applied clone {cid} to spaceship."
 
 
-def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
+def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optional[Dict[str, Any]]]:
     """
     Run an expedition with the applied clone.
     
     Phase 2: Uses new outcome engine for deterministic resolution.
-    Keeps backward-compatible signature.
+    Phase 4: Returns feral attack info if occurred.
+    Keeps backward-compatible signature (returns 3-tuple now).
     
     Returns:
-        Tuple of (new_state, message)
+        Tuple of (new_state, message, feral_attack_info)
+        feral_attack_info is None if no attack occurred
     """
     import time
     import uuid
@@ -214,6 +238,9 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     # Resolve outcome using deterministic engine
     outcome = resolve_expedition_outcome(ctx)
     
+    # Phase 4: Handle feral attack info from outcome
+    # (event emission will be done in endpoint)
+    
     # Apply outcome to state
     if outcome.result == 'death':
         # Clone died - reduce XP and mark as dead
@@ -227,7 +254,8 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
         if new_state.applied_clone_id == cid:
             new_state.applied_clone_id = ""
         # Do NOT increment survived_runs - clone died
-        return new_state, f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes."
+        # Phase 4: Return feral attack info even on death (attack happened before death roll)
+        return new_state, f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes.", outcome.feral_attack
     
     # Clone survived - apply rewards and XP
     for res, amount in outcome.loot.items():
@@ -256,7 +284,9 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     msg = f"{kind.title()} expedition complete: {loot_str}. {kind.title()} XP +{gained}. Survived runs: {new_clone.survived_runs}."
     if outcome.shilajit_found:
         msg += " Recovered Shilajit fragment from exploration site."
-    return new_state, msg
+    
+    # Phase 4: Return feral attack info if occurred
+    return new_state, msg, outcome.feral_attack
 
 
 def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str]:

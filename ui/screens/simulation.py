@@ -419,8 +419,11 @@ class SimulationScreen(tk.Tk):
                     # Rotate expeditions
                     exp_kind = expedition_types[self.R.randint(0, len(expedition_types) - 1)]
 
-                new_state, msg = run_expedition(self.p, exp_kind)
+                new_state, msg, feral_attack = run_expedition(self.p, exp_kind)
                 self.p = new_state
+                # Phase 4: Log feral attack if occurred
+                if feral_attack:
+                    self.logline(f"[AGENT] ⚠️ Feral attack: {feral_attack}")
                 self.logline(f"[AGENT] {msg}")
                 self.refresh_all()
                 self.agent_timer_id = self.after(1500, self.agent_think)
@@ -704,8 +707,11 @@ class SimulationScreen(tk.Tk):
 
     def run(self, kind: str):
         """Run an expedition"""
-        new_state, msg = run_expedition(self.p, kind)
+        new_state, msg, feral_attack = run_expedition(self.p, kind)
         self.p = new_state
+        # Phase 4: Log feral attack if occurred
+        if feral_attack:
+            self.logline(f"⚠️ Feral attack: {feral_attack}")
         save_state(self.p)
         self.logline(msg)
         self.refresh_all()

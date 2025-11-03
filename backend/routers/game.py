@@ -334,10 +334,14 @@ def get_player_id(player_id: Optional[str] = None, session_id: Optional[str] = N
     return new_player_id
 
 
-def check_and_complete_tasks(state: GameState) -> GameState:
+def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None) -> GameState:
     """
     Check for completed tasks and auto-complete them.
     Returns updated state if any tasks completed, otherwise original state.
+    
+    Args:
+        state: Game state to check
+        session_id: Optional session ID for event emission (if provided, events will be emitted)
     """
     if not state.active_tasks:
         return state
@@ -473,9 +477,30 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                         task_data['completed_clone'] = {
                             "id": clone.id,
                             "kind": clone.kind,
+                            "traits": clone.traits,
                             "xp": clone.xp,
                             "created_at": clone.created_at
                         }
+                        
+                        # Emit clone.grow.complete event (optional - events need DB and session_id)
+                        if session_id:
+                            try:
+                                from database import get_db
+                                db = get_db()
+                            except:
+                                db = None
+                            
+                            if db:
+                                emit_event(db, session_id, "clone.grow.complete", {
+                                    "clone_id": clone.id,
+                                    "clone": {
+                                        "id": clone.id,
+                                        "kind": clone.kind,
+                                        "traits": clone.traits,
+                                        "xp": clone.xp,
+                                        "created_at": clone.created_at
+                                    }
+                                }, entity_id=clone.id)
             
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
@@ -1466,13 +1491,24 @@ async def run_expedition_endpoint(
         state._session_id = sid
 
         # Run expedition (no DB required)
-        new_state, message = run_expedition(state, kind)
+        # Phase 4: Returns feral attack info from outcome resolution
+        new_state, message, feral_attack_info = run_expedition(state, kind)
         
         # Clean up temporary attribute
         if hasattr(new_state, '_session_id'):
             delattr(new_state, '_session_id')
 
+        # Phase 4: Emit feral.attack event if attack occurred (through same feed path)
+        if feral_attack_info and db:
+            emit_event(db, sid, "feral.attack", {
+                "band": feral_attack_info.get("band"),
+                "action": feral_attack_info.get("action"),
+                "effects": feral_attack_info.get("effects", {})
+            }, entity_id=expedition_id)
+
         # Apply womb systems (decay, attacks) after state change
+        # Note: Feral attacks during expeditions are now handled in outcome resolution
+        # This still handles womb durability attacks from attention decay
         from game.wombs import check_and_apply_womb_systems
         new_state, attack_message = check_and_apply_womb_systems(new_state)
 
@@ -1571,14 +1607,22 @@ async def run_expedition_endpoint(
                 "death": not clone_survived
             }, entity_id=expedition_id)
 
-        # Include attack message if one occurred
+        # Include attack messages if any occurred
         response_data = {
             "state": game_state_to_dict(new_state),
             "message": message,
             "expedition_id": expedition_id,
             "signature": signature  # Optional - only if DB available
         }
-        if attack_message:
+        # Phase 4: Include feral attack info from outcome resolution
+        if feral_attack_info:
+            response_data["feral_attack"] = feral_attack_info
+            # Build message for frontend display
+            band = feral_attack_info.get("band", "unknown").upper()
+            death_add = feral_attack_info.get("effects", {}).get("death_chance", 0.0)
+            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Expedition danger increased by {death_add*100:.0f}% due to high attention."
+        # Womb durability attack (from check_and_apply_womb_systems)
+        elif attack_message:
             response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)

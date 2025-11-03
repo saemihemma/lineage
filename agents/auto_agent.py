@@ -111,8 +111,11 @@ class AgentController:
                     # Rotate expeditions
                     exp_kind = expedition_types[self.rng.randint(0, len(expedition_types) - 1)]
                 
-                new_state, msg = run_expedition(self.p, exp_kind)
+                new_state, msg, feral_attack = run_expedition(self.p, exp_kind)
                 self.p = new_state
+                # Phase 4: Log feral attack if occurred
+                if feral_attack:
+                    self.log(f"[AGENT] ⚠️ Feral attack during expedition: {feral_attack}")
                 self.log(f"[AGENT] {msg}")
                 return True, 1500
         
