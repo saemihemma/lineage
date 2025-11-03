@@ -125,7 +125,7 @@ export function LoadingScreen() {
         <input
           type="text"
           className="loading-name-input"
-          placeholder="Enter your SELF name..."
+          placeholder=""
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && canEnter && handleEnter()}
