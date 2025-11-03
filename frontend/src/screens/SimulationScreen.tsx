@@ -44,17 +44,18 @@ export function SimulationScreen() {
   const [_pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const prevClonesRef = useRef<Record<string, any>>({});
-  
-  // Stable empty object for optional chaining guard
-  const EMPTY_TASKS = useMemo(() => ({} as Record<string, any>), []);
-  
+
   // Create stable version string for active_tasks to avoid object reference dependencies
-  // Guard against optional chaining instability by normalizing to empty object
+  // Only recalculate when active_tasks actually changes, not when any part of state changes
+  // This prevents unnecessary re-runs of effects that depend on activeTasksVersion
   const activeTasksVersion = useMemo(() => {
-    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    const tasks = state?.active_tasks;
+    if (!tasks || Object.keys(tasks).length === 0) {
+      return '';
+    }
     return Object.keys(tasks).sort().join('|');
-  }, [state, EMPTY_TASKS]); // Depend on state (which can be null), not state?.active_tasks
-  
+  }, [state?.active_tasks]);
+
   // Calculate primary progress (for single progress bar display)
   // Show the most recently started task, or first active task if none specified
   const primaryProgress = (() => {
@@ -169,7 +170,7 @@ export function SimulationScreen() {
 
   // Track task progress locally (no backend polling needed)
   useEffect(() => {
-    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    const tasks = state?.active_tasks;
     if (!state || !tasks || Object.keys(tasks).length === 0) {
       // No active tasks - clear all progress
       setActiveTaskProgress({});
@@ -211,7 +212,7 @@ export function SimulationScreen() {
 
     // Update progress locally based on task timing
     const progressInterval = setInterval(() => {
-      const currentTasks = state?.active_tasks ?? EMPTY_TASKS;
+      const currentTasks = state?.active_tasks;
       if (!state || !currentTasks || Object.keys(currentTasks).length === 0) {
         return;
       }
@@ -264,7 +265,7 @@ export function SimulationScreen() {
     }, 500); // Update every 500ms for smoother progress
 
     return () => clearInterval(progressInterval);
-  }, [activeTasksVersion, state, EMPTY_TASKS]);
+  }, [activeTasksVersion, state]);
 
   // Listen for task completion and show messages
   useEffect(() => {
@@ -320,11 +321,11 @@ export function SimulationScreen() {
 
   // Auto-expand Progress when tasks start - MUST BE BEFORE EARLY RETURNS
   useEffect(() => {
-    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    const tasks = state?.active_tasks;
     if (tasks && Object.keys(tasks).length > 0) {
       setPanelOpen('rightOpen', 'progress', true);
     }
-  }, [activeTasksVersion, state, setPanelOpen, EMPTY_TASKS]);
+  }, [activeTasksVersion, state, setPanelOpen]);
 
   // Keyboard shortcut: Ctrl+/ or F12 toggles Terminal - MUST BE BEFORE EARLY RETURNS
   useEffect(() => {
@@ -440,15 +441,27 @@ export function SimulationScreen() {
         errorMsg = err.message;
       }
 
-      // Check for network errors
+      // Check for network errors - provide more helpful messages
       if (err && typeof err === 'object' && 'name' in err) {
-        if (err.name === 'TypeError' || err.name === 'NetworkError') {
-          errorMsg = 'Network error. Please check your connection.';
+        if (err.name === 'NetworkError' || (err.name === 'TypeError' && err.message?.includes('fetch'))) {
+          // More detailed network error message
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          errorMsg = `Network error: Unable to connect to API at ${apiUrl}. Check your connection and ensure the backend is running.`;
+          console.error(`🌐 Network Error Details:`, {
+            action: actionName,
+            apiUrl,
+            error: err,
+            suggestion: 'Verify VITE_API_URL is set correctly in production',
+          });
         }
       }
 
       addTerminalMessage(`ERROR: ${errorMsg}`);
-      console.error(`Action failed: ${actionName}`, err);
+      console.error(`Action failed: ${actionName}`, {
+        error: err,
+        errorType: err instanceof Error ? err.constructor.name : typeof err,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
 
       // Reset busy state on error
       setIsBusy(false);

@@ -29,39 +29,65 @@ export class GameAPI {
     // Log request details for debugging
     console.log(`🌐 API Request: ${options?.method || 'GET'} ${endpoint}`, {
       url,
+      baseUrl: this.baseUrl,
       hasCredentials: true,
       headers: options?.headers,
     });
     
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-      credentials: 'include', // Important for cookies
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+        credentials: 'include', // Important for cookies
+      });
 
-    // Check if session cookie is present in response
-    const setCookieHeader = response.headers.get('Set-Cookie');
-    if (setCookieHeader) {
-      console.log(`🍪 Cookie set in response: ${setCookieHeader.substring(0, 50)}...`);
+      // Check if session cookie is present in response
+      const setCookieHeader = response.headers.get('Set-Cookie');
+      if (setCookieHeader) {
+        console.log(`🍪 Cookie set in response: ${setCookieHeader.substring(0, 50)}...`);
+      }
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        const errorMsg = error.detail || `API request failed: ${response.status}`;
+        console.error(`❌ API Error: ${options?.method || 'GET'} ${endpoint}`, {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorMsg,
+        });
+        throw new Error(errorMsg);
+      }
+
+      const data = await response.json();
+      console.log(`✅ API Response: ${options?.method || 'GET'} ${endpoint}`, {
+        status: response.status,
+        hasState: 'state' in data,
+        hasWombs: 'state' in data && Array.isArray(data.state?.wombs),
+        wombCount: 'state' in data && Array.isArray(data.state?.wombs) ? data.state.wombs.length : 0,
+      });
+      
+      return data;
+    } catch (err) {
+      // Enhanced error handling for network issues
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        // Network error - fetch failed (CORS, DNS, connection refused, etc.)
+        console.error(`🌐 Network Error: ${options?.method || 'GET'} ${endpoint}`, {
+          url,
+          baseUrl: this.baseUrl,
+          error: err.message,
+          suggestion: 'Check if API is running and CORS is configured correctly',
+        });
+        const networkError = new Error(`Network error: ${err.message}. API URL: ${this.baseUrl}`);
+        (networkError as any).name = 'NetworkError';
+        throw networkError;
+      }
+      
+      // Re-throw other errors (including Error from response handling)
+      throw err;
     }
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || `API request failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(`✅ API Response: ${options?.method || 'GET'} ${endpoint}`, {
-      status: response.status,
-      hasState: 'state' in data,
-      hasWombs: 'state' in data && Array.isArray(data.state?.wombs),
-      wombCount: 'state' in data && Array.isArray(data.state?.wombs) ? data.state.wombs.length : 0,
-    });
-    
-    return data;
   }
 
   // State management moved to localStorage - these methods are no longer used
