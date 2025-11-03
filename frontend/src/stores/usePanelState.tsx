@@ -64,30 +64,50 @@ const PanelStateContext = createContext<PanelStateContextType | undefined>(undef
 
 export function PanelStateProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PanelState>(() => {
-    // Load from localStorage on mount
+    // Load from localStorage on mount (synchronous operation)
     try {
+      // Defensive check: localStorage may not be available (SSR, private browsing)
+      if (typeof window === 'undefined' || !window.localStorage) {
+        console.warn('localStorage not available, using default state');
+        return DEFAULT_STATE;
+      }
+
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         // Merge with defaults to handle schema changes
-        return {
+        // Ensure sizes object always exists with valid structure
+        const mergedState = {
           ...DEFAULT_STATE,
           ...parsed,
-          leftOpen: { ...DEFAULT_STATE.leftOpen, ...parsed.leftOpen },
-          centerOpen: { ...DEFAULT_STATE.centerOpen, ...parsed.centerOpen },
-          rightOpen: { ...DEFAULT_STATE.rightOpen, ...parsed.rightOpen },
-          sizes: { ...DEFAULT_STATE.sizes, ...parsed.sizes },
+          leftOpen: { ...DEFAULT_STATE.leftOpen, ...(parsed.leftOpen || {}) },
+          centerOpen: { ...DEFAULT_STATE.centerOpen, ...(parsed.centerOpen || {}) },
+          rightOpen: { ...DEFAULT_STATE.rightOpen, ...(parsed.rightOpen || {}) },
+          sizes: {
+            ...DEFAULT_STATE.sizes,
+            ...(parsed.sizes || {}),
+          },
         };
+        // Validate sizes are numbers
+        if (typeof mergedState.sizes.leftPx !== 'number') mergedState.sizes.leftPx = DEFAULT_STATE.sizes.leftPx;
+        if (typeof mergedState.sizes.rightPx !== 'number') mergedState.sizes.rightPx = DEFAULT_STATE.sizes.rightPx;
+        if (typeof mergedState.sizes.terminalPct !== 'number') mergedState.sizes.terminalPct = DEFAULT_STATE.sizes.terminalPct;
+        return mergedState;
       }
     } catch (err) {
       console.warn('Failed to load panel state from localStorage:', err);
     }
+    // Always return a valid state object
     return DEFAULT_STATE;
   });
 
   // Save to localStorage whenever state changes
   useEffect(() => {
     try {
+      // Defensive check: localStorage may not be available
+      if (typeof window === 'undefined' || !window.localStorage) {
+        return;
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
       console.warn('Failed to save panel state to localStorage:', err);

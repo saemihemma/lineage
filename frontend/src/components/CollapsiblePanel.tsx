@@ -45,7 +45,13 @@ export function CollapsiblePanel({
     setPanelOpen(category, id, !isOpen);
   };
 
-  // Resize handle mouse handlers
+  // Use ref to store setPanelSize function without dependency
+  const setPanelSizeRef = useRef(setPanelSize);
+  useEffect(() => {
+    setPanelSizeRef.current = setPanelSize;
+  }, [setPanelSize]);
+
+  // Resize handle mouse handlers - setup once, no dependencies on state.sizes
   useEffect(() => {
     if (!resizable || !resizeHandleRef.current) return;
 
@@ -56,14 +62,14 @@ export function CollapsiblePanel({
       isResizingRef.current = true;
       startPosRef.current = resizeDirection === 'vertical' ? e.clientX : e.clientY;
       
-      // Get current size from state
+      // Get current size from CSS variable (source of truth) or fallback
       let currentSize = 0;
       if (category === 'terminalOpen') {
-        currentSize = state.sizes.terminalPct ?? 30;
+        currentSize = parseFloat(document.documentElement.style.getPropertyValue('--terminal-height') || '30');
       } else if (category === 'leftOpen') {
-        currentSize = state.sizes.leftPx ?? 320;
+        currentSize = parseFloat(document.documentElement.style.getPropertyValue('--left-width') || '320');
       } else if (category === 'rightOpen') {
-        currentSize = state.sizes.rightPx ?? 360;
+        currentSize = parseFloat(document.documentElement.style.getPropertyValue('--right-width') || '360');
       }
       startSizeRef.current = currentSize;
 
@@ -116,7 +122,7 @@ export function CollapsiblePanel({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
 
-      // Save to state
+      // Save to state using ref to avoid dependency
       const currentPos = resizeDirection === 'vertical' 
         ? (document.documentElement.style.getPropertyValue('--left-width') || document.documentElement.style.getPropertyValue('--right-width'))
         : document.documentElement.style.getPropertyValue('--terminal-height');
@@ -124,11 +130,11 @@ export function CollapsiblePanel({
       if (currentPos) {
         let sizeValue = parseFloat(currentPos);
         if (category === 'terminalOpen') {
-          setPanelSize('terminalPct', sizeValue);
+          setPanelSizeRef.current('terminalPct', sizeValue);
         } else if (category === 'leftOpen') {
-          setPanelSize('leftPx', sizeValue);
+          setPanelSizeRef.current('leftPx', sizeValue);
         } else if (category === 'rightOpen') {
-          setPanelSize('rightPx', sizeValue);
+          setPanelSizeRef.current('rightPx', sizeValue);
         }
         onResize?.(sizeValue);
       }
@@ -141,7 +147,7 @@ export function CollapsiblePanel({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizable, resizeDirection, category, state.sizes, minSize, setPanelSize, onResize]);
+  }, [resizable, resizeDirection, category, minSize, onResize]); // Removed state.sizes and setPanelSize from dependencies
 
   return (
     <div className={`collapsible-panel ${className} ${!isOpen ? 'collapsed' : ''}`}>
