@@ -147,7 +147,7 @@ def clamp_stats(stats: CanonicalStats) -> CanonicalStats:
 @dataclass
 class Outcome:
     """Result of outcome resolution"""
-    result: Literal['success', 'death']  # Phase 5: Gather always 'success'
+    result: Literal['success', 'death', 'failure']  # Phase 6: Grow can fail, upload always success
     stats: CanonicalStats  # Final computed stats
     loot: Dict[str, int]  # Phase 5: For gather, contains {resource: amount}
     xp_gained: Dict[str, int]  # Phase 5: Empty for gather (practice XP is separate)
@@ -155,20 +155,26 @@ class Outcome:
     terms: Dict[str, Any]  # Internal structure for Phase 7 explainability
     shilajit_found: bool = False
     feral_attack: Optional[Dict[str, Any]] = None  # Phase 4: Feral attack info if occurred
-    time_seconds: Optional[float] = None  # Phase 5: For gather, deterministic duration
+    time_seconds: Optional[float] = None  # Phase 5: For gather/grow, deterministic duration
+    cost: Optional[Dict[str, int]] = None  # Phase 6: For grow, computed cost
+    soul_split_percent: Optional[float] = None  # Phase 6: For grow, soul split percentage
+    soul_xp_gained: Optional[int] = None  # Phase 6: For upload, SELF XP gained
+    soul_restore_percent: Optional[float] = None  # Phase 6: For upload, soul restoration
 
 
 @dataclass
 class OutcomeContext:
     """Context for resolving an outcome"""
-    action: Literal['expedition', 'gather']  # Phase 5: Added gather
-    clone: Optional[Clone]  # Phase 5: Optional for gather (no clone needed)
+    action: Literal['expedition', 'gather', 'grow', 'upload']  # Phase 6: Added grow and upload
+    clone: Optional[Clone]  # Phase 5: Optional for gather (no clone needed), required for upload
     self_level: int
     practices: Dict[str, int]  # Kinetic, Cognitive, Constructive levels
     global_attention: float
     womb_durability: float  # Best womb durability
     expedition_kind: Optional[str] = None  # Phase 5: Optional for gather
     resource: Optional[str] = None  # Phase 5: For gather actions
+    clone_kind: Optional[str] = None  # Phase 6: For grow actions
+    soul_percent: Optional[float] = None  # Phase 6: For grow (check sufficient soul), upload (current soul)
     config: Dict = None  # From CONFIG (for backward compat, practice levels, etc.)
     outcomes_config: Dict[str, Any] = None  # Phase 3: From outcomes_config.json
     seed_parts: SeedParts = None  # For deterministic RNG
@@ -589,5 +595,305 @@ def resolve_gather(ctx: OutcomeContext) -> Outcome:
         terms=terms,
         feral_attack=feral_attack,
         time_seconds=final_time
+    )
+
+
+def resolve_grow(ctx: OutcomeContext) -> Outcome:
+    """
+    Resolve grow clone outcome using deterministic, canonical stats system.
+    
+    Phase 6: Grow action migrated to outcome engine.
+    - Deterministic cost calculation with SELF tapering
+    - Deterministic soul split percentage
+    - Deterministic time
+    - Feral attack check (affects time_mult and cost_mult)
+    """
+    # 1. Compute RNG from seed_parts (HMAC recipe)
+    rng = random.Random(compute_rng_seed(ctx.seed_parts))
+    
+    # 2. Get grow config
+    grow_config = ctx.outcomes_config.get("grow", {})
+    base_costs = grow_config.get("base_costs", {}).get(ctx.clone_kind, {})
+    
+    if not base_costs:
+        raise ValueError(f"Unknown clone kind: {ctx.clone_kind}")
+    
+    # 3. Compute base stats (all 7 canonical stats)
+    attention_delta = grow_config.get("attention_delta", 5.0)
+    success_chance_base = grow_config.get("success_chance_base", 1.0)
+    
+    base_stats = CanonicalStats(
+        time_mult=1.0,
+        success_chance=success_chance_base,
+        death_chance=0.0,  # No death chance for growing
+        reward_mult=1.0,
+        xp_mult=1.0,
+        cost_mult=1.0,
+        attention_delta=attention_delta
+    )
+    
+    # 4. Build mods list
+    mods = []
+    # Practice cost reduction (Constructive perk)
+    constructive_level = ctx.practices.get("Constructive", 0) // ctx.config.get("PRACTICE_XP_PER_LEVEL", 100)
+    if constructive_level >= 2:
+        cost_reduction = ctx.config.get("PERK_CONSTRUCTIVE_COST_MULT", 0.85)
+        mods.append(Mod(target='cost_mult', op='mult', value=cost_reduction, source='Practice:Constructive_L2+'))
+    
+    # Womb durability affects time (lower durability = slower)
+    mods.extend(womb_mods(ctx.womb_durability))
+    # Attention mods (for feral attacks)
+    mods.extend(attention_mods(ctx.global_attention))
+    
+    # 5. Aggregate mods
+    final_stats = aggregate(mods, base_stats)
+    
+    # 6. Apply global invariants (clamps)
+    final_stats = clamp_stats(final_stats)
+    
+    # 7. Phase 4: Check for feral attack (after aggregate+clamp, before final calculation)
+    feral_attack = None
+    attention_config = ctx.outcomes_config.get("attention", {})
+    bands = attention_config.get("bands", {})
+    yellow_threshold = bands.get("yellow", 30)
+    red_threshold = bands.get("red", 60)
+    
+    attention_band = None
+    if ctx.global_attention >= red_threshold:
+        attention_band = "red"
+    elif ctx.global_attention >= yellow_threshold:
+        attention_band = "yellow"
+    
+    # If in yellow or red band, roll for feral attack
+    if attention_band:
+        feral_attack_probs = attention_config.get("feral_attack_prob", {})
+        attack_prob = feral_attack_probs.get(attention_band, 0.0)
+        
+        if attack_prob > 0 and rng.random() < attack_prob:
+            # Feral attack occurred - apply per-action penalties as mods
+            action_effects = attention_config.get("effects", {}).get("grow", {})
+            time_mult_penalty = action_effects.get("time_mult", 1.0)
+            cost_mult_penalty = action_effects.get("cost_mult", 1.0)
+            
+            # Apply feral effects as mods
+            if time_mult_penalty != 1.0:
+                feral_time_mod = Mod(
+                    target='time_mult',
+                    op='mult',
+                    value=time_mult_penalty,
+                    source=f'FeralAttack:{attention_band.upper()}'
+                )
+                mods.append(feral_time_mod)
+                final_stats.time_mult *= time_mult_penalty
+            
+            if cost_mult_penalty != 1.0:
+                feral_cost_mod = Mod(
+                    target='cost_mult',
+                    op='mult',
+                    value=cost_mult_penalty,
+                    source=f'FeralAttack:{attention_band.upper()}'
+                )
+                mods.append(feral_cost_mod)
+                final_stats.cost_mult *= cost_mult_penalty
+            
+            # Store attack info for event emission
+            feral_attack = {
+                "band": attention_band,
+                "action": "grow",
+                "effects": {
+                    "time_mult": time_mult_penalty,
+                    "cost_mult": cost_mult_penalty
+                }
+            }
+    
+    # 8. Calculate cost with SELF tapering
+    cost_inflate_per_level = grow_config.get("cost_inflate_per_level", 0.05)
+    if ctx.self_level <= 1:
+        cost_mult_base = 1.0
+    else:
+        cost_mult_base = (1.0 + cost_inflate_per_level) ** (ctx.self_level - 1)
+    
+    # Apply cost_mult from mods
+    final_cost_mult = cost_mult_base * final_stats.cost_mult
+    
+    # Calculate final cost
+    cost = {}
+    for resource, base_amount in base_costs.items():
+        cost[resource] = max(1, int(round(base_amount * final_cost_mult)))
+    
+    # 9. Calculate deterministic soul split
+    soul_split_base = grow_config.get("soul_split_base", 0.08)
+    soul_split_variance = grow_config.get("soul_split_variance", 0.02)
+    soul_split = max(0.01, soul_split_base + rng.uniform(-soul_split_variance, soul_split_variance))
+    
+    # Check if sufficient soul
+    if ctx.soul_percent is None or ctx.soul_percent - 100.0 * soul_split < 0:
+        return Outcome(
+            result='failure',
+            stats=final_stats,
+            loot={},
+            xp_gained={},
+            mods_applied=mods,
+            terms={},
+            cost=cost,
+            soul_split_percent=soul_split
+        )
+    
+    # 10. Calculate deterministic time
+    time_base_range = grow_config.get("time_base", {}).get(ctx.clone_kind, [30, 45])
+    time_min, time_max = time_base_range[0], time_base_range[1]
+    base_time = rng.randint(time_min, time_max)
+    final_time = base_time * final_stats.time_mult
+    # Clamp time to reasonable bounds
+    final_time = max(1.0, min(final_time, 600.0))  # 1s to 10min
+    
+    # 11. Roll for success (currently always succeeds, but compute anyway)
+    success_roll = rng.random()
+    if success_roll < final_stats.success_chance:
+        result = 'success'
+    else:
+        result = 'failure'
+    
+    # Build terms structure for Phase 7 explainability
+    terms = {
+        "cost_mult": {
+            "base": cost_mult_base,
+            "mods": [{"source": m.source, "op": m.op, "value": m.value} for m in mods if m.target == 'cost_mult'],
+            "final": final_cost_mult
+        },
+        "cost": {
+            "base_costs": base_costs,
+            "final": cost
+        },
+        "soul_split": {
+            "base": soul_split_base,
+            "variance": soul_split_variance,
+            "final": soul_split
+        },
+        "time_mult": {
+            "base": 1.0,
+            "mods": [{"source": m.source, "op": m.op, "value": m.value} for m in mods if m.target == 'time_mult'],
+            "final": final_stats.time_mult
+        },
+        "time": {
+            "base_range": time_base_range,
+            "base_time": base_time,
+            "time_mult": final_stats.time_mult,
+            "final": final_time
+        }
+    }
+    
+    return Outcome(
+        result=result,
+        stats=final_stats,
+        loot={},
+        xp_gained={},
+        mods_applied=mods,
+        terms=terms,
+        feral_attack=feral_attack,
+        time_seconds=final_time,
+        cost=cost,
+        soul_split_percent=soul_split
+    )
+
+
+def resolve_upload(ctx: OutcomeContext) -> Outcome:
+    """
+    Resolve upload clone outcome using deterministic, canonical stats system.
+    
+    Phase 6: Upload action migrated to outcome engine.
+    - Quality-based soul restoration (uncapped, can exceed 100%)
+    - Deterministic SELF XP retention
+    - No feral attacks (warning only)
+    """
+    # 1. Compute RNG from seed_parts (HMAC recipe)
+    rng = random.Random(compute_rng_seed(ctx.seed_parts))
+    
+    # 2. Get upload config
+    upload_config = ctx.outcomes_config.get("upload", {})
+    
+    # 3. Calculate clone total XP
+    if not ctx.clone:
+        raise ValueError("Clone required for upload")
+    
+    total_xp = sum(ctx.clone.xp.values())
+    
+    # 4. Compute base stats (all 7 canonical stats)
+    attention_delta = upload_config.get("attention_delta", 0.0)
+    
+    base_stats = CanonicalStats(
+        time_mult=1.0,
+        success_chance=1.0,  # Upload always succeeds
+        death_chance=0.0,
+        reward_mult=1.0,
+        xp_mult=1.0,
+        cost_mult=1.0,
+        attention_delta=attention_delta
+    )
+    
+    # 5. Calculate SELF XP retention (deterministic)
+    retain_range = upload_config.get("soul_xp_retain_range", [0.6, 0.9])
+    retain_min, retain_max = retain_range[0], retain_range[1]
+    retain = rng.uniform(retain_min, retain_max)
+    soul_xp_gained = int(total_xp * retain)
+    
+    # 6. Calculate soul restoration (quality-based, uncapped)
+    soul_restore_per_100_xp = upload_config.get("soul_restore_per_100_xp", 0.5)
+    soul_restore_percent = total_xp * soul_restore_per_100_xp / 100.0
+    # Uncapped - can exceed 100%
+    
+    # 7. Phase 4: Check for feral attack (warning only, no mechanical change)
+    feral_attack = None
+    attention_config = ctx.outcomes_config.get("attention", {})
+    bands = attention_config.get("bands", {})
+    yellow_threshold = bands.get("yellow", 30)
+    red_threshold = bands.get("red", 60)
+    
+    attention_band = None
+    if ctx.global_attention >= red_threshold:
+        attention_band = "red"
+    elif ctx.global_attention >= yellow_threshold:
+        attention_band = "yellow"
+    
+    # If in yellow or red band, roll for feral attack (warning only)
+    if attention_band:
+        feral_attack_probs = attention_config.get("feral_attack_prob", {})
+        attack_prob = feral_attack_probs.get(attention_band, 0.0)
+        
+        if attack_prob > 0 and rng.random() < attack_prob:
+            # Feral attack occurred - warning only, no mechanical change
+            feral_attack = {
+                "band": attention_band,
+                "action": "upload",
+                "effects": {
+                    "warning": "High attention detected during upload - proceed with caution"
+                }
+            }
+    
+    # Build terms structure for Phase 7 explainability
+    terms = {
+        "soul_xp": {
+            "total_xp": total_xp,
+            "retain_range": retain_range,
+            "retain": retain,
+            "gained": soul_xp_gained
+        },
+        "soul_restore": {
+            "total_xp": total_xp,
+            "restore_per_100_xp": soul_restore_per_100_xp,
+            "restore_percent": soul_restore_percent
+        }
+    }
+    
+    return Outcome(
+        result='success',
+        stats=base_stats,  # No mods for upload
+        loot={},
+        xp_gained={},
+        mods_applied=[],
+        terms=terms,
+        feral_attack=feral_attack,
+        soul_xp_gained=soul_xp_gained,
+        soul_restore_percent=soul_restore_percent
     )
 

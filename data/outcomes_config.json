@@ -333,6 +333,47 @@
     "practice_xp": {
       "kinetic": 2
     }
+  },
+  "grow": {
+    "base_costs": {
+      "BASIC": {
+        "Synthetic": 6,
+        "Organic": 4,
+        "Shilajit": 1
+      },
+      "MINER": {
+        "Synthetic": 8,
+        "Metal Ore": 8,
+        "Organic": 5,
+        "Shilajit": 1
+      },
+      "VOLATILE": {
+        "Synthetic": 10,
+        "Biomass": 8,
+        "Organic": 6,
+        "Shilajit": 3
+      }
+    },
+    "cost_inflate_per_level": 0.05,
+    "soul_split_base": 0.08,
+    "soul_split_variance": 0.02,
+    "attention_delta": 5.0,
+    "practice_xp": {
+      "constructive": 6
+    },
+    "time_base": {
+      "BASIC": [30, 45],
+      "MINER": [35, 50],
+      "VOLATILE": [40, 55]
+    },
+    "success_chance_base": 1.0,
+    "notes": "Cost uses SELF tapering: (1.0 + cost_inflate_per_level) ^ (level - 1)"
+  },
+  "upload": {
+    "soul_xp_retain_range": [0.6, 0.9],
+    "soul_restore_per_100_xp": 0.5,
+    "attention_delta": 0.0,
+    "notes": "Restoration = total_xp * soul_restore_per_100_xp / 100. Uncapped, can exceed 100%. Quality-based soft-cap formula."
   }
 }
 

@@ -64,10 +64,19 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     Grow a new clone.
     Requires at least one functional womb with sufficient durability/attention.
     
+    Phase 6: Uses outcome engine for deterministic resolution.
+    Keeps backward-compatible signature.
+    
     Returns:
-        Tuple of (new_state, clone, soul_split_percent, message)
+        Tuple of (new_state, clone, soul_split_percent, message, clone_data)
     """
     from game.wombs import check_womb_available, find_active_womb
+    import time
+    import uuid
+    from backend.engine.outcomes import (
+        OutcomeContext, SeedParts, resolve_grow
+    )
+    from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
     
     # Check if womb is available (using new womb system or fallback to assembler_built)
     if not check_womb_available(state) and not state.assembler_built:
@@ -83,28 +92,55 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     # Capture womb_id for deterministic trait generation
     womb_id = active_womb.id if active_womb else 0
     
-    level = state.soul_level()
-    base_cost = inflate_costs(CONFIG["CLONE_COSTS"][kind], level)
-    cost_mult = perk_constructive_cost_mult(state)
-    cost = {k: int(round(v * cost_mult)) for k, v in base_cost.items()}
+    # Phase 6: Build outcome context for deterministic resolution
+    grow_id = str(uuid.uuid4())
+    seed_parts = SeedParts(
+        user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
+        session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
+        action_id=grow_id,
+        config_version=OUTCOMES_CONFIG_VERSION,
+        timestamp=time.time()
+    )
     
-    if not can_afford(state.resources, cost):
-        raise RuntimeError(format_resource_error(state.resources, cost, CLONE_TYPES[kind].display))
+    # Get best womb durability
+    womb_durability = 100.0  # Default
+    if active_womb:
+        womb_durability = active_womb.durability
     
-    split = soul_split_percent(state.rng)
-    if state.soul_percent - 100.0 * split < 0:
+    ctx = OutcomeContext(
+        action='grow',
+        clone=None,  # No clone yet - we're creating one
+        self_level=state.soul_level(),
+        practices=state.practices_xp,
+        global_attention=getattr(state, 'global_attention', 0.0),
+        womb_durability=womb_durability,
+        clone_kind=kind,
+        soul_percent=state.soul_percent,
+        config=CONFIG,
+        outcomes_config=OUTCOMES_CONFIG,
+        seed_parts=seed_parts
+    )
+    
+    # Resolve outcome using deterministic engine
+    outcome = resolve_grow(ctx)
+    
+    # Check if outcome failed (insufficient soul)
+    if outcome.result == 'failure':
         raise RuntimeError("Insufficient soul integrity for clone crafting.")
+    
+    # Check if can afford cost
+    if not can_afford(state.resources, outcome.cost):
+        raise RuntimeError(format_resource_error(state.resources, outcome.cost, CLONE_TYPES[kind].display))
     
     # Create new state
     new_state = state.copy()
-    new_state.soul_percent -= 100.0 * split
+    new_state.soul_percent -= 100.0 * outcome.soul_split_percent
     
     # Deduct resources
-    for k, v in cost.items():
+    for k, v in outcome.cost.items():
         new_state.resources[k] = new_state.resources.get(k, 0) - v
     
     # Prepare clone data (but don't add to state yet - will be added when task completes)
-    import time
     # Capture deterministic timestamp for trait generation
     deterministic_timestamp = time.time()
     # Generate clone ID first (needed for trait generation)
@@ -133,18 +169,27 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
             "womb_id": womb_id,
             "timestamp": deterministic_timestamp,
             "self_name": state.self_name or ""
+        },
+        # Phase 6: Store outcome info for completion handler
+        "outcome": {
+            "feral_attack": outcome.feral_attack,
+            "attention_delta": outcome.stats.attention_delta,
+            "time_seconds": outcome.time_seconds
         }
     }
     
-    # Award practice XP
-    award_practice_xp(new_state, "Constructive", 6)
+    # Award practice XP (from config)
+    from core.config import OUTCOMES_CONFIG
+    grow_config = OUTCOMES_CONFIG.get("grow", {})
+    practice_xp = grow_config.get("practice_xp", {}).get("constructive", 6)
+    award_practice_xp(new_state, "Constructive", practice_xp)
     
     # Gain attention on active womb (if any)
     if new_state.wombs:
         from game.wombs import gain_attention
         new_state = gain_attention(new_state)
     
-    msg = f"{CLONE_TYPES[kind].display} growing... SELF now {new_state.soul_percent:.1f}% (consumed ~{int(split * 100)}%)."
+    msg = f"{CLONE_TYPES[kind].display} growing... SELF now {new_state.soul_percent:.1f}% (consumed ~{int(outcome.soul_split_percent * 100)}%)."
     # Create a Clone object for return (but don't add to state yet)
     clone = Clone(
         id=clone_data["id"],
@@ -153,7 +198,7 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
         xp=clone_data["xp"],
         created_at=0.0
     )
-    return new_state, clone, split, msg, clone_data
+    return new_state, clone, outcome.soul_split_percent, msg, clone_data
 
 
 def apply_clone(state: GameState, cid: str) -> Tuple[GameState, str]:
@@ -289,34 +334,69 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
     return new_state, msg, outcome.feral_attack
 
 
-def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str]:
+def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[Dict[str, Any]]]:
     """
     Upload a clone to SELF to gain XP.
     
+    Phase 6: Uses outcome engine for deterministic resolution.
+    Keeps backward-compatible signature (returns 3-tuple now).
+    
     Returns:
-        Tuple of (new_state, message)
+        Tuple of (new_state, message, feral_attack_info)
+        feral_attack_info is None if no attack occurred
     """
+    import time
+    import uuid
+    from backend.engine.outcomes import (
+        OutcomeContext, SeedParts, resolve_upload
+    )
+    from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
+    
     c = state.clones.get(cid)
     if not c:
-        return state, "Clone not found."
+        return state, "Clone not found.", None
     if not c.alive:
-        return state, "Cannot upload a destroyed clone."
+        return state, "Cannot upload a destroyed clone.", None
     if c.uploaded:
-        return state, "Clone has already been uploaded."
+        return state, "Clone has already been uploaded.", None
     
-    total = sum(c.xp.values())
-    lo, hi = CONFIG["SOUL_XP_RETAIN_RANGE"]
-    retain = state.rng.uniform(lo, hi)
-    gained = int(total * retain)
+    # Phase 6: Build outcome context for deterministic resolution
+    upload_id = str(uuid.uuid4())
+    seed_parts = SeedParts(
+        user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
+        session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
+        action_id=upload_id,
+        config_version=OUTCOMES_CONFIG_VERSION,
+        timestamp=time.time()
+    )
     
+    # Get best womb durability (for context, but upload doesn't use it)
+    womb_durability = 100.0  # Default
+    if state.wombs:
+        functional_wombs = [w for w in state.wombs if w.is_functional()]
+        if functional_wombs:
+            womb_durability = functional_wombs[0].durability
+    
+    ctx = OutcomeContext(
+        action='upload',
+        clone=c,
+        self_level=state.soul_level(),
+        practices=state.practices_xp,
+        global_attention=getattr(state, 'global_attention', 0.0),
+        womb_durability=womb_durability,
+        soul_percent=state.soul_percent,
+        config=CONFIG,
+        outcomes_config=OUTCOMES_CONFIG,
+        seed_parts=seed_parts
+    )
+    
+    # Resolve outcome using deterministic engine
+    outcome = resolve_upload(ctx)
+    
+    # Apply outcome to state
     new_state = state.copy()
-    new_state.soul_xp += gained
-    
-    # Restore soul_percent based on clone quality
-    # Higher XP clones restore more (every 100 XP = 0.5% restoration, uncapped)
-    # So 1000 XP = 5%, 2000 XP = 10%, etc. - can exceed 100%
-    percent_restore = total * 0.005
-    new_state.soul_percent = new_state.soul_percent + percent_restore
+    new_state.soul_xp += outcome.soul_xp_gained
+    new_state.soul_percent = new_state.soul_percent + outcome.soul_restore_percent
     
     # Mark clone as uploaded
     new_clone = new_state.clones[cid]
@@ -326,8 +406,10 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str]:
         new_state.applied_clone_id = ""
     
     new_level = 1 + (new_state.soul_xp // CONFIG['SOUL_LEVEL_STEP'])
-    msg = f"Uploaded clone to SELF. Retained ~{int(retain*100)}% (+{gained} SELF XP). SELF restored by {percent_restore:.1f}%. SELF Level now {new_level}."
-    return new_state, msg
+    msg = f"Uploaded clone to SELF. Retained ~{int(outcome.terms['soul_xp']['retain']*100)}% (+{outcome.soul_xp_gained} SELF XP). SELF restored by {outcome.soul_restore_percent:.1f}%. SELF Level now {new_level}."
+    
+    # Phase 6: Return feral attack info if occurred
+    return new_state, msg, outcome.feral_attack
 
 
 def gather_resource(state: GameState, resource: str) -> Tuple[GameState, int, str]:

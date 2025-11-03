@@ -1417,10 +1417,28 @@ async def grow_clone_endpoint(
         raise HTTPException(status_code=400, detail="A task is already in progress")
 
     try:
+        # Phase 6: Store session_id in state for seed generation (temporary approach)
+        state._session_id = sid
+        
         # Prepare clone data (but don't create clone yet - will be created when task completes)
         new_state, clone, soul_split, message, clone_data = grow_clone(state, kind)
+        
+        # Clean up temporary attribute
+        if hasattr(new_state, '_session_id'):
+            delattr(new_state, '_session_id')
 
-        # Start timer task with clone data stored
+        # Phase 6: Emit feral.attack event if attack occurred during grow
+        outcome_info = clone_data.get('outcome', {})
+        feral_attack_info = outcome_info.get('feral_attack')
+        if feral_attack_info and db:
+            grow_id = clone_data.get('id', str(uuid.uuid4()))
+            emit_event(db, sid, "feral.attack", {
+                "band": feral_attack_info.get("band"),
+                "action": feral_attack_info.get("action"),
+                "effects": feral_attack_info.get("effects", {})
+            }, entity_id=grow_id)
+
+        # Start timer task with clone data stored (including outcome info)
         final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind, pending_clone_data=clone_data)
 
         # Apply womb systems (decay, attacks) after state change
@@ -1443,6 +1461,7 @@ async def grow_clone_endpoint(
         # Don't add clone to state yet - it will be added when task completes
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
 
+        # Phase 6: Include feral attack info if occurred
         response_data = {
             "state": game_state_to_dict(final_state),  # Return state WITHOUT clone added yet
             "clone": None,  # Clone not created yet - will appear when task completes
@@ -1450,7 +1469,11 @@ async def grow_clone_endpoint(
             "message": message,
             "task_id": task_id
         }
-        if attack_message:
+        if feral_attack_info:
+            response_data["feral_attack"] = feral_attack_info
+            band = feral_attack_info.get("band", "unknown").upper()
+            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): Clone growth slowed and cost increased due to high attention."
+        elif attack_message:
             response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)
@@ -1746,19 +1769,36 @@ async def upload_clone_endpoint(
         old_soul_xp = state.soul_xp
         old_soul_percent = state.soul_percent
         
-        new_state, message = upload_clone(state, clone_id)
-
-        # Apply womb systems (decay, attacks) after state change
-        from game.wombs import check_and_apply_womb_systems
-        new_state, attack_message = check_and_apply_womb_systems(new_state)
+        # Phase 6: Store session_id in state for seed generation (temporary approach)
+        state._session_id = sid
         
-        # Optional: Emit upload.complete event if DB available
+        # Phase 6: Returns feral attack info from outcome resolution
+        new_state, message, feral_attack_info = upload_clone(state, clone_id)
+        
+        # Clean up temporary attribute
+        if hasattr(new_state, '_session_id'):
+            delattr(new_state, '_session_id')
+
+        # Phase 6: Emit feral.attack event if attack occurred (warning only)
         try:
             from database import get_db
             db = get_db()
         except:
             db = None
         
+        if feral_attack_info and db:
+            upload_id = str(uuid.uuid4())
+            emit_event(db, sid, "feral.attack", {
+                "band": feral_attack_info.get("band"),
+                "action": feral_attack_info.get("action"),
+                "effects": feral_attack_info.get("effects", {})
+            }, entity_id=upload_id)
+
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        new_state, attack_message = check_and_apply_womb_systems(new_state)
+        
+        # Optional: Emit upload.complete event if DB available
         soul_xp_delta = new_state.soul_xp - old_soul_xp
         soul_percent_delta = new_state.soul_percent - old_soul_percent
         
@@ -1769,11 +1809,16 @@ async def upload_clone_endpoint(
                 "soul_percent_delta": soul_percent_delta,
             }, entity_id=clone_id)
 
+        # Phase 6: Include feral attack info if occurred (warning only)
         response_data = {
             "state": game_state_to_dict(new_state),
             "message": message
         }
-        if attack_message:
+        if feral_attack_info:
+            response_data["feral_attack"] = feral_attack_info
+            band = feral_attack_info.get("band", "unknown").upper()
+            response_data["attack_message"] = f"⚠️ FERAL DRONE ATTACK ({band} ALERT): High attention detected during upload - proceed with caution."
+        elif attack_message:
             response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)
