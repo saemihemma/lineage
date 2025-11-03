@@ -166,7 +166,7 @@ export function SimulationScreen() {
     }
 
     // Track all active task IDs
-    const activeTaskIds = Object.keys(state.active_tasks);
+    const activeTaskIds = Object.keys(state.active_tasks || {});
     
     // Initialize progress for new tasks (preserve existing ones to prevent flicker)
     setActiveTaskProgress((prev) => {
@@ -174,7 +174,7 @@ export function SimulationScreen() {
       activeTaskIds.forEach((taskId) => {
         if (!updated[taskId]) {
           // New task - initialize progress
-          const task = state.active_tasks![taskId];
+          const task = (state.active_tasks || {})[taskId];
           updated[taskId] = {
             value: 0,
             label: task.type === 'gather_resource' ? `Gathering ${task.resource}...` : 
@@ -208,7 +208,7 @@ export function SimulationScreen() {
         const updated = { ...prev };
         let allComplete = true;
 
-        for (const [taskId, taskData] of Object.entries(state.active_tasks)) {
+        for (const [taskId, taskData] of Object.entries(state.active_tasks || {})) {
           const startTime = taskData.start_time || 0;
           const duration = taskData.duration || 0;
           
@@ -242,7 +242,7 @@ export function SimulationScreen() {
           }
         }
 
-        if (allComplete && Object.keys(state.active_tasks).length === 0) {
+        if (allComplete && (!state.active_tasks || Object.keys(state.active_tasks).length === 0)) {
           setIsBusy(false);
         }
 

@@ -70,7 +70,7 @@ export class GameAPI {
     throw new Error('State management moved to localStorage. Use loadStateFromLocalStorage() instead.');
   }
 
-  async saveState(state: GameState): Promise<GameState | void> {
+  async saveState(_state: GameState): Promise<GameState | void> {
     console.warn('saveState() called but state is now managed via localStorage');
     throw new Error('State management moved to localStorage. Use saveStateToLocalStorage() instead.');
   }
