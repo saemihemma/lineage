@@ -1364,25 +1364,15 @@ async def run_expedition_endpoint(
     kind: str,
     request: Request,
     state_data: Optional[Dict[str, Any]] = Body(None),
-    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
-    Run an expedition (Mining, Combat, or Exploration) with server-authoritative outcomes.
+    Run an expedition (Mining, Combat, or Exploration).
     State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
-
-    Anti-cheat measures:
-    - Server generates RNG seed from HMAC(session_id, expedition_id, timestamp)
-    - Outcomes are signed with HMAC to prevent tampering
-    - Anomaly detection flags suspicious behavior patterns
+    
+    Works without database - all anti-cheat features are optional.
     """
-    from core.anticheat import (
-        generate_expedition_seed,
-        generate_outcome_signature,
-        check_and_flag_anomaly
-    )
-
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "run_expedition")
 
@@ -1392,40 +1382,29 @@ async def run_expedition_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    # Get state from request body (frontend localStorage) or fallback to default
-    if state_data:
-        try:
-            state = dict_to_game_state(state_data)
-        except Exception as e:
-            logger.error(f"Failed to parse state from request body: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
-    else:
-        logger.warning(f"⚠️ No state provided in request body for run-expedition - using default state")
-        state = load_game_state(db, sid, create_if_missing=True)
-        if state is None:
-            raise HTTPException(
-                status_code=400, 
-                detail="Game state required in request body. Please refresh the page."
-            )
+    # Get state from request body (frontend localStorage)
+    if not state_data:
+        raise HTTPException(
+            status_code=400, 
+            detail="Game state required in request body. Please refresh the page."
+        )
+    
+    try:
+        state = dict_to_game_state(state_data)
+    except Exception as e:
+        logger.error(f"Failed to parse state from request body: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
 
     try:
         # Generate unique expedition ID
         expedition_id = str(uuid.uuid4())
         start_ts = time.time()
 
-        # Emit expedition.start event
-        clone_id = state.applied_clone_id
-        if clone_id:
-            emit_event(db, sid, "expedition.start", {
-                "kind": kind,
-                "clone_id": clone_id,
-                "duration": 0  # Expeditions complete immediately
-            }, entity_id=expedition_id)
-
-        # Run expedition with server-authoritative outcome
+        # Run expedition (no DB required)
         new_state, message = run_expedition(state, kind)
 
         # Get clone that ran expedition
+        clone_id = state.applied_clone_id
         clone_survived = new_state.clones.get(clone_id, None).alive if clone_id and clone_id in new_state.clones else True
 
         # Calculate XP gained and loot (extract from state changes)
@@ -1441,95 +1420,79 @@ async def run_expedition_endpoint(
             if after > before:
                 loot[res] = after - before
 
-        # Create outcome data
-        outcome_data = {
-            "result": "success" if clone_survived else "death",
-            "clone_id": clone_id,
-            "expedition_kind": kind,
-            "loot": loot,
-            "xp_gained": xp_gained,
-            "survived": clone_survived
-        }
-
-        # Generate signature
-        signature = generate_outcome_signature(sid, expedition_id, start_ts, outcome_data)
-
-        # Store outcome in database
-        # Fix: Explicitly cast timestamps to float for PostgreSQL compatibility
-        end_ts = time.time()
-        start_ts_float = float(start_ts)
-        end_ts_float = float(end_ts)
-        
+        # Optional: Emit events if DB is available (doesn't break if unavailable)
         try:
-            execute_query(db, """
-                INSERT INTO expedition_outcomes
-                (id, session_id, expedition_kind, clone_id, start_ts, end_ts, result, loot_json, xp_gained, survived, signature)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                expedition_id,
-                sid,
-                kind,
-                clone_id or "",
-                start_ts_float,  # Explicitly float for PostgreSQL DOUBLE PRECISION
-                end_ts_float,    # Explicitly float for PostgreSQL DOUBLE PRECISION
-                outcome_data["result"],
-                json.dumps(loot),
-                xp_gained,
-                1 if clone_survived else 0,
-                signature
-            ))
-            db.commit()
-        except Exception as db_error:
-            # Critical: Rollback transaction on error to prevent "transaction aborted" cascade
-            try:
-                db.rollback()
-            except Exception as rollback_error:
-                logger.error(f"Failed to rollback transaction: {rollback_error}")
-            logger.error(f"Database error inserting expedition outcome for session {sid[:8]}...: {db_error}")
-            raise
-
-        # Check for anomalies
-        anomaly = check_and_flag_anomaly(sid, "expedition")
-        if anomaly:
-            # Store anomaly flag
-            try:
-                execute_query(db, """
-                    INSERT INTO anomaly_flags (session_id, action_type, anomaly_description, action_rate)
-                    VALUES (?, ?, ?, ?)
-                """, (sid, "expedition", anomaly, 0.0))
-                db.commit()
-                logger.warning(f"🚩 Anomaly flagged for session {sid[:8]}...: {anomaly}")
-            except Exception as db_error:
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                logger.error(f"Failed to store anomaly flag: {db_error}")
-                # Don't fail expedition on anomaly flag error
-
-        # Save state (with autocommit, each statement commits automatically)
-        # save_game_state(db, sid, new_state)  # DEPRECATED: State in localStorage
+            from database import get_db
+            db = get_db()
+        except:
+            db = None
         
-        # Emit expedition.result event
+        if clone_id and db:
+            emit_event(db, sid, "expedition.start", {
+                "kind": kind,
+                "clone_id": clone_id,
+                "duration": 0  # Expeditions complete immediately
+            }, entity_id=expedition_id)
+        
+        # Optional: Store outcome in database (anti-cheat) - skip if DB unavailable
+        signature = None
+        if db:
+            try:
+                from core.anticheat import generate_outcome_signature
+                signature = generate_outcome_signature(sid, expedition_id, start_ts, {
+                    "result": "success" if clone_survived else "death",
+                    "clone_id": clone_id or "",
+                    "expedition_kind": kind,
+                    "loot": loot,
+                    "xp_gained": xp_gained,
+                    "survived": clone_survived
+                })
+                
+                end_ts = time.time()
+                execute_query(db, """
+                    INSERT INTO expedition_outcomes
+                    (id, session_id, expedition_kind, clone_id, start_ts, end_ts, result, loot_json, xp_gained, survived, signature)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    expedition_id,
+                    sid,
+                    kind,
+                    clone_id or "",
+                    float(start_ts),
+                    float(end_ts),
+                    "success" if clone_survived else "death",
+                    json.dumps(loot),
+                    xp_gained,
+                    1 if clone_survived else 0,
+                    signature
+                ))
+                db.commit()
+            except Exception as db_error:
+                # Don't break expedition if DB fails - just log and continue
+                logger.warning(f"Could not store expedition outcome in DB (optional): {db_error}")
+                signature = None  # Reset signature if DB operation failed
+        
+        # Emit expedition.result event (optional)
         clone_xp = {}
         if clone_id and clone_id in new_state.clones:
             clone_xp = new_state.clones[clone_id].xp
         
-        emit_event(db, sid, "expedition.result", {
-            "kind": kind,
-            "clone_id": clone_id or "",
-            "clone_xp": clone_xp,
-            "loot": loot,
-            "message": message,
-            "success": clone_survived,
-            "death": not clone_survived
-        }, entity_id=expedition_id)
+        if db:
+            emit_event(db, sid, "expedition.result", {
+                "kind": kind,
+                "clone_id": clone_id or "",
+                "clone_xp": clone_xp,
+                "loot": loot,
+                "message": message,
+                "success": clone_survived,
+                "death": not clone_survived
+            }, entity_id=expedition_id)
 
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
             "message": message,
             "expedition_id": expedition_id,
-            "signature": signature  # Return signature for client verification (optional)
+            "signature": signature  # Optional - only if DB available
         })
         set_session_cookie(response, sid, "session_id")
         return response
@@ -1544,13 +1507,14 @@ async def upload_clone_endpoint(
     clone_id: str,
     request: Request,
     state_data: Optional[Dict[str, Any]] = Body(None),
-    db: DatabaseConnection = Depends(get_db),
     session_id: Optional[str] = Cookie(None)
 ):
     """
     Upload a clone to SELF.
     State should be provided in request body (localStorage-based).
     Rate limit: 10 requests/minute
+    
+    Works without database - leaderboard submission is optional.
     """
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "upload_clone")
@@ -1561,21 +1525,18 @@ async def upload_clone_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
-    # Get state from request body (frontend localStorage) or fallback to default
-    if state_data:
-        try:
-            state = dict_to_game_state(state_data)
-        except Exception as e:
-            logger.error(f"Failed to parse state from request body: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
-    else:
-        logger.warning(f"⚠️ No state provided in request body for upload-clone - using default state")
-        state = load_game_state(db, sid, create_if_missing=True)
-        if state is None:
-            raise HTTPException(
-                status_code=400, 
-                detail="Game state required in request body. Please refresh the page."
-            )
+    # Get state from request body (frontend localStorage)
+    if not state_data:
+        raise HTTPException(
+            status_code=400, 
+            detail="Game state required in request body. Please refresh the page."
+        )
+    
+    try:
+        state = dict_to_game_state(state_data)
+    except Exception as e:
+        logger.error(f"Failed to parse state from request body: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
 
     try:
         # Calculate soul changes before upload
@@ -1583,16 +1544,23 @@ async def upload_clone_endpoint(
         old_soul_percent = state.soul_percent
         
         new_state, message = upload_clone(state, clone_id)
-        # save_game_state(db, sid, new_state)  # DEPRECATED: State in localStorage
-
-        # Emit upload.complete event
+        
+        # Optional: Emit upload.complete event if DB available
+        try:
+            from database import get_db
+            db = get_db()
+        except:
+            db = None
+        
         soul_xp_delta = new_state.soul_xp - old_soul_xp
         soul_percent_delta = new_state.soul_percent - old_soul_percent
-        emit_event(db, sid, "upload.complete", {
-            "clone_id": clone_id,
-            "soul_xp_delta": soul_xp_delta,
-            "soul_percent_delta": soul_percent_delta,
-        }, entity_id=clone_id)
+        
+        if db:
+            emit_event(db, sid, "upload.complete", {
+                "clone_id": clone_id,
+                "soul_xp_delta": soul_xp_delta,
+                "soul_percent_delta": soul_percent_delta,
+            }, entity_id=clone_id)
 
         response = JSONResponse(content={
             "state": game_state_to_dict(new_state),
