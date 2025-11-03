@@ -932,7 +932,17 @@ async def get_task_status(
     state = load_game_state(db, sid, create_if_missing=True)
 
     if state is None or not state.active_tasks:
-        return JSONResponse(content={"active": False, "task": None, "tasks": []})
+        # Still set cookie even when no active tasks
+        response = JSONResponse(content={"active": False, "task": None, "tasks": []})
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
+        return response
 
     current_time = time.time()
     tasks_info = []
@@ -1012,12 +1022,22 @@ async def get_task_status(
     # Return primary task (first one) for backward compatibility, plus all tasks
     primary_task = tasks_info[0] if tasks_info else None
     
-    return JSONResponse(content={
+    response = JSONResponse(content={
         "active": len(tasks_info) > 0,
         "task": primary_task,  # Primary task for backward compatibility
         "tasks": tasks_info,   # All active tasks
         "completed": len(completed_tasks) > 0
     })
+    # Always set session cookie to ensure persistence
+    response.set_cookie(
+        key="session_id",
+        value=sid,
+        httponly=True,
+        samesite="lax",
+        secure=IS_PRODUCTION,
+        max_age=SESSION_EXPIRY
+    )
+    return response
 
 
 @router.post("/state")
@@ -1792,10 +1812,29 @@ async def get_events_feed(
         if_none_match = request.headers.get("If-None-Match")
         if if_none_match and if_none_match.strip('"') == etag_value.strip('"'):
             # No changes, return 304
-            return Response(status_code=304, headers={"ETag": etag_value})
+            # Still set cookie even for 304 responses
+            response = Response(status_code=304, headers={"ETag": etag_value})
+            response.set_cookie(
+                key="session_id",
+                value=sid,
+                httponly=True,
+                samesite="lax",
+                secure=IS_PRODUCTION,
+                max_age=SESSION_EXPIRY
+            )
+            return response
         
         response = JSONResponse(content=events)
         response.headers["ETag"] = etag_value
+        # Always set session cookie to ensure persistence
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
         return response
         
     except Exception as e:
@@ -1871,11 +1910,21 @@ async def get_limits_status(
         "reset_at": int(earliest_reset)
     }
     
-    return JSONResponse(content={
+    response = JSONResponse(content={
         "window_seconds": window_seconds,
         "now": int(now),
         "endpoints": endpoint_status
     })
+    # Always set session cookie to ensure persistence
+    response.set_cookie(
+        key="session_id",
+        value=sid,
+        httponly=True,
+        samesite="lax",
+        secure=IS_PRODUCTION,
+        max_age=SESSION_EXPIRY
+    )
+    return response
 
 
 @router.get("/time")
