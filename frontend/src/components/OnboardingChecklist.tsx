@@ -86,7 +86,8 @@ export function OnboardingChecklist({ state }: OnboardingChecklistProps) {
     return !isCompleted;
   });
 
-  const allCompleted = currentStepIndex === -1;
+  // allCompleted check removed - not currently used (kept for potential future use)
+  // const allCompleted = currentStepIndex === -1;
 
   // Always show the checklist, even when all steps are completed
   // Users should be able to see what they've accomplished

@@ -297,15 +297,16 @@ export function SimulationScreen() {
   // Check if FTUE is complete (for auto-collapse)
   // Guard against null state - calculate only when state exists
   // MUST BE BEFORE EARLY RETURNS to maintain hook order
-  const ftueComplete = useMemo(() => {
-    if (!state) return false;
-    return !!(
-      state.ftue?.step_build_womb && 
-      state.ftue?.step_grow_clone && 
-      (state.applied_clone_id && state.applied_clone_id in (state.clones || {})) &&
-      state.ftue?.step_first_expedition
-    );
-  }, [state]);
+  // Note: Currently unused - auto-collapse was removed, but keeping for potential future use
+  // const ftueComplete = useMemo(() => {
+  //   if (!state) return false;
+  //   return !!(
+  //     state.ftue?.step_build_womb && 
+  //     state.ftue?.step_grow_clone && 
+  //     (state.applied_clone_id && state.applied_clone_id in (state.clones || {})) &&
+  //     state.ftue?.step_first_expedition
+  //   );
+  // }, [state]);
 
   // Keep FTUE panel open even when complete - users should see their progress
   // Removed auto-collapse so checklist stays visible
