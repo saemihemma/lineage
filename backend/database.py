@@ -236,11 +236,39 @@ class PostgreSQLAdapter(DatabaseAdapter):
         try:
             import psycopg2
             from psycopg2.extras import RealDictCursor
+            from psycopg2.extensions import STATUS_READY, STATUS_IN_TRANSACTION
         except ImportError:
             raise ImportError(
                 "psycopg2-binary is required for PostgreSQL support. "
                 "Install it with: pip install psycopg2-binary"
             )
+        
+        # Always ensure autocommit is enabled and connection is healthy
+        if self.conn is not None:
+            # Check if connection is in a bad state
+            try:
+                status = self.conn.status
+                # If in transaction (shouldn't happen with autocommit, but check anyway)
+                # or connection is closed (status < 0), recreate it
+                if status < 0 or (status == STATUS_IN_TRANSACTION):
+                    # Connection is bad or in a transaction state, close and recreate
+                    try:
+                        self.conn.close()
+                    except Exception:
+                        pass
+                    self.conn = None
+                elif status == STATUS_READY:
+                    # Connection is healthy, but ensure autocommit is still enabled
+                    # (it might have been disabled or connection was reused from before fix)
+                    if not self.conn.autocommit:
+                        self.conn.autocommit = True
+            except Exception:
+                # Connection is in error state, close and recreate
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
+                self.conn = None
         
         if self.conn is None:
             self.conn = psycopg2.connect(
@@ -252,14 +280,6 @@ class PostgreSQLAdapter(DatabaseAdapter):
             # For multi-query operations that need transactions, we'll use explicit BEGIN/COMMIT
             self.conn.autocommit = True
             self.init_schema(self.conn)
-        
-        # Ensure connection is in a clean state (handle any lingering transaction errors)
-        try:
-            if self.conn.status != psycopg2.extensions.STATUS_READY:
-                # Connection is in a bad state, reset it
-                self.conn.rollback()
-        except Exception:
-            pass
         
         return self.conn
     
