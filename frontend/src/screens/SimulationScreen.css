@@ -53,6 +53,7 @@
   border: 1px solid #1f252a;
   border-radius: 3px;
   overflow: hidden;
+  min-width: 120px; /* Ensure it's always visible */
 }
 
 .attention-fill {
@@ -60,6 +61,7 @@
   top: 0;
   left: 0;
   height: 100%;
+  min-width: 2px; /* Ensure fill is visible even at 0% */
   transition: width 0.3s ease, background 0.3s ease;
 }
 
@@ -253,8 +255,37 @@
 }
 
 .self-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-size: 14px;
   color: #cccccc;
+}
+
+.pray-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 1px solid #555;
+  color: #ffffff;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.pray-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c8ef5 0%, #8a5fb8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.pray-button:disabled {
+  background: #2a2a2a;
+  color: #888;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .topbar-actions {

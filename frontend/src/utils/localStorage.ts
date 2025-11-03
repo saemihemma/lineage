@@ -93,6 +93,9 @@ export function loadStateFromLocalStorage(): GameState | null {
     if (!parsed.clones) parsed.clones = {};
     if (!parsed.active_tasks) parsed.active_tasks = {};
     if (!parsed.ui_layout) parsed.ui_layout = {};
+    if (typeof parsed.global_attention !== 'number') {
+      parsed.global_attention = 0.0;  // Initialize global attention if missing (for old saves)
+    }
     if (!parsed.resources) {
       parsed.resources = {
         "Tritanium": 60,
