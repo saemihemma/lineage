@@ -21,6 +21,12 @@ export interface PanelState {
     progress: boolean;
     self: boolean;
   };
+  bottomLeftOpen: {
+    costs: boolean;
+  };
+  bottomRightOpen: {
+    gather: boolean;
+  };
   terminalOpen: boolean;
 }
 
@@ -39,13 +45,19 @@ const DEFAULT_STATE: PanelState = {
     progress: false,     // Collapsed (auto-expands when task starts)
     self: true,
   },
+  bottomLeftOpen: {
+    costs: true,
+  },
+  bottomRightOpen: {
+    gather: true,
+  },
   terminalOpen: true,
 };
 
 interface PanelStateContextType {
   state: PanelState;
-  togglePanel: (category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen', id: string) => void;
-  setPanelOpen: (category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen', id: string, open: boolean) => void;
+  togglePanel: (category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'bottomLeftOpen' | 'bottomRightOpen' | 'terminalOpen', id: string) => void;
+  setPanelOpen: (category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'bottomLeftOpen' | 'bottomRightOpen' | 'terminalOpen', id: string, open: boolean) => void;
   resetToDefaults: () => void;
 }
 
@@ -71,6 +83,8 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
           leftOpen: { ...DEFAULT_STATE.leftOpen, ...(parsed.leftOpen || {}) },
           centerOpen: { ...DEFAULT_STATE.centerOpen, ...(parsed.centerOpen || {}) },
           rightOpen: { ...DEFAULT_STATE.rightOpen, ...(parsed.rightOpen || {}) },
+          bottomLeftOpen: { ...DEFAULT_STATE.bottomLeftOpen, ...(parsed.bottomLeftOpen || {}) },
+          bottomRightOpen: { ...DEFAULT_STATE.bottomRightOpen, ...(parsed.bottomRightOpen || {}) },
         };
         // Remove sizes property if it exists (migration)
         if ('sizes' in mergedState) {
@@ -117,7 +131,7 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
     }
   }, [state]);
 
-  const togglePanel = useCallback((category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen', id: string) => {
+  const togglePanel = useCallback((category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'bottomLeftOpen' | 'bottomRightOpen' | 'terminalOpen', id: string) => {
     setState((prev) => {
       if (category === 'terminalOpen') {
         return { ...prev, terminalOpen: !prev.terminalOpen };
@@ -132,7 +146,7 @@ export function PanelStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const setPanelOpen = useCallback((category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen', id: string, open: boolean) => {
+  const setPanelOpen = useCallback((category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'bottomLeftOpen' | 'bottomRightOpen' | 'terminalOpen', id: string, open: boolean) => {
     setState((prev) => {
       if (category === 'terminalOpen') {
         return { ...prev, terminalOpen: open };

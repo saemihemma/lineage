@@ -19,7 +19,7 @@
   grid-template-rows: 1fr 30%;
   grid-template-areas:
     "left center right"
-    "bottom bottom bottom";
+    "bottom-left bottom bottom-right";
   flex: 1;
   min-height: 0;
   min-width: 1200px; /* Prevent squishing on small screens */
@@ -42,9 +42,19 @@
   overflow: auto;
 }
 
+.mission-control-bottom-left {
+  grid-area: bottom-left;
+  overflow: auto;
+}
+
 .mission-control-terminal {
   grid-area: bottom;
   overflow: hidden;
+}
+
+.mission-control-bottom-right {
+  grid-area: bottom-right;
+  overflow: auto;
 }
 
 /* Preserve existing flexbox styles as fallback */

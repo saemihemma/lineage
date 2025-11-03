@@ -8,7 +8,7 @@ import './CollapsiblePanel.css';
 
 interface CollapsiblePanelProps {
   id: string;
-  category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'terminalOpen';
+  category: 'leftOpen' | 'centerOpen' | 'rightOpen' | 'bottomLeftOpen' | 'bottomRightOpen' | 'terminalOpen';
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;

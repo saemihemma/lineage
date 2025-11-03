@@ -22,7 +22,6 @@ import { WombsPanel } from '../components/WombsPanel';
 import { FacilitiesPanel } from '../components/FacilitiesPanel';
 import { MissionControlLayout } from '../components/MissionControlLayout';
 import { CollapsiblePanel } from '../components/CollapsiblePanel';
-import { ExpeditionPanel } from '../components/ExpeditionPanel';
 import { usePanelState } from '../stores/usePanelState';
 import type { GameState } from '../types/game';
 import { hasWomb, getWombCount, getUnlockedWombCount, getAverageAttentionPercent } from '../utils/wombs';
@@ -662,44 +661,10 @@ export function SimulationScreen() {
             title="Clones"
             defaultOpen={true}
           >
-            <ClonesPanel 
+            <ClonesPanel
               clones={state.clones}
               selectedId={selectedCloneId}
               onSelect={setSelectedCloneId}
-            />
-          </CollapsiblePanel>
-          
-          <CollapsiblePanel
-            id="expeditions"
-            category="centerOpen"
-            title="Expeditions"
-            defaultOpen={true}
-          >
-            <ExpeditionPanel 
-              state={state}
-              onRunExpedition={handleRunExpedition}
-              disabled={isBusy}
-            />
-          </CollapsiblePanel>
-          
-          <CollapsiblePanel
-            id="costs"
-            category="centerOpen"
-            title="Costs"
-            defaultOpen={true}
-          >
-            <CostsPanel state={state} />
-          </CollapsiblePanel>
-          
-          <CollapsiblePanel
-            id="gather"
-            category="centerOpen"
-            title="Gather Resources"
-            defaultOpen={true}
-          >
-            <GatherPanel 
-              onGather={handleGatherResource}
-              disabled={isBusy}
             />
           </CollapsiblePanel>
         </div>
@@ -744,7 +709,18 @@ export function SimulationScreen() {
           </CollapsiblePanel>
         </div>
 
-        {/* Terminal (Bottom) */}
+        {/* Bottom Row (3 columns) */}
+        <div className="mission-control-bottom-left">
+          <CollapsiblePanel
+            id="costs"
+            category="bottomLeftOpen"
+            title="Costs"
+            defaultOpen={true}
+          >
+            <CostsPanel state={state} />
+          </CollapsiblePanel>
+        </div>
+
         <div className="mission-control-terminal">
           <CollapsiblePanel
             id="terminal"
@@ -754,6 +730,20 @@ export function SimulationScreen() {
             className="terminal-panel"
           >
             <TerminalPanel messages={terminalMessages} />
+          </CollapsiblePanel>
+        </div>
+
+        <div className="mission-control-bottom-right">
+          <CollapsiblePanel
+            id="gather"
+            category="bottomRightOpen"
+            title="Gather Resources"
+            defaultOpen={true}
+          >
+            <GatherPanel
+              onGather={handleGatherResource}
+              disabled={isBusy}
+            />
           </CollapsiblePanel>
         </div>
       </MissionControlLayout>
