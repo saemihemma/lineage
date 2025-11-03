@@ -551,7 +551,7 @@ export function SimulationScreen() {
         <div className="topbar-center">
           <FuelBar />
           <div className="attention-bar">
-            <span className="attention-label">Attention</span>
+            <span className="attention-label">Global Attention</span>
             <div className="attention-progress">
               <div 
                 className={`attention-fill ${

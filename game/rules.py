@@ -112,18 +112,19 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
             f"Requires Constructive practice level {required_level} (current: {current_level})."
         )
     
-    # Check if womb is available (using new womb system or fallback to assembler_built)
-    if not check_womb_available(state) and not state.assembler_built:
-        raise RuntimeError("Build the Womb first.")
+    # Check if womb is available (using new womb system)
+    if not check_womb_available(state):
+        # Check if we have wombs but they're all broken
+        if state.wombs and len(state.wombs) > 0:
+            raise RuntimeError("No functional wombs available. Repair or build a new womb first.")
+        else:
+            raise RuntimeError("Build the Womb first.")
     
     # Check if active womb is functional (attention is now global, not per-womb)
     active_womb = find_active_womb(state)
     if not active_womb:
-        # If we have assembler_built but no functional wombs, the wombs are broken
-        if state.assembler_built or state.wombs:
-            raise RuntimeError("No functional wombs available. Repair or build a new womb first.")
-        else:
-            raise RuntimeError("Build the Womb first.")
+        # Should not reach here if check_womb_available passed, but safety check
+        raise RuntimeError("No functional wombs available. Repair or build a new womb first.")
     
     # Womb must be functional (durability > 0)
     if not active_womb.is_functional():

@@ -758,7 +758,7 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                 # Phase 1: Re-validate womb availability before creating clone
                 # This prevents clone creation if womb was destroyed during task duration
                 from game.wombs import check_womb_available
-                if not check_womb_available(new_state) and not new_state.assembler_built:
+                if not check_womb_available(new_state):
                     # Womb no longer available - cancel clone creation
                     logger.warning(f"⚠️ Grow clone task {task_id} cancelled: no functional womb available")
                     task_data['completion_message'] = "Clone growth cancelled: no functional womb available. Please repair or build a womb."
