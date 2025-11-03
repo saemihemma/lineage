@@ -1003,8 +1003,10 @@ async def get_game_state(
                         emit_event(db, sid, "clone.grow.complete", {
                             "clone": completed_clone
                         }, entity_id=completed_clone.get("id"))
-        
-        save_game_state(db, sid, state)
+    elif new_womb_count != old_womb_count:
+        # Wombs changed but tasks didn't (edge case - should save anyway)
+        logger.warning(f"⚠️ Wombs changed ({old_womb_count} → {new_womb_count}) but active_tasks unchanged - saving anyway")
+        save_game_state(db, session_id, state)
 
     # Generate CSRF token for this session
     csrf_token = generate_csrf_cookie_value(sid)
