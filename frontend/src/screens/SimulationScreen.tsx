@@ -298,6 +298,47 @@ export function SimulationScreen() {
     }
   }, [state, getCompletedTaskMessages, addTerminalMessage, setSelectedCloneId]);
 
+  // Check if FTUE is complete (for auto-collapse)
+  // Guard against null state - calculate only when state exists
+  // MUST BE BEFORE EARLY RETURNS to maintain hook order
+  const ftueComplete = useMemo(() => {
+    if (!state) return false;
+    return !!(
+      state.ftue?.step_build_womb && 
+      state.ftue?.step_grow_clone && 
+      (state.applied_clone_id && state.applied_clone_id in (state.clones || {})) &&
+      state.ftue?.step_first_expedition
+    );
+  }, [state]);
+
+  // Auto-collapse FTUE when complete - MUST BE BEFORE EARLY RETURNS
+  useEffect(() => {
+    if (ftueComplete) {
+      setPanelOpen('leftOpen', 'ftue', false);
+    }
+  }, [ftueComplete, setPanelOpen]);
+
+  // Auto-expand Progress when tasks start - MUST BE BEFORE EARLY RETURNS
+  useEffect(() => {
+    const tasks = state?.active_tasks ?? EMPTY_TASKS;
+    if (tasks && Object.keys(tasks).length > 0) {
+      setPanelOpen('rightOpen', 'progress', true);
+    }
+  }, [activeTasksVersion, state, setPanelOpen, EMPTY_TASKS]);
+
+  // Keyboard shortcut: Ctrl+/ or F12 toggles Terminal - MUST BE BEFORE EARLY RETURNS
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey && e.key === '/') || e.key === 'F12') {
+        e.preventDefault();
+        togglePanel('terminalOpen', 'terminal');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePanel]);
+
   const handleAction = async (action: () => Promise<any>, actionName: string, allowDuringTasks: boolean = false) => {
     // Expeditions and immediate actions can run during gathering tasks
     // But still prevent duplicate requests for the same action type
@@ -561,40 +602,6 @@ export function SimulationScreen() {
         </div>
       </div>
   );
-
-  // Check if FTUE is complete (for auto-collapse)
-  const ftueComplete = state.ftue?.step_build_womb && 
-    state.ftue?.step_grow_clone && 
-    (state.applied_clone_id && state.applied_clone_id in state.clones) &&
-    state.ftue?.step_first_expedition;
-
-  // Auto-collapse FTUE when complete
-  useEffect(() => {
-    if (ftueComplete) {
-      setPanelOpen('leftOpen', 'ftue', false);
-    }
-  }, [ftueComplete, setPanelOpen]);
-
-  // Auto-expand Progress when tasks start
-  useEffect(() => {
-    const tasks = state?.active_tasks ?? EMPTY_TASKS;
-    if (tasks && Object.keys(tasks).length > 0) {
-      setPanelOpen('rightOpen', 'progress', true);
-    }
-  }, [activeTasksVersion, state, setPanelOpen, EMPTY_TASKS]);
-
-  // Keyboard shortcut: Ctrl+/ or F12 toggles Terminal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey && e.key === '/') || e.key === 'F12') {
-        e.preventDefault();
-        togglePanel('terminalOpen', 'terminal');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePanel]);
 
   return (
     <div className="simulation-screen">
