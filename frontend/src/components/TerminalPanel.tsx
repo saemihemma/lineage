@@ -23,13 +23,19 @@ export function TerminalPanel({ messages }: TerminalPanelProps) {
           <div className="terminal-empty">No messages yet...</div>
         ) : (
           <div className="terminal-messages">
-            {messages.map((message, index) => (
-              <div key={index} className="terminal-message">
-                {message.split('\n').map((line, lineIndex) => (
-                  <div key={lineIndex}>{line}</div>
-                ))}
-              </div>
-            ))}
+            {messages.map((message, index) => {
+              const isFeralAttack = message.includes('FERAL DRONE ATTACK');
+              return (
+                <div 
+                  key={index} 
+                  className={`terminal-message ${isFeralAttack ? 'terminal-message-feral' : ''}`}
+                >
+                  {message.split('\n').map((line, lineIndex) => (
+                    <div key={lineIndex}>{line}</div>
+                  ))}
+                </div>
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}

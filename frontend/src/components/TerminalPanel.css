@@ -36,6 +36,10 @@
   padding: 2px 0;
 }
 
+.terminal-message-feral {
+  color: #f44336; /* Red color for feral drone attacks */
+}
+
 .terminal-empty {
   padding: 20px;
   text-align: center;
