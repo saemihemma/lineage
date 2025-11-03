@@ -1386,14 +1386,7 @@ async def build_womb_endpoint(
             "message": message,
             "task_id": task_id
         })
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
