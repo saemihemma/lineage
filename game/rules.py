@@ -202,9 +202,68 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
             new_state.resources["Shilajit"] = new_state.resources.get("Shilajit", 0) + 1
             shilajit_found = True
     
-    # Check for clone death (12% probability)
+    # Calculate death probability based on clone traits, XP, and mission compatibility
+    def calculate_death_probability(clone, expedition_kind: str, base_prob: float) -> float:
+        """
+        Calculate adjusted death probability based on:
+        - Clone XP (higher XP = lower death chance)
+        - Clone kind vs expedition compatibility
+        - Clone traits (ELK reduces, FRK increases, DLT helps with incompatible missions)
+        """
+        prob = base_prob
+        
+        # XP reduces death chance (each 100 XP = -2% death probability, capped at -10%)
+        total_xp = clone.total_xp()
+        xp_reduction = min(0.10, total_xp / 100.0 * 0.02)
+        prob -= xp_reduction
+        
+        # Clone kind vs expedition compatibility
+        if expedition_kind == "MINING" and clone.kind == "MINER":
+            prob *= 0.5  # MINER on MINING = 50% safer
+        elif expedition_kind == "COMBAT" and clone.kind == "VOLATILE":
+            prob *= 0.6  # VOLATILE on COMBAT = 40% safer
+        elif expedition_kind == "EXPLORATION" and clone.kind == "BASIC":
+            prob *= 0.8  # BASIC slightly better for EXPLORATION
+        
+        # Incompatible missions are more dangerous
+        incompatible = False
+        if expedition_kind == "MINING" and clone.kind == "VOLATILE":
+            prob *= 1.5  # VOLATILE on MINING = 50% more dangerous
+            incompatible = True
+        elif expedition_kind == "COMBAT" and clone.kind == "MINER":
+            prob *= 1.3  # MINER on COMBAT = 30% more dangerous
+            incompatible = True
+        
+        # Trait effects
+        traits = clone.traits or {}
+        elk = traits.get("ELK", 5)  # Entropic Luck (default 5 = neutral)
+        frk = traits.get("FRK", 5)  # Feralization Risk (default 5 = neutral)
+        dlt = traits.get("DLT", 5)  # Differential-Drift Tolerance (default 5 = neutral)
+        
+        # ELK reduces death (each point above 5 = -1% probability)
+        elk_bonus = (elk - 5) / 100.0  # Range: -5% to +5%
+        prob -= elk_bonus
+        
+        # FRK increases death (each point above 5 = +1% probability)
+        frk_penalty = (frk - 5) / 100.0  # Range: -5% to +5%
+        prob += frk_penalty
+        
+        # DLT helps with incompatible missions (reduces penalty)
+        if incompatible:
+            dlt_bonus = (dlt - 5) / 200.0  # Range: -2.5% to +2.5%
+            prob -= dlt_bonus
+        
+        # Clamp probability between 0.5% and 50%
+        prob = max(0.005, min(0.50, prob))
+        
+        return prob
+    
+    # Calculate adjusted death probability
+    adjusted_death_prob = calculate_death_probability(new_clone, kind, CONFIG["DEATH_PROB"])
+    
+    # Check for clone death with adjusted probability
     death_roll = state.rng.random()
-    if death_roll < CONFIG["DEATH_PROB"]:
+    if death_roll < adjusted_death_prob:
         frac = state.rng.uniform(0.25, 0.75)
         for k in new_clone.xp:
             new_clone.xp[k] = int(new_clone.xp[k] * (1.0 - frac))
