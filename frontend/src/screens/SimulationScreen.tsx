@@ -695,7 +695,7 @@ export function SimulationScreen() {
             defaultOpen={true}
           >
             <CloneDetailsPanel 
-              clone={selectedCloneId ? state.clones[selectedCloneId] : null}
+              clone={selectedCloneId ? state.clones?.[selectedCloneId] : null}
               appliedCloneId={state.applied_clone_id || null}
               onApply={() => selectedCloneId && handleApplyClone(selectedCloneId)}
               onUpload={() => selectedCloneId && handleUploadClone(selectedCloneId)}
