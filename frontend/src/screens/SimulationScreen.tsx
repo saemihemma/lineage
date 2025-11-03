@@ -83,10 +83,10 @@ export function SimulationScreen() {
   // Tasks complete client-side now, so event feed is redundant
   // Keeping the hook setup but not starting polling to avoid unnecessary API calls
   const {
-    startPolling,
-    stopPolling,
-    resumePolling,
-    reset: resetEventFeed,
+    // startPolling,
+    // stopPolling,
+    // resumePolling,
+    // reset: resetEventFeed,
   } = useEventFeed({
     interval: 1200, // 1.2 seconds
     currentState: state,
