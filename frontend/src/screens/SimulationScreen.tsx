@@ -324,10 +324,10 @@ export function SimulationScreen() {
     }
   }, [activeTasksVersion, state, setPanelOpen]);
 
-  // Keyboard shortcut: Ctrl+/ or F12 toggles Terminal - MUST BE BEFORE EARLY RETURNS
+  // Keyboard shortcut: Ctrl+/ toggles Terminal - MUST BE BEFORE EARLY RETURNS
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey && e.key === '/') || e.key === 'F12') {
+      if (e.ctrlKey && e.key === '/') {
         e.preventDefault();
         togglePanel('terminalOpen', 'terminal');
       }
