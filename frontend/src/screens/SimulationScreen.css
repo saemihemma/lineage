@@ -153,7 +153,7 @@
   min-height: 0;
 }
 
-/* Right column: Clone Details fills space, SELF & Practices at bottom */
+/* Right column: Clone Details fills space, SELF & Practices in middle, Gather at bottom */
 .mission-control-right {
   display: flex;
   flex-direction: column;
@@ -176,19 +176,15 @@
 
 .mission-control-right #self {
   flex: 0 0 auto;
-  margin-top: auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  /* Match gather resources height (160px) so bottoms align */
-  height: 160px;
-  max-height: 160px;
+  /* Natural height, positioned between Clone Details and Gather */
 }
 
 .mission-control-right #self .collapsible-panel-content {
   overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  max-height: 250px;
 }
 
 /* Bottom right: Gather resources - fixed compact size, positioned at bottom */

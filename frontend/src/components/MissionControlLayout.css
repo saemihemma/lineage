@@ -43,7 +43,6 @@
 
 .mission-control-right {
   grid-area: right;
-  grid-row: 1 / -1; /* Span both rows so SELF can align with gather */
   overflow: hidden;
   display: flex;
   flex-direction: column;
