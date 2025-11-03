@@ -383,6 +383,11 @@ def check_and_complete_tasks(state: GameState) -> GameState:
                     from core.game_logic import award_practice_xp
                     award_practice_xp(new_state, "Kinetic", 2)
                     
+                    # Phase 1: Gain attention on gathering completion (rate-limited action)
+                    # Gathering does NOT require womb, but raises attention when rate-limited
+                    from game.wombs import gain_attention
+                    new_state = gain_attention(new_state)
+                    
                     # Store completion message in task data for frontend to retrieve
                     if resource == "Shilajit":
                         task_data['completion_message'] = f"Shilajit sample extracted. Resource +1. Total: {new_total}"
@@ -435,39 +440,60 @@ def check_and_complete_tasks(state: GameState) -> GameState:
             
             # Create clone if this was a grow_clone task
             if task_type == "grow_clone":
-                from core.models import Clone
-                clone_data = task_data.get('pending_clone_data')
-                if clone_data:
-                    # Set creation timestamp
-                    clone_data['created_at'] = current_time
-                    # Create clone and add to state
-                    clone = Clone(
-                        id=clone_data["id"],
-                        kind=clone_data["kind"],
-                        traits=clone_data["traits"],
-                        xp=clone_data["xp"],
-                        survived_runs=clone_data.get("survived_runs", 0),
-                        alive=clone_data.get("alive", True),
-                        uploaded=clone_data.get("uploaded", False),
-                        created_at=clone_data["created_at"]
-                    )
-                    new_state.clones[clone.id] = clone
-                    # Store completion message
-                    task_data['completion_message'] = f"{clone_data['kind']} clone grown successfully. id={clone.id}"
-                    
-                    # Store clone data in task_data for event emission later
-                    task_data['completed_clone'] = {
-                        "id": clone.id,
-                        "kind": clone.kind,
-                        "xp": clone.xp,
-                        "created_at": clone.created_at
-                    }
+                # Phase 1: Re-validate womb availability before creating clone
+                # This prevents clone creation if womb was destroyed during task duration
+                from game.wombs import check_womb_available
+                if not check_womb_available(new_state) and not new_state.assembler_built:
+                    # Womb no longer available - cancel clone creation
+                    logger.warning(f"⚠️ Grow clone task {task_id} cancelled: no functional womb available")
+                    task_data['completion_message'] = "Clone growth cancelled: no functional womb available. Please repair or build a womb."
+                    # Still mark task as completed but without creating clone
+                else:
+                    from core.models import Clone
+                    clone_data = task_data.get('pending_clone_data')
+                    if clone_data:
+                        # Set creation timestamp
+                        clone_data['created_at'] = current_time
+                        # Create clone and add to state
+                        clone = Clone(
+                            id=clone_data["id"],
+                            kind=clone_data["kind"],
+                            traits=clone_data["traits"],
+                            xp=clone_data["xp"],
+                            survived_runs=clone_data.get("survived_runs", 0),
+                            alive=clone_data.get("alive", True),
+                            uploaded=clone_data.get("uploaded", False),
+                            created_at=clone_data["created_at"]
+                        )
+                        new_state.clones[clone.id] = clone
+                        # Store completion message
+                        task_data['completion_message'] = f"{clone_data['kind']} clone grown successfully. id={clone.id}"
+                        
+                        # Store clone data in task_data for event emission later
+                        task_data['completed_clone'] = {
+                            "id": clone.id,
+                            "kind": clone.kind,
+                            "xp": clone.xp,
+                            "created_at": clone.created_at
+                        }
             
             completed_tasks.append((task_id, task_type, task_data))
             del new_state.active_tasks[task_id]
             logger.info(f"🗑️ Removed completed task {task_id} ({task_type}) from active_tasks. Remaining: {len(new_state.active_tasks)}")
     
+    # Phase 1: Apply womb systems after all task completions
+    # This ensures attacks can happen when tasks finish, and events are emitted through same path
     if completed_tasks:
+        from game.wombs import check_and_apply_womb_systems
+        new_state, attack_message = check_and_apply_womb_systems(new_state)
+        
+        # Store attack message in task data if it occurred (for event emission)
+        if attack_message:
+            # Store in the most recent completed task for event emission
+            if completed_tasks:
+                task_id, task_type, task_data = completed_tasks[-1]
+                task_data['attack_message'] = attack_message
+        
         logger.info(f"✅ check_and_complete_tasks: Completed {len(completed_tasks)} task(s): {[t[1] for t in completed_tasks]}")
     else:
         logger.debug(f"ℹ️ check_and_complete_tasks: No tasks completed")
@@ -1117,6 +1143,10 @@ async def gather_resource_endpoint(
 
     # Note: Task conflict checking is now done in start_task()
     # Gathering can run alongside expeditions, but blocks on build/grow tasks
+    #
+    # Phase 1: Explicit design decision - gathering does NOT require womb.
+    # Players can gather resources even with no wombs or all wombs destroyed.
+    # However, gathering is rate-limited and raises attention when completed (rate limit = attention trigger).
 
     try:
         # Calculate gather amount now (but don't apply until task completes)
