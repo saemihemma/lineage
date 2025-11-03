@@ -6,18 +6,16 @@ import type { GameState, Womb, Clone } from '../types/game';
 
 // Constants from CONFIG
 const WOMB_MAX_DURABILITY = 100.0;
-const WOMB_MAX_ATTENTION = 100.0;
 
 /**
- * Create a new womb with max durability and attention
+ * Create a new womb with max durability (attention is now global, not per-womb)
  */
 function createWomb(wombId: number): Womb {
   return {
     id: wombId,
     durability: WOMB_MAX_DURABILITY,
-    attention: WOMB_MAX_ATTENTION,
     max_durability: WOMB_MAX_DURABILITY,
-    max_attention: WOMB_MAX_ATTENTION,
+    // Note: attention is now global (stored in GameState.global_attention), not per-womb
   };
 }
 
