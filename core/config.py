@@ -1,13 +1,27 @@
 """Game configuration constants"""
 import json
+import logging
 from pathlib import Path
-from data.loader import load_data
+
+logger = logging.getLogger(__name__)
+
+# CRITICAL: Define these at module level BEFORE any execution
+# This ensures they're always visible during import, even if loading fails
+GAMEPLAY_CONFIG = {"config_version": "systems_v1_fallback"}
+GAMEPLAY_CONFIG_VERSION = "systems_v1_fallback"
 
 # Resource types (order matters for UI display)
 RESOURCE_TYPES = ["Tritanium", "Metal Ore", "Biomass", "Synthetic", "Organic", "Shilajit"]
 
 # Load data from JSON files (with fallback to hardcoded CONFIG)
-_loaded_data = load_data()
+# Wrap in try-except to ensure module always loads, even if config files are missing
+try:
+    from data.loader import load_data
+    _loaded_data = load_data()
+except Exception as e:
+    logger.error(f"Failed to load data files: {e}", exc_info=True)
+    _loaded_data = {}
+    # Don't re-raise - module must complete
 
 # Build CONFIG dict with data from JSON files (fallback to defaults)
 _clones_data = _loaded_data.get("clones", {})
@@ -44,9 +58,31 @@ _death_prob = _expeditions_data.get("death_probability", 0.12)
 _womb_config_data = _loaded_data.get("womb_config", {}).get("womb_config", {})
 _womb_attention = _womb_config_data.get("attention", {})
 
-# Phase 3: Load outcomes config from JSON
+# Phase 3: Load outcomes config from JSON (DEPRECATED - kept for backward compat)
 _outcomes_config = _loaded_data.get("outcomes_config", {})
 OUTCOMES_CONFIG_VERSION = _outcomes_config.get("config_version", "legacy")
+
+# Systems v1: Load gameplay config from config/gameplay.json
+# Lazy load gameplay config - called after module variables are defined
+def _load_gameplay_config():
+    """Load gameplay config - updates GAMEPLAY_CONFIG if file is found"""
+    global GAMEPLAY_CONFIG, GAMEPLAY_CONFIG_VERSION
+    try:
+        _gameplay_config = _loaded_data.get("gameplay", {})
+        if _gameplay_config:
+            # Update the dict in place to preserve the reference
+            GAMEPLAY_CONFIG.clear()
+            GAMEPLAY_CONFIG.update(_gameplay_config)
+            GAMEPLAY_CONFIG_VERSION = _gameplay_config.get("config_version", "systems_v1")
+            logger.info(f"Loaded gameplay config version: {GAMEPLAY_CONFIG_VERSION}")
+        else:
+            logger.critical("gameplay.json not found or empty! Using fallback config. Check config/gameplay.json exists.")
+    except Exception as e:
+        logger.critical(f"Failed to load gameplay config: {e}. Using fallback config.", exc_info=True)
+
+# Call immediately but after GAMEPLAY_CONFIG is defined
+_load_gameplay_config()
+
 _womb_attacks = _womb_config_data.get("feral_drone_attacks", {})
 _womb_repair = _womb_config_data.get("repair", {})
 _womb_synergies = _womb_config_data.get("synergies", {})
@@ -136,6 +172,6 @@ CONFIG = {
     "WOMB_SYNERGY_THRESHOLD": _womb_synergies.get("threshold", 3),
 }
 
-# Phase 3: Export outcomes config for outcome engine
-OUTCOMES_CONFIG = _outcomes_config  # Full outcomes config dict
+# Phase 3: Export outcomes config for outcome engine (DEPRECATED - use GAMEPLAY_CONFIG)
+OUTCOMES_CONFIG = _outcomes_config  # Full outcomes config dict (kept for backward compat during migration)
 
