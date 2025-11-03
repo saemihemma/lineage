@@ -49,10 +49,11 @@ export function SimulationScreen() {
   const EMPTY_TASKS = useMemo(() => ({} as Record<string, any>), []);
   
   // Create stable version string for active_tasks to avoid object reference dependencies
+  // Guard against optional chaining instability by normalizing to empty object
   const activeTasksVersion = useMemo(() => {
     const tasks = state?.active_tasks ?? EMPTY_TASKS;
     return Object.keys(tasks).sort().join('|');
-  }, [state?.active_tasks, EMPTY_TASKS]);
+  }, [state, EMPTY_TASKS]); // Depend on state (which can be null), not state?.active_tasks
   
   // Calculate primary progress (for single progress bar display)
   // Show the most recently started task, or first active task if none specified
