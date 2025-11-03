@@ -179,15 +179,15 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     new_state = state.copy()
     new_clone = new_state.clones[cid]
     
-    # Phase 2: Build outcome context for deterministic resolution
-    # Note: session_id should be passed from endpoint for proper seed generation
-    # For now, use a fallback (will be improved when endpoint passes it)
+    # Phase 2/3: Build outcome context for deterministic resolution
+    # Phase 3: Use config_version from outcomes_config.json
+    from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
     expedition_id = str(uuid.uuid4())
     seed_parts = SeedParts(
         user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
         session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
         action_id=expedition_id,
-        config_version="legacy",  # Will be replaced in Phase 3
+        config_version=OUTCOMES_CONFIG_VERSION,  # Phase 3: From outcomes_config.json
         timestamp=time.time()
     )
     
@@ -206,7 +206,8 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
         global_attention=getattr(state, 'global_attention', 0.0),
         womb_durability=womb_durability,
         expedition_kind=kind,
-        config=CONFIG,
+        config=CONFIG,  # For backward compat (practice levels, etc.)
+        outcomes_config=OUTCOMES_CONFIG,  # Phase 3: From outcomes_config.json
         seed_parts=seed_parts
     )
     

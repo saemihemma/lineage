@@ -1,0 +1,127 @@
+{
+  "config_version": "expeditions_v1",
+  "expeditions": {
+    "MINING": {
+      "base_death_prob": 0.12,
+      "base_xp": 10,
+      "rewards": {
+        "Tritanium": [8, 16],
+        "Metal Ore": [6, 12]
+      },
+      "trait_effects": {
+        "ELK": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.01
+          }
+        },
+        "FRK": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": 0.01
+          }
+        },
+        "DLT": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.005,
+            "notes": "Only applies when clone kind is incompatible with expedition type"
+          }
+        }
+      }
+    },
+    "COMBAT": {
+      "base_death_prob": 0.12,
+      "base_xp": 12,
+      "rewards": {
+        "Biomass": [3, 7],
+        "Synthetic": [2, 5]
+      },
+      "trait_effects": {
+        "ELK": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.01
+          }
+        },
+        "FRK": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": 0.01
+          }
+        },
+        "DLT": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.005,
+            "notes": "Only applies when clone kind is incompatible with expedition type"
+          }
+        }
+      }
+    },
+    "EXPLORATION": {
+      "base_death_prob": 0.12,
+      "base_xp": 8,
+      "rewards": {
+        "Tritanium": [2, 6],
+        "Metal Ore": [2, 6],
+        "Organic": [1, 3]
+      },
+      "shilajit_chance": 0.15,
+      "trait_effects": {
+        "ELK": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.01
+          }
+        },
+        "FRK": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": 0.01
+          }
+        },
+        "DLT": {
+          "death_chance": {
+            "op": "add",
+            "value_per_point": -0.005,
+            "notes": "Only applies when clone kind is incompatible with expedition type"
+          }
+        }
+      }
+    }
+  },
+  "clone_kind_compatibility": {
+    "MINING": {
+      "MINER": {
+        "death_chance_mult": 0.5,
+        "notes": "MINER on MINING = 50% safer"
+      },
+      "VOLATILE": {
+        "death_chance_mult": 1.5,
+        "notes": "VOLATILE on MINING = 50% more dangerous (incompatible)"
+      }
+    },
+    "COMBAT": {
+      "VOLATILE": {
+        "death_chance_mult": 0.6,
+        "notes": "VOLATILE on COMBAT = 40% safer"
+      },
+      "MINER": {
+        "death_chance_mult": 1.3,
+        "notes": "MINER on COMBAT = 30% more dangerous (incompatible)"
+      }
+    },
+    "EXPLORATION": {
+      "BASIC": {
+        "death_chance_mult": 0.8,
+        "notes": "BASIC slightly better for EXPLORATION"
+      }
+    }
+  },
+  "xp_modifiers": {
+    "MINER_XP_MULT": 1.25,
+    "notes": "MINER clone gets 25% bonus XP on MINING expeditions"
+  }
+}
+

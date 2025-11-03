@@ -43,6 +43,10 @@ _death_prob = _expeditions_data.get("death_probability", 0.12)
 # Load womb config from JSON
 _womb_config_data = _loaded_data.get("womb_config", {}).get("womb_config", {})
 _womb_attention = _womb_config_data.get("attention", {})
+
+# Phase 3: Load outcomes config from JSON
+_outcomes_config = _loaded_data.get("outcomes_config", {})
+OUTCOMES_CONFIG_VERSION = _outcomes_config.get("config_version", "legacy")
 _womb_attacks = _womb_config_data.get("feral_drone_attacks", {})
 _womb_repair = _womb_config_data.get("repair", {})
 _womb_synergies = _womb_config_data.get("synergies", {})
@@ -131,4 +135,7 @@ CONFIG = {
     "WOMB_SYNERGY_CONSTRUCTIVE_REPAIR_MULT": _womb_synergies.get("constructive_repair_mult", 0.85),
     "WOMB_SYNERGY_THRESHOLD": _womb_synergies.get("threshold", 3),
 }
+
+# Phase 3: Export outcomes config for outcome engine
+OUTCOMES_CONFIG = _outcomes_config  # Full outcomes config dict
 

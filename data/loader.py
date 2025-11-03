@@ -42,7 +42,8 @@ def load_data() -> Dict[str, Any]:
         "briefing_text": load_json_file("briefing_text.json") or {},
         "phrases": load_json_file("phrases.json") or {},
         "womb_config": load_json_file("womb_config.json") or {},
-        "feral_drone_messages": load_json_file("feral_drone_messages.json") or {}
+        "feral_drone_messages": load_json_file("feral_drone_messages.json") or {},
+        "outcomes_config": load_json_file("outcomes_config.json") or {}
     }
     
     return data

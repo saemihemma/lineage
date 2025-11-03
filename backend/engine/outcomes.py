@@ -2,6 +2,7 @@
 Outcome Engine - Deterministic outcome resolution system
 
 Phase 2: Simple outcome resolver for expeditions to prove the pattern.
+Phase 3: Uses outcomes_config.json for all expedition configuration.
 """
 import random
 import hmac
@@ -9,7 +10,7 @@ import hashlib
 from typing import Dict, List, Any, Literal, Optional, Tuple
 from dataclasses import dataclass
 from core.models import Clone
-from core.config import CONFIG
+from core.config import CONFIG, OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
 
 
 @dataclass
@@ -165,63 +166,76 @@ class OutcomeContext:
     global_attention: float
     womb_durability: float  # Best womb durability
     expedition_kind: str
-    config: Dict  # From CONFIG
+    config: Dict  # From CONFIG (for backward compat, practice levels, etc.)
+    outcomes_config: Dict[str, Any]  # Phase 3: From outcomes_config.json
     seed_parts: SeedParts  # For deterministic RNG
 
 
-def trait_mods(clone: Clone, expedition_kind: str) -> List[Mod]:
-    """Generate mods from clone traits"""
+def trait_mods(clone: Clone, expedition_kind: str, outcomes_config: Dict[str, Any]) -> List[Mod]:
+    """
+    Generate mods from clone traits.
+    Phase 3: Reads trait effects from outcomes_config.json.
+    """
     mods = []
     traits = clone.traits or {}
     
-    elk = traits.get("ELK", 5)  # Entropic Luck (default 5 = neutral)
-    frk = traits.get("FRK", 5)  # Feralization Risk (default 5 = neutral)
-    dlt = traits.get("DLT", 5)  # Differential-Drift Tolerance (default 5 = neutral)
+    # Get expedition config for trait effects
+    expedition_config = outcomes_config.get("expeditions", {}).get(expedition_kind, {})
+    trait_effects = expedition_config.get("trait_effects", {})
     
-    # ELK reduces death (each point above 5 = -1% probability per point)
-    elk_bonus = (elk - 5) / 100.0
-    mods.append(Mod(target='death_chance', op='add', value=-elk_bonus, source=f'Trait:ELK({elk})'))
-    
-    # FRK increases death (each point above 5 = +1% probability per point)
-    frk_penalty = (frk - 5) / 100.0
-    mods.append(Mod(target='death_chance', op='add', value=frk_penalty, source=f'Trait:FRK({frk})'))
-    
-    # DLT helps with incompatible missions (reduces penalty)
-    incompatible = False
-    if expedition_kind == "MINING" and clone.kind == "VOLATILE":
-        incompatible = True
-    elif expedition_kind == "COMBAT" and clone.kind == "MINER":
-        incompatible = True
-    
-    if incompatible:
-        dlt_bonus = (dlt - 5) / 200.0  # Range: -2.5% to +2.5%
-        mods.append(Mod(target='death_chance', op='add', value=-dlt_bonus, source=f'Trait:DLT({dlt})_IncompatibleMission'))
+    # Process each trait effect from config
+    for trait_code, trait_config in trait_effects.items():
+        trait_value = traits.get(trait_code, 5)  # Default 5 = neutral
+        
+        # Get effect config (death_chance, reward_mult, etc.)
+        for target, effect_config in trait_config.items():
+            op = effect_config.get("op", "add")
+            value_per_point = effect_config.get("value_per_point", 0.0)
+            
+            # Calculate effect: (trait_value - 5) * value_per_point
+            # This makes trait value 5 = neutral (0 effect)
+            trait_offset = trait_value - 5
+            total_value = trait_offset * value_per_point
+            
+            # Special handling for DLT - only applies to incompatible missions
+            if trait_code == "DLT" and target == "death_chance":
+                incompatible = False
+                if expedition_kind == "MINING" and clone.kind == "VOLATILE":
+                    incompatible = True
+                elif expedition_kind == "COMBAT" and clone.kind == "MINER":
+                    incompatible = True
+                if incompatible:
+                    mods.append(Mod(target=target, op=op, value=total_value, source=f'Trait:{trait_code}({trait_value})_IncompatibleMission'))
+            else:
+                mods.append(Mod(target=target, op=op, value=total_value, source=f'Trait:{trait_code}({trait_value})'))
     
     return mods
 
 
-def self_mods(self_level: int, practices: Dict[str, int], expedition_kind: str, clone_kind: str) -> List[Mod]:
-    """Generate mods from SELF level and practices"""
+def self_mods(self_level: int, practices: Dict[str, int], expedition_kind: str, clone_kind: str, outcomes_config: Dict[str, Any]) -> List[Mod]:
+    """
+    Generate mods from SELF level and practices.
+    Phase 3: Reads clone kind compatibility from outcomes_config.json.
+    """
     mods = []
     
     # XP reduces death chance (each 100 XP = -2% death probability, capped at -10%)
-    # This is handled per-clone, so we'll pass it differently
+    # This is handled per-clone in resolve_expedition, so we don't handle it here
     
-    # Clone kind vs expedition compatibility
-    if expedition_kind == "MINING" and clone_kind == "MINER":
-        mods.append(Mod(target='death_chance', op='mult', value=0.5, source='KindMatch:MINER_on_MINING'))
-    elif expedition_kind == "COMBAT" and clone_kind == "VOLATILE":
-        mods.append(Mod(target='death_chance', op='mult', value=0.6, source='KindMatch:VOLATILE_on_COMBAT'))
-    elif expedition_kind == "EXPLORATION" and clone_kind == "BASIC":
-        mods.append(Mod(target='death_chance', op='mult', value=0.8, source='KindMatch:BASIC_on_EXPLORATION'))
+    # Clone kind vs expedition compatibility (from config)
+    clone_compat = outcomes_config.get("clone_kind_compatibility", {}).get(expedition_kind, {})
+    clone_kind_config = clone_compat.get(clone_kind)
     
-    # Incompatible missions are more dangerous
-    if expedition_kind == "MINING" and clone_kind == "VOLATILE":
-        mods.append(Mod(target='death_chance', op='mult', value=1.5, source='KindMismatch:VOLATILE_on_MINING'))
-    elif expedition_kind == "COMBAT" and clone_kind == "MINER":
-        mods.append(Mod(target='death_chance', op='mult', value=1.3, source='KindMismatch:MINER_on_COMBAT'))
+    if clone_kind_config:
+        mult = clone_kind_config.get("death_chance_mult", 1.0)
+        notes = clone_kind_config.get("notes", "")
+        # Determine if it's a match or mismatch based on mult value
+        if mult < 1.0:
+            mods.append(Mod(target='death_chance', op='mult', value=mult, source=f'KindMatch:{clone_kind}_on_{expedition_kind}'))
+        elif mult > 1.0:
+            mods.append(Mod(target='death_chance', op='mult', value=mult, source=f'KindMismatch:{clone_kind}_on_{expedition_kind}'))
     
-    # Practice bonuses
+    # Practice bonuses (still use CONFIG for practice levels as they're not in outcomes config yet)
     kinetic_level = practices.get("Kinetic", 0) // CONFIG["PRACTICE_XP_PER_LEVEL"]
     if expedition_kind in ["MINING", "COMBAT"] and kinetic_level >= 2:
         # Mining/combat XP multiplier (from perk_mining_xp_mult)
@@ -267,13 +281,15 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     Resolve expedition outcome using deterministic, canonical stats system.
     
     Phase 2: Proves the pattern for expeditions only.
+    Phase 3: Reads all expedition config from outcomes_config.json.
     """
     # 1. Compute RNG from seed_parts (HMAC recipe)
     rng = random.Random(compute_rng_seed(ctx.seed_parts))
     
-    # 2. Compute base stats from config (all 7 canonical stats)
-    base_death_prob = ctx.config.get("DEATH_PROB", 0.12)
-    base_xp = {"MINING": 10, "COMBAT": 12, "EXPLORATION": 8}.get(ctx.expedition_kind, 10)
+    # 2. Compute base stats from outcomes_config (all 7 canonical stats)
+    expedition_config = ctx.outcomes_config.get("expeditions", {}).get(ctx.expedition_kind, {})
+    base_death_prob = expedition_config.get("base_death_prob", 0.12)
+    base_xp = expedition_config.get("base_xp", 10)
     
     base_stats = CanonicalStats(
         time_mult=1.0,  # Expeditions complete immediately, but compute anyway
@@ -290,10 +306,10 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     xp_reduction = min(0.10, total_xp / 100.0 * 0.02)
     base_stats.death_chance -= xp_reduction
     
-    # 3. Build mods list (hardcoded sources for now):
+    # 3. Build mods list (Phase 3: reads from outcomes_config):
     mods = []
-    mods.extend(trait_mods(ctx.clone, ctx.expedition_kind))
-    mods.extend(self_mods(ctx.self_level, ctx.practices, ctx.expedition_kind, ctx.clone.kind))
+    mods.extend(trait_mods(ctx.clone, ctx.expedition_kind, ctx.outcomes_config))
+    mods.extend(self_mods(ctx.self_level, ctx.practices, ctx.expedition_kind, ctx.clone.kind, ctx.outcomes_config))
     mods.extend(womb_mods(ctx.womb_durability))
     mods.extend(attention_mods(ctx.global_attention))
     
@@ -313,31 +329,29 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     else:
         result = 'success'
     
-    # 7. Calculate rewards with reward_mult
+    # 7. Calculate rewards with reward_mult (from outcomes_config)
     loot = {}
     yield_mult = final_stats.reward_mult
     
-    rewards_config = ctx.config.get("REWARDS", {}).get(ctx.expedition_kind, {})
-    for res, (a, b) in rewards_config.items():
+    rewards_config = expedition_config.get("rewards", {})
+    for res, reward_range in rewards_config.items():
+        a, b = reward_range[0], reward_range[1]  # Convert list to tuple-like
         base_amt = rng.randint(a, b)
         loot[res] = int(round(base_amt * yield_mult))
     
-    # Calculate XP with xp_mult
-    base_xp = {"MINING": 10, "COMBAT": 12, "EXPLORATION": 8}.get(ctx.expedition_kind, 10)
-    
+    # Calculate XP with xp_mult (from outcomes_config)
     # Clone kind bonus (MINER on MINING gets bonus)
-    if ctx.expedition_kind == "MINING" and ctx.clone.kind == "MINER":
-        base_xp_mult = ctx.config.get("MINER_XP_MULT", 1.25)
-    else:
-        base_xp_mult = 1.0
+    xp_modifiers = ctx.outcomes_config.get("xp_modifiers", {})
+    base_xp_mult = xp_modifiers.get("MINER_XP_MULT", 1.25) if (ctx.expedition_kind == "MINING" and ctx.clone.kind == "MINER") else 1.0
     
     gained = int(round(base_xp * base_xp_mult * final_stats.xp_mult))
     xp_gained = {ctx.expedition_kind: gained}
     
-    # Shilajit chance (EXPLORATION only)
+    # Shilajit chance (from outcomes_config)
     shilajit_found = False
     if ctx.expedition_kind == "EXPLORATION":
-        if rng.random() < 0.15:
+        shilajit_chance = expedition_config.get("shilajit_chance", 0.15)
+        if rng.random() < shilajit_chance:
             shilajit_found = True
             loot["Shilajit"] = loot.get("Shilajit", 0) + 1
     
