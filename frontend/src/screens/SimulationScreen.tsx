@@ -111,21 +111,21 @@ export function SimulationScreen() {
   //   };
   // }, [state, loading, startPolling, stopPolling]);
 
-  // Reset event feed on reconnection or after long idle
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Reset and resume when tab becomes visible again
-        resetEventFeed();
-        if (state && !loading) {
-          resumePolling();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [state, loading, resetEventFeed, resumePolling]);
+  // Event feed visibility handler - DISABLED: Event feed not needed with localStorage
+  // useEffect(() => {
+  //   const handleVisibilityChange = () => {
+  //     if (document.visibilityState === 'visible') {
+  //       // Reset and resume when tab becomes visible again
+  //       resetEventFeed();
+  //       if (state && !loading) {
+  //         resumePolling();
+  //       }
+  //     }
+  //   };
+  //
+  //   document.addEventListener('visibilitychange', handleVisibilityChange);
+  //   return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  // }, [state, loading, resetEventFeed, resumePolling]);
 
   // Load game state when component mounts (only once)
   useEffect(() => {
