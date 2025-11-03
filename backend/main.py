@@ -107,7 +107,27 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown events"""
-    # Startup - log registered routes (after all routers are included)
+    # Startup - initialize database schema if DATABASE_URL is set
+    try:
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            logger.info("Initializing database schema...")
+            try:
+                db = get_db()
+                # Schema is automatically created on first connection
+                # Test that it worked by checking if we can query
+                from database import execute_query
+                cursor = execute_query(db, "SELECT 1")
+                cursor.fetchone()
+                logger.info("Database schema initialized successfully")
+            except Exception as db_error:
+                logger.warning(f"Could not initialize database schema (database optional): {db_error}")
+        else:
+            logger.info("No DATABASE_URL set - running without database (leaderboard will be unavailable)")
+    except Exception as e:
+        logger.warning(f"Database initialization check failed (database optional): {e}")
+    
+    # Log registered routes (after all routers are included)
     routes = []
     for route in app.routes:
         if hasattr(route, 'path') and hasattr(route, 'methods'):
