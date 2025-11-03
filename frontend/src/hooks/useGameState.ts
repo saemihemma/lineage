@@ -2,7 +2,7 @@
  * React hook for managing game state
  * Uses localStorage for persistence instead of database
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { GameState } from '../types/game';
 import { loadStateFromLocalStorage, saveStateToLocalStorage, createDefaultState } from '../utils/localStorage';
 import { checkAndCompleteTasks } from '../utils/tasks';
@@ -54,6 +54,20 @@ export function useGameState() {
   // Check for task completion periodically
   // Use ref to track previous active_tasks keys for stable comparison
   const prevActiveTasksKeysRef = useRef<string>('');
+  const stateRef = useRef(state);
+  
+  // Keep stateRef updated without causing effect re-runs
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+  
+  // Create stable version string for active_tasks using useMemo
+  const activeTasksVersion = useMemo(() => {
+    return state?.active_tasks 
+      ? Object.keys(state.active_tasks).sort().join('|')
+      : '';
+  }, [state?.active_tasks]);
+  
   useEffect(() => {
     // Clear any existing interval
     if (taskCheckIntervalRef.current) {
@@ -61,15 +75,16 @@ export function useGameState() {
       taskCheckIntervalRef.current = null;
     }
 
-    // Only check if state exists and has active tasks
-    const activeTasks = state?.active_tasks;
+    // Get current state from ref
+    const currentState = stateRef.current;
+    const activeTasks = currentState?.active_tasks;
     const hasActiveTasks = activeTasks && Object.keys(activeTasks).length > 0;
     
     // Create stable key string for comparison (sorted task IDs)
     const currentTaskKeys = hasActiveTasks ? Object.keys(activeTasks).sort().join(',') : '';
     
     // Only proceed if task keys actually changed (prevents unnecessary re-setup)
-    if (!state || !hasActiveTasks) {
+    if (!currentState || !hasActiveTasks) {
       prevActiveTasksKeysRef.current = currentTaskKeys;
       return;
     }
@@ -86,6 +101,12 @@ export function useGameState() {
 
     // Check every second for completed tasks and process them
     taskCheckIntervalRef.current = setInterval(() => {
+      // Use ref to get latest state without dependency
+      const latestState = stateRef.current;
+      if (!latestState || !latestState.active_tasks || Object.keys(latestState.active_tasks).length === 0) {
+        return;
+      }
+      
       setState((prevState) => {
         if (!prevState || !prevState.active_tasks || Object.keys(prevState.active_tasks).length === 0) {
           return prevState;
@@ -115,6 +136,8 @@ export function useGameState() {
           
           // Auto-save when tasks complete
           saveStateToLocalStorage(updatedState);
+          // Update ref with new state
+          stateRef.current = updatedState;
           return updatedState;
         }
         
@@ -122,7 +145,7 @@ export function useGameState() {
       });
     }, 1000); // Check every 1 second
 
-    // Cleanup on unmount or when state changes
+    // Cleanup on unmount or when task version changes
     return () => {
       if (taskCheckIntervalRef.current) {
         console.log(`🟡 Cleaning up task checking`);
@@ -130,7 +153,7 @@ export function useGameState() {
         taskCheckIntervalRef.current = null;
       }
     };
-  }, [state]); // Depend on entire state object, but use ref pattern to detect actual task changes
+  }, [activeTasksVersion]); // Depend on stable version string instead of entire state object
 
   // Save state to localStorage
   const saveState = useCallback((newState: GameState) => {
