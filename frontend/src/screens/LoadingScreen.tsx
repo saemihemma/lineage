@@ -118,13 +118,15 @@ export function LoadingScreen() {
 
   const canEnter = name.trim().length > 0 && loadingComplete;
 
-  const hasSavedName = localStorage.getItem(SELF_NAME_KEY) !== null;
+  // Check if the current name matches what's saved (only show "Welcome back" if names match)
+  const savedName = localStorage.getItem(SELF_NAME_KEY);
+  const isReturningUser = savedName !== null && savedName.trim() === name.trim();
 
   return (
     <div className="loading-screen">
       <div className="loading-content">
         <h2 className="loading-title">IDENTITY</h2>
-        {hasSavedName && name && (
+        {isReturningUser && name && (
           <div style={{ color: '#00ff00', fontSize: '14px', marginBottom: '8px' }}>
             Welcome back, {name}
           </div>
