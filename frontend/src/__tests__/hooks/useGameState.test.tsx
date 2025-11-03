@@ -110,7 +110,6 @@ describe('useGameState - Hook Stability Tests', () => {
 
   it('should maintain stable activeTasksVersion when active_tasks changes', async () => {
     let lastVersion: string | undefined
-    let versionChanged = false
     let renderCount = 0
 
     function TestComponent() {
@@ -122,8 +121,9 @@ describe('useGameState - Hook Stability Tests', () => {
         ? Object.keys(state.active_tasks).sort().join('|')
         : ''
       
+      // Track version changes for stability verification
       if (lastVersion !== undefined && lastVersion !== activeTasksVersion) {
-        versionChanged = true
+        // Version changed - this is expected when tasks are added/removed
       }
       lastVersion = activeTasksVersion
       
@@ -148,7 +148,6 @@ describe('useGameState - Hook Stability Tests', () => {
       const { state } = useGameState()
       
       // This mirrors the pattern in useGameState - should use EMPTY_TASKS_OBJ guard
-      const EMPTY_TASKS_OBJ = {} as Record<string, any>
       const activeTasksVersion = state?.active_tasks
         ? Object.keys(state.active_tasks).sort().join('|')
         : ''
@@ -173,7 +172,7 @@ describe('useGameState - Hook Stability Tests', () => {
     
     function TestComponent() {
       hookCallOrder.push('useState-1')
-      const [localState] = useState(0)
+      const [_localState] = useState(0) // Prefix with _ to indicate intentionally unused
       
       hookCallOrder.push('useGameState')
       const { state, loading } = useGameState()
