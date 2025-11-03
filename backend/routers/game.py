@@ -268,7 +268,12 @@ def sanitize_error_message(error: Exception) -> str:
     # Always preserve other game logic errors that are user-friendly
     if any(phrase in error_str for phrase in [
         "Build the Womb first",
+        "No functional wombs available",
+        "is not functional",
+        "Repair it first",
         "Insufficient soul integrity",
+        "Cannot grow",
+        "Requires Constructive practice level",
         "Clone unavailable",
         "Cannot apply an uploaded clone",
         "No clone applied to the spaceship",
