@@ -4,6 +4,7 @@ Supports both SQLite and PostgreSQL databases.
 Automatically detects database type from DATABASE_URL environment variable.
 """
 import os
+import threading
 from pathlib import Path
 from typing import Optional, Union, Any, Protocol
 from abc import ABC, abstractmethod
@@ -273,19 +274,24 @@ class PostgreSQLAdapter(DatabaseAdapter):
         if self.conn is None:
             # Add connection timeout and retry logic for Railway PostgreSQL
             import logging
+            import time
             logger = logging.getLogger(__name__)
             
             max_retries = 3
             retry_delay = 1  # seconds
+            connection_start = time.time()
             
             for attempt in range(max_retries):
                 try:
                     logger.info(f"🔌 Attempting PostgreSQL connection (attempt {attempt + 1}/{max_retries})...")
+                    connect_start = time.time()
                     self.conn = psycopg2.connect(
                         self.db_url,
                         cursor_factory=RealDictCursor,  # Returns dict-like rows similar to sqlite3.Row
                         connect_timeout=10  # 10 second connection timeout
                     )
+                    connect_elapsed = (time.time() - connect_start) * 1000
+                    
                     # Enable autocommit mode - each query is its own transaction
                     # This prevents "transaction aborted" errors when one query fails
                     # For multi-query operations that need transactions, we'll use explicit BEGIN/COMMIT
@@ -297,7 +303,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     test_cursor.fetchone()
                     test_cursor.close()
                     
-                    logger.info("✅ PostgreSQL connection established successfully")
+                    total_elapsed = (time.time() - connection_start) * 1000
+                    # Log connection ID (using object id as identifier)
+                    conn_id = id(self.conn)
+                    logger.info(f"✅ PostgreSQL connection established successfully (conn_id: {conn_id:016x}, connect: {connect_elapsed:.1f}ms, total: {total_elapsed:.1f}ms)")
                     self.init_schema(self.conn)
                     break  # Success, exit retry loop
                     
@@ -305,14 +314,15 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     logger.warning(f"⚠️ PostgreSQL connection failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
                     if attempt < max_retries - 1:
                         logger.info(f"   Retrying in {retry_delay} seconds...")
-                        import time
                         time.sleep(retry_delay)
                         retry_delay *= 2  # Exponential backoff
                     else:
-                        logger.error(f"❌ Failed to connect to PostgreSQL after {max_retries} attempts")
+                        total_elapsed = (time.time() - connection_start) * 1000
+                        logger.error(f"❌ Failed to connect to PostgreSQL after {max_retries} attempts (total time: {total_elapsed:.1f}ms)")
                         raise
                 except Exception as e:
-                    logger.error(f"❌ Unexpected error connecting to PostgreSQL: {str(e)}")
+                    total_elapsed = (time.time() - connection_start) * 1000
+                    logger.error(f"❌ Unexpected error connecting to PostgreSQL after {total_elapsed:.1f}ms: {str(e)}")
                     raise
         
         return self.conn
@@ -540,6 +550,43 @@ class Database:
 
 # Global database instance
 _db_instance: Optional[Database] = None
+_db_reconnect_lock = threading.Lock()  # Thread-safe connection recreation
+
+
+def _recreate_db_connection() -> DatabaseConnection:
+    """
+    Thread-safe helper to recreate database connection.
+    Closes existing connection properly and creates a fresh one.
+    """
+    import logging
+    import time
+    logger = logging.getLogger(__name__)
+    
+    global _db_instance
+    with _db_reconnect_lock:
+        # Log connection state before recreation
+        had_existing = _db_instance is not None
+        connection_state = "existing" if had_existing else "none"
+        logger.info(f"🔄 Starting connection recreation (previous state: {connection_state})")
+        
+        # Double-check pattern: verify connection still needs recreation
+        if _db_instance:
+            try:
+                db_type = _db_instance.db_type if hasattr(_db_instance, 'db_type') else "unknown"
+                logger.debug(f"   Closing existing {db_type} connection...")
+                _db_instance.close()
+                logger.debug(f"   Old connection closed successfully")
+            except Exception as close_error:
+                logger.warning(f"   Error closing old connection during recreation: {close_error}")
+        
+        # Recreate instance (will create fresh adapter with no cached connection)
+        start_time = time.time()
+        _db_instance = Database()
+        new_conn = _db_instance.connect()
+        elapsed = (time.time() - start_time) * 1000
+        db_type = _db_instance.db_type if hasattr(_db_instance, 'db_type') else "unknown"
+        logger.info(f"✅ Recreated {db_type} connection instance in {elapsed:.1f}ms")
+        return new_conn
 
 
 def get_db() -> DatabaseConnection:
@@ -613,21 +660,13 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
         
         if is_connection_error:
             logger.warning(f"⚠️ PostgreSQL connection lost: {error_str[:100]}. Forcing reconnection and retrying query...")
-            # Force connection recreation by closing global connection
+            # Use thread-safe connection recreation helper
             try:
-                if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
-                    _db_instance.adapter.close()
-                    _db_instance.adapter.conn = None
-                    if hasattr(_db_instance, 'conn'):
-                        _db_instance.conn = None
-                    logger.info("🔄 Closed stale PostgreSQL connection, recreating...")
-                    
-                    # Immediately recreate connection and retry query
-                    new_conn = _db_instance.connect()
-                    cursor = new_conn.cursor()
-                    cursor.execute(sql, params)
-                    logger.info("✅ Successfully reconnected and retried query")
-                    return cursor
+                new_conn = _recreate_db_connection()
+                cursor = new_conn.cursor()
+                cursor.execute(sql, params)
+                logger.info("✅ Successfully reconnected and retried query")
+                return cursor
             except Exception as reconnect_error:
                 logger.error(f"❌ Failed to reconnect and retry: {reconnect_error}")
                 raise
@@ -644,14 +683,9 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
                     test_cursor.execute("SELECT 1")
                     test_cursor.close()
                 except Exception:
-                    # Connection is dead, recreate it
-                    if _db_instance and hasattr(_db_instance, 'adapter'):
-                        _db_instance.adapter.close()
-                        _db_instance.adapter.conn = None
-                        if hasattr(_db_instance, 'conn'):
-                            _db_instance.conn = None
-                        new_conn = _db_instance.connect()
-                        conn = new_conn
+                    # Connection is dead, recreate it using thread-safe helper
+                    new_conn = _recreate_db_connection()
+                    conn = new_conn
                 
                 try:
                     conn.rollback()
@@ -661,16 +695,11 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
                     cursor.execute(sql, params)
                     return cursor
                 except Exception as rollback_error:
-                    # Rollback failed, connection is likely dead - recreate
-                    if _db_instance and hasattr(_db_instance, 'adapter'):
-                        _db_instance.adapter.close()
-                        _db_instance.adapter.conn = None
-                        if hasattr(_db_instance, 'conn'):
-                            _db_instance.conn = None
-                        new_conn = _db_instance.connect()
-                        cursor = new_conn.cursor()
-                        cursor.execute(sql, params)
-                        return cursor
+                    # Rollback failed, connection is likely dead - recreate using thread-safe helper
+                    new_conn = _recreate_db_connection()
+                    cursor = new_conn.cursor()
+                    cursor.execute(sql, params)
+                    return cursor
             except Exception as retry_error:
                 logger.error(f"Failed to retry query after rollback: {retry_error}")
                 raise
