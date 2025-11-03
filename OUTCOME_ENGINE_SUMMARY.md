@@ -286,12 +286,17 @@ rng = random.Random(int(seed_hash[:16], 16))  # 64-bit seed
 **Formula**: `(trait_value - 5) * value_per_point`
 
 - Trait value 5 = neutral (0 effect)
-- Values 0-4 = negative effect (worse)
-- Values 6-10 = positive effect (better)
+- Values 0-4 = negative offset → reduces positive effects, increases negative effects
+- Values 6-10 = positive offset → increases positive effects, increases negative effects
 - Per-point effects configured in `outcomes_config.json`
 
 **Example**: ELK with value 7 on MINING expedition:
 - `(7 - 5) * (-0.01) = -0.02` → death_chance reduced by 2%
+
+**Special Case: ENF (Exotronic Noise Floor)**
+- Low ENF (0-4): Negative offset → reduces death_chance (safer) but also reduces reward_mult (less rewards)
+- High ENF (6-10): Positive offset → increases death_chance (riskier) but increases reward_mult (more rewards)
+- The linear model automatically handles this without special-case logic
 
 ### Deterministic Trait Generation
 
