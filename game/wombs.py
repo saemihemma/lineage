@@ -278,8 +278,15 @@ def check_and_apply_womb_systems(state: GameState) -> GameState:
     - Random attacks
     
     This should be called after state-changing operations.
+    Updates last_saved_ts to current time for accurate decay calculation.
     """
-    new_state = decay_attention(state)
+    import time
+    # Update last_saved_ts to current time so decay is calculated from now
+    new_state = state.copy()
+    new_state.last_saved_ts = time.time()
+    
+    # Apply decay and attacks
+    new_state = decay_attention(new_state)
     new_state, attacked_id, attack_msg = attack_womb(new_state)
     
     # Note: Attack message can be logged/emitted by caller if needed

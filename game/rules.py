@@ -202,7 +202,9 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
             new_state.resources["Shilajit"] = new_state.resources.get("Shilajit", 0) + 1
             shilajit_found = True
     
-    if state.rng.random() < CONFIG["DEATH_PROB"]:
+    # Check for clone death (12% probability)
+    death_roll = state.rng.random()
+    if death_roll < CONFIG["DEATH_PROB"]:
         frac = state.rng.uniform(0.25, 0.75)
         for k in new_clone.xp:
             new_clone.xp[k] = int(new_clone.xp[k] * (1.0 - frac))
@@ -210,6 +212,11 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
         if new_state.applied_clone_id == cid:
             new_state.applied_clone_id = ""
         return new_state, f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes."
+    
+    # Gain attention on active womb after successful expedition
+    if new_state.wombs:
+        from game.wombs import gain_attention
+        new_state = gain_attention(new_state)
     
     loot_str = ", ".join([f"{k}+{v}" for k, v in loot.items()])
     msg = f"{kind.title()} expedition complete: {loot_str}. {kind.title()} XP +{gained}. Survived runs: {new_clone.survived_runs}."
@@ -242,8 +249,10 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str]:
     new_state.soul_xp += gained
     
     # Restore soul_percent based on clone quality
-    percent_restore = min(5.0, total * 0.05)
-    new_state.soul_percent = min(100.0, new_state.soul_percent + percent_restore)
+    # Higher XP clones restore more (every 100 XP = 0.5% restoration, uncapped)
+    # So 1000 XP = 5%, 2000 XP = 10%, etc. - can exceed 100%
+    percent_restore = total * 0.005
+    new_state.soul_percent = new_state.soul_percent + percent_restore
     
     # Mark clone as uploaded
     new_clone = new_state.clones[cid]

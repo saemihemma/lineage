@@ -1101,6 +1101,10 @@ async def gather_resource_endpoint(
         # Start task timer with pending resource amount stored
         new_state, task_id = start_task(state, "gather_resource", resource=resource, pending_amount=amount)
 
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        new_state = check_and_apply_womb_systems(new_state)
+
         # Emit gather.start event (optional - events need DB)
         try:
             from database import get_db
@@ -1182,6 +1186,10 @@ async def build_womb_endpoint(
         # Start timer task
         final_state, task_id = start_task(new_state, "build_womb")
 
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        final_state = check_and_apply_womb_systems(final_state)
+
         # State is saved to localStorage by frontend - no DB save needed
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
         
@@ -1250,6 +1258,10 @@ async def grow_clone_endpoint(
 
         # Start timer task with clone data stored
         final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind, pending_clone_data=clone_data)
+
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        final_state = check_and_apply_womb_systems(final_state)
 
         # Emit clone.grow.start event (optional - events need DB)
         try:
@@ -1379,6 +1391,10 @@ async def run_expedition_endpoint(
 
         # Run expedition (no DB required)
         new_state, message = run_expedition(state, kind)
+
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        new_state = check_and_apply_womb_systems(new_state)
 
         # Get clone that ran expedition
         clone_id = state.applied_clone_id
@@ -1521,6 +1537,10 @@ async def upload_clone_endpoint(
         old_soul_percent = state.soul_percent
         
         new_state, message = upload_clone(state, clone_id)
+
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        new_state = check_and_apply_womb_systems(new_state)
         
         # Optional: Emit upload.complete event if DB available
         try:
@@ -1621,6 +1641,10 @@ async def repair_womb_endpoint(
             womb_id=womb_id,
             repair_amount=target_womb.max_durability - target_womb.durability
         )
+
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        final_state = check_and_apply_womb_systems(final_state)
         
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
         
