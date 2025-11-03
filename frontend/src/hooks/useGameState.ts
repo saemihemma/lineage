@@ -127,12 +127,12 @@ export function useGameState() {
   }, []);
 
   // Update state after action
+  // NOTE: Do NOT auto-save here - backend already saves state on every action.
+  // Auto-save causes race conditions where frontend overwrites newer backend state.
   const updateState = useCallback((newState: GameState) => {
     setState(newState);
-    // Auto-save after state update
-    gameAPI.saveState(newState).catch((err) => {
-      console.error('Failed to auto-save:', err);
-    });
+    // No auto-save - backend handles persistence on actions
+    // If you need to save state explicitly, use saveState() instead
   }, []);
 
   return {
