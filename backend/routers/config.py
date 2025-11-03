@@ -9,6 +9,7 @@ import hashlib
 import json
 from typing import Dict, Any
 from core.config import CONFIG, RESOURCE_TYPES
+from data.loader import load_data
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -118,6 +119,15 @@ def serialize_config() -> Dict[str, Any]:
             "soulSafetyMargin": CONFIG.get("SOUL_SAFETY_MARGIN", 5.0),
         },
     }
+    
+    # Systems v1: Merge full gameplay.json config (loaded from config directory)
+    _gameplay_data = load_data().get("gameplay", {})
+    if _gameplay_data:
+        # Merge gameplay.json into config (overwrites existing keys)
+        # This ensures all Systems v1 config is available
+        gameplay_config.update(_gameplay_data)
+        # Preserve computed values (convert tuples back to lists for JSON)
+        # But allow gameplay.json to override defaults
 
     return gameplay_config
 

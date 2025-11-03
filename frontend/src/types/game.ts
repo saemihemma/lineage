@@ -5,7 +5,7 @@
 export interface Clone {
   id: string;
   kind: string;
-  traits: string[];
+  traits: Record<string, number>;  // Trait ID -> value (0-10)
   xp: Record<string, number>;
   survived_runs: number;
   alive: boolean;
@@ -43,6 +43,8 @@ export interface GameState {
   clones: Record<string, Clone>;
   active_tasks?: Record<string, any>;
   ui_layout?: Record<string, any>;
+  prayer_cooldown_until?: number;  // Timestamp when prayer can be used again
+  last_pray_effect?: Record<string, any>;  // Last prayer effect (for expedition bonus)
   ftue?: {
     step_gather_10_tritanium?: boolean;
     step_build_womb?: boolean;

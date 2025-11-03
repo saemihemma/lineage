@@ -966,6 +966,8 @@ def game_state_to_dict(state: GameState) -> Dict[str, Any]:
         "global_attention": getattr(state, "global_attention", 0.0),  # Global attention (0-100)
         "active_tasks": getattr(state, "active_tasks", {}),
         "ui_layout": getattr(state, "ui_layout", {}),
+        "prayer_cooldown_until": getattr(state, "prayer_cooldown_until", None),
+        "last_pray_effect": getattr(state, "last_pray_effect", None),
         "clones": {
             cid: {
                 "id": c.id,
@@ -1032,7 +1034,9 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
         self_name=data.get("self_name", ""),
         global_attention=data.get("global_attention", CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)),
         active_tasks=data.get("active_tasks", {}),
-        ui_layout=data.get("ui_layout", {})
+        ui_layout=data.get("ui_layout", {}),
+        prayer_cooldown_until=data.get("prayer_cooldown_until"),
+        last_pray_effect=data.get("last_pray_effect")
     )
     # RNG instance is initialized in __post_init__, so it should be ready
     # But ensure it's initialized if somehow it wasn't
@@ -2234,6 +2238,135 @@ async def repair_womb_endpoint(
     except Exception as e:
         error_msg = sanitize_error_message(e)
         logger.error(f"Error repairing womb for session {sid[:8]}...: {str(e)}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+
+@router.post("/pray-to-trinary")
+async def pray_to_trinary_endpoint(
+    request: Request,
+    state_data: Optional[Dict[str, Any]] = Body(None),
+    session_id: Optional[str] = Cookie(None)
+):
+    """
+    Pray to Trinary - mystical button that provides random effects.
+    Effects:
+    - Expedition prayer: Next expedition gets reduced death chance and increased rewards
+    - Gathering prayer: Reduces active gather task duration by 15-30%
+    - Kill clone: 5% chance to kill activated clone (if exists)
+    
+    Cooldown: 12-19 seconds (random)
+    """
+    import random
+    import time
+    
+    sid = get_session_id(session_id)
+    enforce_rate_limit(sid, "pray_to_trinary")
+    
+    # Get state from request body
+    if not state_data:
+        raise HTTPException(
+            status_code=400, 
+            detail="Game state required in request body. Please refresh the page."
+        )
+    
+    try:
+        state = dict_to_game_state(state_data)
+    except Exception as e:
+        logger.error(f"Failed to parse state from request body: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
+    
+    try:
+        current_time = time.time()
+        
+        # Check cooldown
+        if state.prayer_cooldown_until and current_time < state.prayer_cooldown_until:
+            remaining = state.prayer_cooldown_until - current_time
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Prayer is on cooldown. Wait {int(remaining)} more seconds."
+            )
+        
+        # Create new state
+        new_state = state.copy()
+        
+        # Generate random cooldown (12-19 seconds)
+        cooldown_duration = random.randint(12, 19)
+        new_state.prayer_cooldown_until = current_time + cooldown_duration
+        
+        effects = []
+        effect_description = {}
+        
+        # Roll for kill clone (1% chance)
+        if random.random() < 0.01 and new_state.applied_clone_id:
+            clone_id = new_state.applied_clone_id
+            if clone_id in new_state.clones:
+                clone = new_state.clones[clone_id]
+                clone.alive = False
+                new_state.applied_clone_id = ""
+                effects.append("kill_clone")
+                effect_description["kill_clone"] = {
+                    "clone_id": clone_id,
+                    "message": f"⚠️ TRINARY SACRIFICE: The Trinary demanded a sacrifice. Clone {clone_id} was consumed..."
+                }
+        
+        # Check for active gather task (gathering prayer)
+        active_gather_task = None
+        if new_state.active_tasks:
+            for task_id, task_data in new_state.active_tasks.items():
+                if task_data.get('type') == 'gather_resource':
+                    active_gather_task = (task_id, task_data)
+                    break
+        
+        if active_gather_task:
+            # Gathering prayer: reduce duration by 15-30%
+            task_id, task_data = active_gather_task
+            reduction_percent = random.uniform(0.15, 0.30)
+            original_duration = task_data.get('duration', 30)
+            new_duration = int(round(original_duration * (1 - reduction_percent)))
+            task_data['duration'] = new_duration
+            task_data['prayer_time_reduction'] = reduction_percent
+            effects.append("gathering_prayer")
+            effect_description["gathering_prayer"] = {
+                "reduction_percent": reduction_percent,
+                "original_duration": original_duration,
+                "new_duration": new_duration
+            }
+        else:
+            # Expedition prayer: store bonus for next expedition
+            death_reduction = random.uniform(0.02, 0.05)
+            reward_mult = random.uniform(1.05, 1.15)
+            new_state.last_pray_effect = {
+                "type": "expedition",
+                "death_reduction": death_reduction,
+                "reward_mult": reward_mult
+            }
+            effects.append("expedition_prayer")
+            effect_description["expedition_prayer"] = {
+                "death_reduction": death_reduction,
+                "reward_mult": reward_mult,
+                "message": "The Trinary blesses your next expedition..."
+            }
+        
+        # Apply womb systems (decay, attacks) after state change
+        from game.wombs import check_and_apply_womb_systems
+        new_state, attack_message = check_and_apply_womb_systems(new_state)
+        
+        response_data = {
+            "state": game_state_to_dict(new_state),
+            "message": "The Trinary works in mysterious ways...Results are unknown",
+            "effect": effect_description
+        }
+        if attack_message:
+            response_data["attack_message"] = attack_message
+        
+        response = JSONResponse(content=response_data)
+        set_session_cookie(response, sid, "session_id")
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = sanitize_error_message(e)
+        logger.error(f"Error in pray-to-trinary for session {sid[:8]}...: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
 
 

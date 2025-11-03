@@ -189,6 +189,18 @@ export class GameAPI {
     });
   }
 
+  async prayToTrinary(): Promise<{ 
+    state: GameState; 
+    message: string; 
+    effect?: Record<string, any>;
+  }> {
+    const currentState = this.getCurrentState();
+    return this.makeRequest('/api/game/pray-to-trinary', {
+      method: 'POST',
+      body: JSON.stringify(currentState || {}),
+    });
+  }
+
   async getTaskStatus(): Promise<{
     active: boolean;
     task: {

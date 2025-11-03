@@ -42,6 +42,7 @@ export function SimulationScreen() {
   const [_pendingMessages, setPendingMessages] = useState<Map<string, string>>(new Map());
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const prevClonesRef = useRef<Record<string, any>>({});
+  const [cooldownTick, setCooldownTick] = useState(0); // Force re-render for cooldown timer
 
   // Create stable version string for active_tasks to avoid object reference dependencies
   // Only recalculate when active_tasks actually changes, not when any part of state changes
@@ -162,6 +163,20 @@ export function SimulationScreen() {
       }
     }
   }, [state, hasShownWelcome]);
+
+  // Update prayer cooldown timer display (force re-render every second when on cooldown)
+  useEffect(() => {
+    if (!state?.prayer_cooldown_until) return;
+    
+    const now = Date.now() / 1000;
+    if (now >= state.prayer_cooldown_until) return; // Cooldown expired
+    
+    const interval = setInterval(() => {
+      setCooldownTick(prev => prev + 1); // Force re-render
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [state?.prayer_cooldown_until, cooldownTick]);
 
   // Track task progress locally (no backend polling needed)
   useEffect(() => {
@@ -331,6 +346,39 @@ export function SimulationScreen() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePanel]);
+
+  const handlePrayToTrinary = useCallback(async () => {
+    if (!state) return;
+    
+    const currentTime = Date.now() / 1000;
+    if (state.prayer_cooldown_until && currentTime < state.prayer_cooldown_until) {
+      const remaining = Math.ceil(state.prayer_cooldown_until - currentTime);
+      addTerminalMessage(`Prayer is on cooldown. Wait ${remaining} more seconds.`);
+      return;
+    }
+    
+    try {
+      const result = await gameAPI.prayToTrinary();
+      if (result.state) {
+        updateState(result.state);
+      }
+      if (result.message) {
+        addTerminalMessage(result.message);
+      }
+      // Show effect messages if any
+      if (result.effect) {
+        if (result.effect.kill_clone) {
+          addTerminalMessage(result.effect.kill_clone.message);
+        }
+        if (result.effect.expedition_prayer) {
+          addTerminalMessage(result.effect.expedition_prayer.message);
+        }
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to pray to Trinary';
+      addTerminalMessage(`Error: ${errorMsg}`);
+    }
+  }, [state, addTerminalMessage, updateState]);
 
   const handleAction = async (action: () => Promise<any>, actionName: string, allowDuringTasks: boolean = false) => {
     // Expeditions and immediate actions can run during gathering tasks
@@ -546,6 +594,18 @@ export function SimulationScreen() {
           <h1 className="game-title">LINEAGE</h1>
           <div className="self-stats">
             SELF: {state.self_name || localStorage.getItem('lineage_self_name') || 'Unnamed'} | Level: {state.soul_level} | Soul: {(state.soul_percent || 0).toFixed(1)}%
+            <button
+              className="pray-button"
+              onClick={handlePrayToTrinary}
+              disabled={!!(state.prayer_cooldown_until && (Date.now() / 1000) < state.prayer_cooldown_until)}
+              title={state.prayer_cooldown_until && (Date.now() / 1000) < state.prayer_cooldown_until
+                ? `Prayer on cooldown: ${Math.ceil(state.prayer_cooldown_until - (Date.now() / 1000))}s`
+                : 'Pray to Trinary - Mysterious effects await...'}
+            >
+              {state.prayer_cooldown_until && (Date.now() / 1000) < state.prayer_cooldown_until
+                ? `Pray to Trinary (${Math.ceil(state.prayer_cooldown_until - (Date.now() / 1000))}s)`
+                : 'Pray to Trinary'}
+            </button>
           </div>
         </div>
         <div className="topbar-center">

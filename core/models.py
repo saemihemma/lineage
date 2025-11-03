@@ -1,6 +1,6 @@
 """Game data models"""
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 import random
 from .config import CONFIG
 
@@ -56,15 +56,26 @@ class Clone:
         return sum(self.xp.values())
     
     def biological_days(self, current_time: float = None) -> float:
-        """Calculate biological days (8 simulation days per real day)"""
+        """
+        Calculate biological days (configurable rate per real day).
+        
+        Systems v1: Reads bio_days_per_real_day from gameplay config (default 20.0).
+        """
         import time
+        from core.config import GAMEPLAY_CONFIG
+        
         if current_time is None:
             current_time = time.time()
         if self.created_at == 0.0:
             return 0.0
-        # 8 simulation days per real day = 8/86400 per second
+        
+        # Get rate from config (default 20.0 per real day)
+        aging_config = GAMEPLAY_CONFIG.get("aging", {})
+        bio_days_per_real_day = aging_config.get("bio_days_per_real_day", 20.0)
+        
+        # Calculate: bio_days_per_real_day / 86400 per second
         elapsed_seconds = current_time - self.created_at
-        return elapsed_seconds * (8.0 / 86400.0)
+        return elapsed_seconds * (bio_days_per_real_day / 86400.0)
 
 
 @dataclass
@@ -111,6 +122,8 @@ class PlayerState:
     last_saved_ts: float = 0.0
     self_name: str = ""
     global_attention: float = 0.0  # Global attention (0-100), shared across all wombs
+    prayer_cooldown_until: Optional[float] = None  # Timestamp when prayer can be used again
+    last_pray_effect: Optional[Dict[str, Any]] = None  # Last prayer effect (for expedition bonus)
 
     def soul_level(self) -> int:
         """Calculate current SELF level"""

@@ -25,10 +25,12 @@ export function TerminalPanel({ messages }: TerminalPanelProps) {
           <div className="terminal-messages">
             {messages.map((message, index) => {
               const isFeralAttack = message.includes('FERAL DRONE ATTACK');
+              const isTrinarySacrifice = message.includes('TRINARY SACRIFICE');
+              const isRedMessage = isFeralAttack || isTrinarySacrifice;
               return (
                 <div 
                   key={index} 
-                  className={`terminal-message ${isFeralAttack ? 'terminal-message-feral' : ''}`}
+                  className={`terminal-message ${isRedMessage ? 'terminal-message-feral' : ''}`}
                 >
                   {message.split('\n').map((line, lineIndex) => (
                     <div key={lineIndex}>{line}</div>

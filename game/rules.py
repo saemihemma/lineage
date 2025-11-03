@@ -332,6 +332,12 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
     # Count active wombs for overload calculation
     active_wombs_count = len(functional_wombs) if new_state.wombs else 0
     
+    # Check for prayer bonus (clear after use)
+    prayer_bonus = getattr(state, 'last_pray_effect', None)
+    if prayer_bonus and prayer_bonus.get("type") == "expedition":
+        # Clear prayer bonus after use
+        new_state.last_pray_effect = None
+    
     ctx = OutcomeContext(
         action='expedition',
         clone=c,
@@ -343,7 +349,8 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
         config=CONFIG,  # For backward compat (practice levels, etc.)
         gameplay_config=GAMEPLAY_CONFIG,
         seed_parts=seed_parts,
-        active_wombs_count=active_wombs_count
+        active_wombs_count=active_wombs_count,
+        prayer_bonus=prayer_bonus  # Pass prayer bonus to outcome engine
     )
     
     # Resolve outcome using deterministic engine

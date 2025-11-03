@@ -215,7 +215,20 @@ export function useEventFeed(options: UseEventFeedOptions = {}) {
         return `Growing ${event.data.clone?.kind || 'clone'}...`;
       
       case 'clone.grow.complete':
-        return `${event.data.clone?.kind || 'Clone'} grown successfully. id=${event.data.clone?.id}`;
+        const clone = event.data.clone;
+        if (!clone) {
+          return `Clone grown successfully.`;
+        }
+        const traitOrder = ['PWC', 'SSC', 'MGC', 'DLT', 'ENF', 'ELK', 'FRK'];
+        const traits = clone.traits || {};
+        const traitStr = traitOrder
+          .map(traitId => {
+            const value = traits[traitId];
+            return value !== undefined ? `${traitId} ${value}` : null;
+          })
+          .filter(Boolean)
+          .join(', ');
+        return `Clone #${clone.id} crafted — Traits: ${traitStr}.`;
       
       case 'expedition.start':
         return `Starting ${event.data.kind?.toLowerCase() || 'expedition'} expedition...`;

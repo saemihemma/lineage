@@ -207,6 +207,7 @@ class OutcomeContext:
     gameplay_config: Dict[str, Any] = None  # Systems v1: From config/gameplay.json
     seed_parts: SeedParts = None  # For deterministic RNG
     active_wombs_count: int = 0  # Systems v1: For womb overload calculation
+    prayer_bonus: Optional[Dict[str, Any]] = None  # Prayer bonus from Trinary (death_reduction, reward_mult)
 
 
 def build_explanation(terms: Dict[str, Any], stats: CanonicalStats, mods_applied: List[Mod]) -> Dict[str, Any]:
@@ -629,6 +630,25 @@ def resolve_expedition(ctx: OutcomeContext) -> Outcome:
     mods.extend(self_level_mods(ctx.self_level, ctx.gameplay_config))  # Systems v1: SELF level givebacks
     mods.extend(womb_mods(ctx.womb_durability, ctx.gameplay_config))
     mods.extend(attention_mods(ctx.global_attention))
+    
+    # Prayer bonus mods (if present)
+    if ctx.prayer_bonus and ctx.prayer_bonus.get("type") == "expedition":
+        death_reduction = ctx.prayer_bonus.get("death_reduction", 0.0)
+        reward_mult = ctx.prayer_bonus.get("reward_mult", 1.0)
+        if death_reduction > 0:
+            mods.append(Mod(
+                target='death_chance',
+                op='add',
+                value=-death_reduction,  # Negative = reduction
+                source='Prayer'
+            ))
+        if reward_mult != 1.0:
+            mods.append(Mod(
+                target='reward_mult',
+                op='mult',
+                value=reward_mult,
+                source='Prayer'
+            ))
     
     # 4. Aggregate mods using single helper
     final_stats = aggregate(mods, base_stats)
