@@ -128,7 +128,7 @@ export function CloneDetailsPanel({
             {cloneTraits && Object.keys(cloneTraits).length > 0 && (
               <div className="traits-compact">
                 {traitOrder.map((traitId: string) => {
-                  const value: number | undefined = cloneTraits[traitId];
+                  const value: number | undefined = (cloneTraits as Record<string, number>)[traitId];
                   if (value === undefined) return null;
                   const traitDef = traitsConfig?.traits?.[traitId];
                   const traitName = traitDef?.name || traitId;
