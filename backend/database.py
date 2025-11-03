@@ -127,31 +127,14 @@ class SQLiteAdapter(DatabaseAdapter):
         """)
         
         # Game states table
-        # NOTE: player_id is the primary identifier (persistent across sessions)
-        # session_id is kept for backward compatibility and migration
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS game_states (
-                player_id TEXT PRIMARY KEY,
-                session_id TEXT,
+                session_id TEXT PRIMARY KEY,
                 state_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Add session_id column if it doesn't exist (for existing databases)
-        try:
-            cursor.execute("ALTER TABLE game_states ADD COLUMN session_id TEXT")
-        except Exception:
-            pass  # Column already exists
-        
-        # Add player_id column if it doesn't exist (for existing databases)
-        try:
-            cursor.execute("ALTER TABLE game_states ADD COLUMN player_id TEXT")
-            # Make it the primary key if table was created with session_id as PK
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_game_states_player_id ON game_states(player_id)")
-        except Exception:
-            pass  # Column already exists or PK conflict
         
         # Create index on updated_at for cleanup queries
         cursor.execute("""
@@ -392,31 +375,14 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """)
         
         # Game states table
-        # NOTE: player_id is the primary identifier (persistent across sessions)
-        # session_id is kept for backward compatibility and migration
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS game_states (
-                player_id VARCHAR(255) PRIMARY KEY,
-                session_id VARCHAR(255),
+                session_id VARCHAR(255) PRIMARY KEY,
                 state_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Add session_id column if it doesn't exist (for existing databases)
-        try:
-            cursor.execute("ALTER TABLE game_states ADD COLUMN IF NOT EXISTS session_id VARCHAR(255)")
-        except Exception:
-            pass  # Column already exists or PostgreSQL version doesn't support IF NOT EXISTS
-        
-        # Add player_id column if it doesn't exist (for existing databases)
-        try:
-            cursor.execute("ALTER TABLE game_states ADD COLUMN IF NOT EXISTS player_id VARCHAR(255)")
-            # Create unique index on player_id if table was created with session_id as PK
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_game_states_player_id ON game_states(player_id)")
-        except Exception:
-            pass  # Column already exists or other error
         
         # Create index on updated_at
         cursor.execute("""

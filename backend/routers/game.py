@@ -805,61 +805,35 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
     return state
 
 
-def load_game_state(db: DatabaseConnection, player_id: str, session_id: Optional[str] = None, create_if_missing: bool = False) -> Optional[GameState]:
+def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: bool = False) -> Optional[GameState]:
     """
-    Load game state from database using player_id (persistent identifier).
+    Load game state from database using session_id.
     
     Args:
         db: Database connection
-        player_id: Player identifier (from localStorage, persistent)
-        session_id: Optional session identifier (for logging/migration)
+        session_id: Session identifier
         create_if_missing: If True, create new state if not found (for recovery after redeploy)
     
     Returns:
         GameState if found or created, None otherwise
     """
-    logger.debug(f"🔍 Loading state for player_id: {player_id[:8]}...")
-    
-    # Try to load by player_id first (new system)
+    logger.debug(f"🔍 Loading state for session: {session_id[:8]}...")
     cursor = execute_query(
         db,
-        "SELECT state_data FROM game_states WHERE player_id = ?",
-        (player_id,)
+        "SELECT state_data FROM game_states WHERE session_id = ?",
+        (session_id,)
     )
     row = cursor.fetchone()
-    
-    # Fallback: if no player_id match and session_id provided, try legacy session_id lookup
-    if row is None and session_id:
-        logger.debug(f"⚠️ No state found for player_id {player_id[:8]}..., trying legacy session_id {session_id[:8]}...")
-        cursor = execute_query(
-            db,
-            "SELECT state_data FROM game_states WHERE session_id = ?",
-            (session_id,)
-        )
-        row = cursor.fetchone()
-        if row:
-            # Found by session_id - migrate to player_id
-            logger.info(f"🔄 Migrating state from session_id to player_id: {session_id[:8]}... → {player_id[:8]}...")
-            try:
-                execute_query(
-                    db,
-                    "UPDATE game_states SET player_id = ? WHERE session_id = ?",
-                    (player_id, session_id)
-                )
-                logger.info(f"✅ Migration complete: state now uses player_id {player_id[:8]}...")
-            except Exception as migrate_error:
-                logger.warning(f"⚠️ Migration failed: {migrate_error}")
-    
     if row is None:
-        logger.debug(f"❌ No state found for player_id: {player_id[:8]}..., create_if_missing={create_if_missing}")
+        logger.debug(f"❌ No state found for session: {session_id[:8]}..., create_if_missing={create_if_missing}")
         if create_if_missing:
             # Auto-recover: create new state after redeploy/database wipe
-            logger.info(f"Auto-recovering: creating new state for player_id {player_id[:8]}... (likely after redeploy)")
+            logger.info(f"Auto-recovering: creating new state for session {session_id[:8]}... (likely after redeploy)")
             state = GameState()
             state.version = get_latest_version()
             state.assembler_built = False
             state.last_saved_ts = time.time()
-            save_game_state(db, player_id, state, session_id=session_id)
+            save_game_state(db, session_id, state)
             return state
         return None
     
@@ -874,34 +848,33 @@ def load_game_state(db: DatabaseConnection, player_id: str, session_id: Optional
         state = check_and_complete_tasks(state)
         if state.active_tasks != data.get("active_tasks", {}):
             # Tasks were completed, save updated state
-            logger.info(f"🔄 Tasks completed during load, saving updated state for player_id {player_id[:8]}...")
-            save_game_state(db, player_id, state, session_id=session_id)
+            logger.info(f"🔄 Tasks completed during load, saving updated state for session {session_id[:8]}...")
+            save_game_state(db, session_id, state)
         
         return state
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         # Corrupted state - auto-recover
-        logger.error(f"Corrupted state for player_id {player_id[:8]}..., recovering: {e}")
+        logger.error(f"Corrupted state for session {session_id[:8]}..., recovering: {e}")
         if create_if_missing:
             state = GameState()
             state.version = get_latest_version()
             state.assembler_built = False
             state.last_saved_ts = time.time()
-            save_game_state(db, player_id, state, session_id=session_id)
+            save_game_state(db, session_id, state)
             return state
         return None
 
 
-def save_game_state(db: DatabaseConnection, player_id: str, state: GameState, check_version: bool = False, session_id: Optional[str] = None):
+def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, check_version: bool = False):
     """
-    Save game state to database using player_id (persistent identifier).
+    Save game state to database with optional optimistic locking.
     Applies womb systems (decay, attacks) before saving.
 
     Args:
         db: Database connection
-        player_id: Player identifier (from localStorage, persistent)
+        session_id: Session identifier
         state: Game state to save
         check_version: If True, verify version matches before saving (prevents conflicts)
-        session_id: Optional session identifier (for logging/migration)
 
     Raises:
         RuntimeError: If check_version is True and state version doesn't match database
@@ -914,8 +887,8 @@ def save_game_state(db: DatabaseConnection, player_id: str, state: GameState, ch
         # Optimistic locking: check if version matches
         cursor = execute_query(
             db,
-            "SELECT state_data FROM game_states WHERE player_id = ?",
-            (player_id,)
+            "SELECT state_data FROM game_states WHERE session_id = ?",
+            (session_id,)
         )
         row = cursor.fetchone()
         if row:
@@ -923,7 +896,7 @@ def save_game_state(db: DatabaseConnection, player_id: str, state: GameState, ch
             existing_version = existing_data.get("version", 1)
             if existing_version != state.version:
                 logger.warning(
-                    f"State conflict for player_id {player_id[:8]}...: "
+                    f"State conflict for session {session_id[:8]}...: "
                     f"expected v{state.version}, found v{existing_version}"
                 )
                 raise RuntimeError(
@@ -938,18 +911,16 @@ def save_game_state(db: DatabaseConnection, player_id: str, state: GameState, ch
     
     # Log save details
     womb_count = len(state.wombs) if state.wombs else 0
-    logger.debug(f"💾 Saving state - Player: {player_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}, Version: {state.version}")
+    logger.debug(f"💾 Saving state - Session: {session_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}, Version: {state.version}")
 
     try:
-        # Use player_id as primary key, store session_id for migration/backward compatibility
         execute_query(db, """
-            INSERT INTO game_states (player_id, session_id, state_data, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(player_id) DO UPDATE SET
-                session_id = excluded.session_id,
+            INSERT INTO game_states (session_id, state_data, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(session_id) DO UPDATE SET
                 state_data = excluded.state_data,
                 updated_at = CURRENT_TIMESTAMP
-        """, (player_id, session_id, state_json))
+        """, (session_id, state_json))
         db.commit()
     except Exception as db_error:
         # Rollback on error to prevent transaction cascade
@@ -957,7 +928,7 @@ def save_game_state(db: DatabaseConnection, player_id: str, state: GameState, ch
             db.rollback()
         except Exception as rollback_error:
             logger.error(f"Failed to rollback transaction in save_game_state: {rollback_error}")
-        logger.error(f"Database error saving game state for player_id {player_id[:8]}...: {db_error}")
+        logger.error(f"Database error saving game state for session {session_id[:8]}...: {db_error}")
         raise
 
 
