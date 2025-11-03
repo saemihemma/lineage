@@ -23,7 +23,7 @@ import { MissionControlLayout } from '../components/MissionControlLayout';
 import { CollapsiblePanel } from '../components/CollapsiblePanel';
 import { usePanelState } from '../stores/usePanelState';
 import type { GameState } from '../types/game';
-import { hasWomb, getWombCount, getUnlockedWombCount, getAverageAttentionPercent } from '../utils/wombs';
+import { hasWomb, getWombCount, getUnlockedWombCount } from '../utils/wombs';
 
 export function SimulationScreen() {
   const { state, loading, error, updateState, getCompletedTaskMessages } = useGameState();
@@ -550,15 +550,19 @@ export function SimulationScreen() {
         </div>
         <div className="topbar-center">
           <FuelBar />
-          <div className="attention-bar-global">
-            <span className="attention-bar-label">Attention:</span>
-            <div className="attention-bar-visual">
-              <div
-                className={`attention-bar-fill ${getAverageAttentionPercent(state) >= 55 ? 'critical' : getAverageAttentionPercent(state) >= 25 ? 'warning' : 'good'}`}
-                style={{ width: `${getAverageAttentionPercent(state)}%` }}
+          <div className="attention-bar">
+            <span className="attention-label">Attention</span>
+            <div className="attention-progress">
+              <div 
+                className={`attention-fill ${
+                  (state.global_attention || 0) >= 55 ? 'attention-red' : 
+                  (state.global_attention || 0) >= 25 ? 'attention-yellow' : 
+                  'attention-green'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(0, state.global_attention || 0))}%` }}
               />
-              <span className="attention-bar-text">{getAverageAttentionPercent(state).toFixed(0)}%</span>
             </div>
+            <span className="attention-value">{(state.global_attention || 0).toFixed(0)}%</span>
           </div>
           {/* Progress bar in HUD */}
           <div className="progress-bar-hud">

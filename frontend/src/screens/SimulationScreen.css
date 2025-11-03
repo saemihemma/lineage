@@ -32,59 +32,55 @@
   gap: 20px;
 }
 
-.attention-bar-global {
+.attention-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
 }
 
-.attention-bar-label {
+.attention-label {
   color: #9aa4ad;
   font-weight: 500;
+  white-space: nowrap;
 }
 
-.attention-bar-visual {
+.attention-progress {
   position: relative;
-  width: 150px;
-  height: 20px;
+  width: 120px;
+  height: 18px;
   background: #151a1f;
   border: 1px solid #1f252a;
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
-.attention-bar-fill {
+.attention-fill {
   position: absolute;
   top: 0;
   left: 0;
   height: 100%;
-  background: linear-gradient(90deg, #ff7a00 0%, #ff9933 100%);
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease;
 }
 
-.attention-bar-fill.good {
+.attention-fill.attention-green {
   background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
 }
 
-.attention-bar-fill.warning {
+.attention-fill.attention-yellow {
   background: linear-gradient(90deg, #ff9800 0%, #ffb74d 100%);
 }
 
-.attention-bar-fill.critical {
+.attention-fill.attention-red {
   background: linear-gradient(90deg, #f44336 0%, #ef5350 100%);
 }
 
-.attention-bar-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 11px;
+.attention-value {
+  color: #e7e7e7;
   font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  z-index: 1;
+  font-size: 11px;
+  min-width: 35px;
+  text-align: right;
 }
 
 /* Progress bar in HUD */
