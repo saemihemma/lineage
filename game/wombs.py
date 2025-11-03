@@ -196,12 +196,14 @@ def decay_attention(state: GameState) -> GameState:
 def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[str]]:
     """
     Check for feral drone attack based on global attention level.
-    Attack probability scales linearly with attention (0% attention = 0% chance, 100% attention = max_chance).
+    Systems v1: Uses gameplay.json attention bands and probabilities.
     
     Returns:
         (new_state, attacked_womb_id, message)
         If no attack occurs, returns (state, None, None)
     """
+    from core.config import GAMEPLAY_CONFIG
+    
     new_state = state.copy()
     
     if not new_state.wombs:
@@ -211,24 +213,40 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     if not hasattr(new_state, 'global_attention'):
         new_state.global_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)
     
-    # Calculate attack probability based on global attention
-    # Linear scaling: 0% attention = 0% chance, 100% attention = max_chance
-    max_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_MAX", 100.0)
-    max_attack_chance = CONFIG.get("WOMB_FERAL_ATTACK_CHANCE_AT_MAX", 0.25)
+    # Get attention config from gameplay.json
+    attention_config = GAMEPLAY_CONFIG.get("attention", {})
+    womb_damage_config = attention_config.get("womb_damage", {})
     
-    if max_attention <= 0:
+    # Check if womb damage is enabled
+    if not womb_damage_config.get("enabled", True):
         return new_state, None, None
     
-    # Calculate attack chance based on attention percentage
-    attention_percent = new_state.global_attention / max_attention
-    base_attack_chance = attention_percent * max_attack_chance
+    # Get attention bands from config
+    bands = attention_config.get("bands", {})
+    yellow_threshold = bands.get("yellow", 25)
+    red_threshold = bands.get("red", 55)
+    
+    # Determine attention band
+    attention_band = None
+    if new_state.global_attention >= red_threshold:
+        attention_band = "red"
+    elif new_state.global_attention >= yellow_threshold:
+        attention_band = "yellow"
+    
+    # Only attack if in yellow or red band
+    if not attention_band:
+        return new_state, None, None
+    
+    # Get attack probability for this band
+    feral_attack_probs = attention_config.get("feral_attack_prob", {})
+    attack_prob = feral_attack_probs.get(attention_band, 0.0)
     
     # Apply Kinetic synergy (reduces attack chance)
     mult = get_attack_chance_multiplier(new_state)
-    attack_chance = base_attack_chance * mult
+    attack_chance = attack_prob * mult
     
     # Roll for attack
-    if new_state.rng.random() >= attack_chance:
+    if attack_chance <= 0 or new_state.rng.random() >= attack_chance:
         return new_state, None, None  # No attack
     
     # Select random functional womb to attack
@@ -238,11 +256,16 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     
     attacked_womb = new_state.rng.choice(functional_wombs)
     
-    # Calculate damage with Kinetic synergy
-    damage_min = CONFIG.get("WOMB_ATTACK_DAMAGE_MIN", 5.0)
-    damage_max = CONFIG.get("WOMB_ATTACK_DAMAGE_MAX", 15.0)
-    base_damage = new_state.rng.uniform(damage_min, damage_max)
-    damage = base_damage * mult  # Kinetic reduces damage
+    # Calculate damage as percentage of max durability (from gameplay.json)
+    damage_min_pct = womb_damage_config.get("min", 0.02)  # 2% of max
+    damage_max_pct = womb_damage_config.get("max", 0.06)  # 6% of max
+    
+    # Apply Kinetic synergy to damage (reduces damage)
+    base_damage_pct = new_state.rng.uniform(damage_min_pct, damage_max_pct)
+    damage_pct = base_damage_pct * mult  # Kinetic reduces damage
+    
+    # Calculate absolute damage
+    damage = attacked_womb.max_durability * damage_pct
     
     # Apply damage to womb
     attacked_womb.durability = max(0.0, attacked_womb.durability - damage)
@@ -260,7 +283,7 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
         message = "Feral drone swarm detected. Womb integrity compromised."
     
     # Add damage info to message
-    message += f" Womb {attacked_womb.id} took {damage:.1f} damage. Durability: {attacked_womb.durability:.1f}/{attacked_womb.max_durability:.1f}"
+    message += f" Womb {attacked_womb.id + 1} took {damage:.1f} damage ({damage_pct*100:.1f}%). Durability: {attacked_womb.durability:.1f}/{attacked_womb.max_durability:.1f}"
     
     return new_state, attacked_womb.id, message
 
