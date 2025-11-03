@@ -17,7 +17,20 @@ export function useGameState() {
       try {
         setLoading(true);
         setError(null);
+        console.log('🔄 Loading initial game state...');
         const gameState = await gameAPI.getState();
+        
+        // Log state details for debugging
+        const wombCount = gameState.wombs?.length || 0;
+        console.log('📦 State loaded:', {
+          hasWombs: Array.isArray(gameState.wombs),
+          wombCount,
+          assemblerBuilt: gameState.assembler_built,
+          selfName: gameState.self_name,
+          hasClones: Object.keys(gameState.clones || {}).length > 0,
+          activeTasks: Object.keys(gameState.active_tasks || {}).length,
+        });
+        
         setState(gameState);
       } catch (err) {
         if (retries > 0) {
@@ -76,10 +89,19 @@ export function useGameState() {
                               newTaskKeys.some(id => !prevTasks[id]) ||
                               JSON.stringify(prevTasks) !== JSON.stringify(newTasks);
           
+          // Check if wombs changed
+          const prevWombCount = prevState.wombs?.length || 0;
+          const newWombCount = updatedState.wombs?.length || 0;
+          const wombsChanged = prevWombCount !== newWombCount;
+          
           // Always use backend state when polling - it has the latest resources, XP, etc.
           // The backend saves state after every action, so polling should always sync
           if (tasksChanged) {
             console.log(`🟢 Tasks changed: ${prevTaskKeys.length} → ${newTaskKeys.length}, syncing state from backend`);
+          }
+          
+          if (wombsChanged) {
+            console.log(`🏗️ Wombs changed: ${prevWombCount} → ${newWombCount}, syncing state from backend`);
           }
           
           // Always return backend state - it's the source of truth

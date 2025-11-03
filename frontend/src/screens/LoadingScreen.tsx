@@ -62,23 +62,33 @@ export function LoadingScreen() {
       setSaving(true);
       try {
         const trimmedName = name.trim();
+        console.log('🎯 LoadingScreen: Saving name and navigating to simulation', { name: trimmedName });
 
         // Save name to localStorage for future sessions
         localStorage.setItem(SELF_NAME_KEY, trimmedName);
 
         // Load current state
+        console.log('📥 LoadingScreen: Loading initial state...');
         let currentState = await gameAPI.getState();
+        console.log('📦 LoadingScreen: Initial state loaded', {
+          hasWombs: Array.isArray(currentState.wombs),
+          wombCount: currentState.wombs?.length || 0,
+          selfName: currentState.self_name,
+          assemblerBuilt: currentState.assembler_built,
+        });
+        
         // Update self_name
         const updatedState = {
           ...currentState,
           self_name: trimmedName,
         };
         // Save to backend (may return updated state on conflict)
+        console.log('💾 LoadingScreen: Saving state with name...');
         const savedResult = await gameAPI.saveState(updatedState);
         if (savedResult) {
           // Version conflict - use latest state from server
           currentState = savedResult;
-          console.log('Version conflict resolved, using latest state from server');
+          console.log('⚠️ LoadingScreen: Version conflict resolved, using latest state from server');
         }
         
         // Ensure name is in the state we're using (fallback safety)
@@ -86,16 +96,18 @@ export function LoadingScreen() {
           currentState.self_name = trimmedName;
           // Try one more save with the name
           try {
+            console.log('🔄 LoadingScreen: Retrying save with name...');
             await gameAPI.saveState(currentState);
           } catch (retryErr) {
-            console.warn('Failed to retry save with name:', retryErr);
+            console.warn('❌ LoadingScreen: Failed to retry save with name:', retryErr);
           }
         }
         
         // Navigate to simulation
+        console.log('➡️ LoadingScreen: Navigating to simulation');
         navigate('/simulation');
       } catch (err) {
-        console.error('Failed to save name:', err);
+        console.error('❌ LoadingScreen: Failed to save name:', err);
         // Still navigate even if save fails (name will be lost)
         navigate('/simulation');
       } finally {

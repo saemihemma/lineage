@@ -18,6 +18,13 @@ export class GameAPI {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
+    // Log request details for debugging
+    console.log(`🌐 API Request: ${options?.method || 'GET'} ${endpoint}`, {
+      url,
+      hasCredentials: true,
+      headers: options?.headers,
+    });
+    
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -27,12 +34,26 @@ export class GameAPI {
       credentials: 'include', // Important for cookies
     });
 
+    // Check if session cookie is present in response
+    const setCookieHeader = response.headers.get('Set-Cookie');
+    if (setCookieHeader) {
+      console.log(`🍪 Cookie set in response: ${setCookieHeader.substring(0, 50)}...`);
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Request failed' }));
       throw new Error(error.detail || `API request failed: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log(`✅ API Response: ${options?.method || 'GET'} ${endpoint}`, {
+      status: response.status,
+      hasState: 'state' in data,
+      hasWombs: 'state' in data && Array.isArray(data.state?.wombs),
+      wombCount: 'state' in data && Array.isArray(data.state?.wombs) ? data.state.wombs.length : 0,
+    });
+    
+    return data;
   }
 
   async getState(): Promise<GameState> {

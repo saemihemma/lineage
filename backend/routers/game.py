@@ -369,6 +369,9 @@ def get_session_id(session_id: Optional[str] = Cookie(None)) -> str:
     """
     if not session_id:
         session_id = str(uuid.uuid4())
+        logger.info(f"🆕 New session created: {session_id[:8]}...")
+    else:
+        logger.debug(f"📋 Existing session: {session_id[:8]}...")
     return session_id
 
 
@@ -426,14 +429,17 @@ def check_and_complete_tasks(state: GameState) -> GameState:
             if task_type == "build_womb":
                 from game.wombs import create_womb
                 # Create new womb with index based on current count
-                new_womb_id = len(new_state.wombs)
+                old_womb_count = len(new_state.wombs) if new_state.wombs else 0
+                new_womb_id = old_womb_count
                 new_womb = create_womb(new_womb_id)
+                if not new_state.wombs:
+                    new_state.wombs = []
                 new_state.wombs.append(new_womb)
                 # Also set assembler_built for backward compatibility (if first womb)
                 if len(new_state.wombs) == 1:
                     new_state.assembler_built = True
                 task_data['completion_message'] = f"Womb {new_womb_id + 1} built successfully. You can now grow clones."
-                logger.info(f"🏗️ Womb created: ID={new_womb_id}, total wombs={len(new_state.wombs)}, durability={new_womb.durability}/{new_womb.max_durability}")
+                logger.info(f"🏗️ Womb created: ID={new_womb_id}, total wombs={len(new_state.wombs)}, durability={new_womb.durability}/{new_womb.max_durability}, assembler_built={new_state.assembler_built}")
             
             # Complete repair_womb if this was a repair task
             if task_type == "repair_womb":
@@ -711,6 +717,7 @@ def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: 
     Returns:
         GameState if found or created, None otherwise
     """
+    logger.debug(f"🔍 Loading state for session: {session_id[:8]}...")
     cursor = execute_query(
         db,
         "SELECT state_data FROM game_states WHERE session_id = ?",
@@ -718,6 +725,7 @@ def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: 
     )
     row = cursor.fetchone()
     if row is None:
+        logger.debug(f"❌ No state found for session: {session_id[:8]}..., create_if_missing={create_if_missing}")
         if create_if_missing:
             # Auto-recover: create new state after redeploy/database wipe
             logger.info(f"Auto-recovering: creating new state for session {session_id[:8]}... (likely after redeploy)")
@@ -733,10 +741,14 @@ def load_game_state(db: DatabaseConnection, session_id: str, create_if_missing: 
         data = json.loads(row['state_data'])
         state = dict_to_game_state(data)
         
+        womb_count = len(state.wombs) if state.wombs else 0
+        logger.debug(f"✅ State loaded for session {session_id[:8]}... - Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}")
+        
         # Check and complete any finished tasks
         state = check_and_complete_tasks(state)
         if state.active_tasks != data.get("active_tasks", {}):
             # Tasks were completed, save updated state
+            logger.info(f"🔄 Tasks completed during load, saving updated state for session {session_id[:8]}...")
             save_game_state(db, session_id, state)
         
         return state
@@ -796,6 +808,10 @@ def save_game_state(db: DatabaseConnection, session_id: str, state: GameState, c
     state.version += 1
     state_dict = game_state_to_dict(state)
     state_json = json.dumps(state_dict)
+    
+    # Log save details
+    womb_count = len(state.wombs) if state.wombs else 0
+    logger.debug(f"💾 Saving state - Session: {session_id[:8]}..., Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}, Version: {state.version}")
 
     try:
         execute_query(db, """
@@ -831,6 +847,7 @@ async def get_game_state(
     from core.csrf import generate_csrf_cookie_value
 
     sid = get_session_id(session_id)
+    logger.info(f"📥 GET /state - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
     enforce_rate_limit(sid, "get_state")
 
     # Check if this is a new session (no cookie provided)
@@ -845,12 +862,16 @@ async def get_game_state(
     state = load_game_state(db, sid)
     if state is None:
         # Create new game state
+        logger.info(f"🆕 Creating new game state for session {sid[:8]}...")
         state = GameState()
         state.version = get_latest_version()
         state.assembler_built = False
         state.last_saved_ts = time.time()
         save_game_state(db, sid, state)
         is_new_session = True  # Mark as new since we just created state
+    else:
+        womb_count = len(state.wombs) if state.wombs else 0
+        logger.debug(f"📦 Loaded state for session {sid[:8]}... - Wombs: {womb_count}, Assembler: {state.assembler_built}, Self: {state.self_name}")
 
     # Check for completed tasks
     old_active_tasks = state.active_tasks.copy() if state.active_tasks else {}
@@ -1205,9 +1226,12 @@ async def build_womb_endpoint(
     Rate limit: 5 requests/minute
     """
     sid = get_session_id(session_id)
+    logger.info(f"🔨 POST /build-womb - Session: {sid[:8]}..., Cookie present: {session_id is not None}")
     enforce_rate_limit(sid, "build_womb")
 
     state = load_game_state(db, sid, create_if_missing=True)
+    current_womb_count = len(state.wombs) if state.wombs else 0
+    logger.info(f"📊 Before build_womb - Session: {sid[:8]}..., Wombs: {current_womb_count}, Assembler: {state.assembler_built}")
     
     if state is None:
         # This should rarely happen now (auto-recovery), but handle it gracefully
@@ -1228,6 +1252,9 @@ async def build_womb_endpoint(
         final_state, task_id = start_task(new_state, "build_womb")
 
         save_game_state(db, sid, final_state)
+        
+        new_womb_count = len(final_state.wombs) if final_state.wombs else 0
+        logger.info(f"✅ build_womb saved - Session: {sid[:8]}..., Wombs: {new_womb_count}, Task: {task_id}, Assembler: {final_state.assembler_built}")
 
         response = JSONResponse(content={
             "state": game_state_to_dict(final_state),

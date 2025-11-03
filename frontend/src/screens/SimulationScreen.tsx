@@ -115,17 +115,27 @@ export function SimulationScreen() {
     if (state && !hasShownWelcome) {
       setHasShownWelcome(true);
       
+      const wombCount = state.wombs?.length || 0;
+      console.log('🎮 SimulationScreen: Component mounted with state', {
+        hasWombs: Array.isArray(state.wombs),
+        wombCount,
+        assemblerBuilt: state.assembler_built,
+        selfName: state.self_name,
+        activeTasks: Object.keys(state.active_tasks || {}).length,
+      });
+      
       // Fallback to localStorage if state doesn't have self_name
       let displayName = state.self_name;
       if (!displayName) {
         const savedName = localStorage.getItem('lineage_self_name');
         if (savedName) {
           displayName = savedName;
+          console.log('📝 SimulationScreen: Syncing name from localStorage to state');
           // Try to update state with saved name
           if (state) {
             const updatedState = { ...state, self_name: savedName };
             gameAPI.saveState(updatedState).catch((err) => {
-              console.warn('Failed to sync name from localStorage:', err);
+              console.warn('❌ SimulationScreen: Failed to sync name from localStorage:', err);
             });
           }
         }
@@ -280,12 +290,28 @@ export function SimulationScreen() {
       return;
     }
 
+    // Log action start with current state
+    const currentWombCount = state.wombs?.length || 0;
+    console.log(`🎬 Starting action: ${actionName}`, {
+      currentWombs: currentWombCount,
+      assemblerBuilt: state.assembler_built,
+      hasActiveTasks: Object.keys(state.active_tasks || {}).length > 0,
+    });
+
     try {
       // Only set busy for actions that create tasks (build, grow, gather)
       if (!allowDuringTasks) {
         setIsBusy(true);
       }
       const result = await action();
+      console.log(`📥 Action response received: ${actionName}`, {
+        hasState: !!result.state,
+        hasWombs: Array.isArray(result.state?.wombs),
+        wombCount: result.state?.wombs?.length || 0,
+        hasActiveTasks: Object.keys(result.state?.active_tasks || {}).length > 0,
+        message: result.message,
+      });
+      
       if (result.state) {
         // Merge active_tasks instead of replacing (prevents flicker)
         // Important: result.state.active_tasks should contain the new task
@@ -307,6 +333,16 @@ export function SimulationScreen() {
         const taskKeys = Object.keys(mergedTasks);
         const hadTasks = Object.keys(existingTasks).length;
         const hasTasks = taskKeys.length;
+        const newWombCount = mergedState.wombs?.length || 0;
+        
+        console.log(`🔄 Merging state after ${actionName}:`, {
+          tasksBefore: hadTasks,
+          tasksAfter: hasTasks,
+          wombsBefore: currentWombCount,
+          wombsAfter: newWombCount,
+          assemblerBuilt: mergedState.assembler_built,
+        });
+        
         if (hasTasks > hadTasks) {
           console.log(`✅ Task added: ${taskKeys.length} total tasks`);
         }
