@@ -1021,6 +1021,9 @@ async def save_game_state_endpoint(
 ):
     """
     Save game state.
+    Uses optimistic locking to prevent race conditions where frontend auto-save
+    might overwrite newer backend state (e.g., after task completion).
+    
     Rate limit: 30 requests/minute
     Max request size: 1MB
     """
@@ -1030,7 +1033,9 @@ async def save_game_state_endpoint(
     try:
         state = dict_to_game_state(state_data)
         state.last_saved_ts = time.time()
-        save_game_state(db, sid, state)
+        # Use optimistic locking to prevent overwriting newer backend state
+        # This protects against race conditions where frontend auto-save sends stale state
+        save_game_state(db, sid, state, check_version=True)
 
         response = JSONResponse(content={"status": "saved"})
         response.set_cookie(
