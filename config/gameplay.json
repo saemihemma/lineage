@@ -1,0 +1,325 @@
+{
+  "config_version": "systems_v1_suffering_tune_1",
+  "attention": {
+    "bands": {
+      "yellow": 25,
+      "red": 55
+    },
+    "gain": {
+      "gather": 6,
+      "grow": 6,
+      "expedition": 9,
+      "upload": 0,
+      "build_womb": 20
+    },
+    "feral_attack_prob": {
+      "yellow": 0.12,
+      "red": 0.25
+    },
+    "effects": {
+      "gather": {
+        "time_mult": 1.12,
+        "cost_mult": 1.06
+      },
+      "grow": {
+        "time_mult": 1.12,
+        "cost_mult": 1.06
+      },
+      "expedition": {
+        "death_add": {
+          "yellow": 0.03,
+          "red": 0.07
+        }
+      },
+      "upload": {}
+    },
+    "womb_damage": {
+      "enabled": true,
+      "min": 0.02,
+      "max": 0.06
+    }
+  },
+  "expeditions": {
+    "MINING": {
+      "base_death_prob": 0.12,
+      "base_xp": 10,
+      "rewards": {
+        "Tritanium": [8, 16],
+        "Metal Ore": [6, 12]
+      },
+      "shilajit_chance": 0.0
+    },
+    "COMBAT": {
+      "base_death_prob": 0.16,
+      "base_xp": 12,
+      "rewards": {
+        "Biomass": [3, 7],
+        "Synthetic": [2, 5]
+      },
+      "shilajit_chance": 0.0
+    },
+    "EXPLORATION": {
+      "base_death_prob": 0.13,
+      "base_xp": 8,
+      "rewards": {
+        "Tritanium": [2, 6],
+        "Metal Ore": [2, 6],
+        "Organic": [1, 3]
+      },
+      "shilajit_chance": 0.15
+    }
+  },
+  "clone_kind_compatibility": {
+    "MINING": {
+      "MINER": {
+        "death_chance_mult": 0.5,
+        "notes": "MINER on MINING = 50% safer"
+      },
+      "VOLATILE": {
+        "death_chance_mult": 1.5,
+        "notes": "VOLATILE on MINING = 50% more dangerous (incompatible)"
+      }
+    },
+    "COMBAT": {
+      "VOLATILE": {
+        "death_chance_mult": 0.6,
+        "notes": "VOLATILE on COMBAT = 40% safer"
+      },
+      "MINER": {
+        "death_chance_mult": 1.3,
+        "notes": "MINER on COMBAT = 30% more dangerous (incompatible)"
+      }
+    },
+    "EXPLORATION": {
+      "BASIC": {
+        "death_chance_mult": 0.8,
+        "notes": "BASIC slightly better for EXPLORATION"
+      }
+    }
+  },
+  "xp_modifiers": {
+    "MINER_XP_MULT": 1.25,
+    "notes": "MINER clone gets 25% bonus XP on MINING expeditions"
+  },
+  "traits": {
+    "PWC": {
+      "name": "Pilot-Wave Coupling",
+      "desc": "Faster temporal harmonics."
+    },
+    "SSC": {
+      "name": "Static Shear Cohesion",
+      "desc": "Stronger frame integrity."
+    },
+    "MGC": {
+      "name": "Morphogenetic Cohesion",
+      "desc": "Stable growth channels."
+    },
+    "DLT": {
+      "name": "Differential-Drift Tol.",
+      "desc": "Coherence in unstable zones."
+    },
+    "ENF": {
+      "name": "Exotronic Noise Floor",
+      "desc": "Predictable low, volatile high."
+    },
+    "ELK": {
+      "name": "Entropic Luck",
+      "desc": "Fortune favors bold."
+    },
+    "FRK": {
+      "name": "Feralization Risk",
+      "desc": "Tendency to go rogue."
+    }
+  },
+  "traits_effects": {
+    "neutral": 5,
+    "PWC": {
+      "death_add_per_point": -0.008,
+      "reward_add_per_point": 0.02,
+      "death_cap": -0.05,
+      "reward_cap": 0.12
+    },
+    "SSC": {
+      "death_add_per_point": -0.012,
+      "reward_add_per_point": 0.01,
+      "death_cap": -0.07,
+      "reward_cap": 0.06
+    },
+    "MGC": {
+      "death_add_per_point": -0.010,
+      "reward_add_per_point": 0.015,
+      "death_cap": -0.06,
+      "reward_cap": 0.09
+    },
+    "DLT": {
+      "death_add_per_point_incompatible": -0.007,
+      "death_cap": -0.035
+    },
+    "ENF": {
+      "death_add_per_point": 0.008,
+      "reward_add_per_point": 0.03,
+      "death_cap": 0.04,
+      "reward_cap": 0.18
+    },
+    "ELK": {
+      "death_add_per_point": -0.010,
+      "death_cap": -0.05
+    },
+    "FRK": {
+      "death_add_per_point": 0.010,
+      "death_cap": 0.06
+    }
+  },
+  "self": {
+    "clone_cost_curve": {
+      "base_mult": 1.0,
+      "per_level_add": 0.025,
+      "breakpoints": [
+        {
+          "level": 4,
+          "slope_mult": 0.5
+        },
+        {
+          "level": 7,
+          "slope_mult": 0.25
+        },
+        {
+          "level": 10,
+          "slope_mult": 0.0
+        }
+      ],
+      "max_mult": 1.85
+    },
+    "level_effects": {
+      "reward_mult_per_level": 0.0020,
+      "time_mult_per_level": 0.9980,
+      "death_add_per_level": -0.0004,
+      "caps": {
+        "reward_mult_max": 1.20,
+        "time_mult_min": 0.85,
+        "death_add_floor": -0.08
+      }
+    }
+  },
+  "practices": {
+    "Kinetic": {
+      "success_add_per_level": 0.002,
+      "reward_mult_per_level": 0.002
+    },
+    "Cognitive": {
+      "time_mult_per_level": 0.997
+    },
+    "Constructive": {
+      "cost_mult_per_level": 0.995,
+      "unlocks": {
+        "tier2": 4,
+        "tier3": 9,
+        "multi_womb": 6
+      }
+    }
+  },
+  "aging": {
+    "bio_days_per_real_day": 20.0,
+    "upload": {
+      "age_k": 0.02,
+      "max_age_bonus": 4.0
+    },
+    "risk": {
+      "enabled": true,
+      "threshold_days": 160,
+      "death_add_per_day": 0.00008
+    }
+  },
+  "wombs": {
+    "durability_time_mult_per_10": 1.02,
+    "overload": {
+      "per_active_womb_attention": 4,
+      "per_active_womb_time_mult": 1.03
+    },
+    "repair": {
+      "cost": {
+        "Tritanium": 10,
+        "Organic": 8
+      },
+      "time_seconds": 30,
+      "restore_range": [0.15, 0.30]
+    }
+  },
+  "gather": {
+    "resources": {
+      "Tritanium": {
+        "base_amount": [5, 12],
+        "base_time": [12, 20],
+        "attention_delta": 6.0
+      },
+      "Metal Ore": {
+        "base_amount": [4, 10],
+        "base_time": [10, 16],
+        "attention_delta": 6.0
+      },
+      "Biomass": {
+        "base_amount": [3, 8],
+        "base_time": [6, 12],
+        "attention_delta": 6.0
+      },
+      "Synthetic": {
+        "base_amount": [2, 6],
+        "base_time": [16, 24],
+        "attention_delta": 6.0
+      },
+      "Organic": {
+        "base_amount": [3, 7],
+        "base_time": [8, 14],
+        "attention_delta": 6.0
+      },
+      "Shilajit": {
+        "base_amount": [1, 1],
+        "base_time": [58, 73],
+        "attention_delta": 6.0,
+        "notes": "Always 1, but time varies"
+      }
+    },
+    "practice_xp": {
+      "kinetic": 2
+    }
+  },
+  "grow": {
+    "base_costs": {
+      "BASIC": {
+        "Synthetic": 6,
+        "Organic": 4,
+        "Shilajit": 1
+      },
+      "MINER": {
+        "Synthetic": 8,
+        "Metal Ore": 8,
+        "Organic": 5,
+        "Shilajit": 1
+      },
+      "VOLATILE": {
+        "Synthetic": 10,
+        "Biomass": 8,
+        "Organic": 6,
+        "Shilajit": 3
+      }
+    },
+    "soul_split_base": 0.08,
+    "soul_split_variance": 0.02,
+    "attention_delta": 6.0,
+    "practice_xp": {
+      "constructive": 6
+    },
+    "time_base": {
+      "BASIC": [30, 45],
+      "MINER": [35, 50],
+      "VOLATILE": [40, 55]
+    },
+    "success_chance_base": 1.0
+  },
+  "upload": {
+    "soul_xp_retain_range": [0.6, 0.9],
+    "soul_restore_per_100_xp": 0.5,
+    "attention_delta": 0.0,
+    "notes": "Restoration = total_xp * soul_restore_per_100_xp / 100. Uncapped, can exceed 100%. Quality-based soft-cap formula."
+  }
+}

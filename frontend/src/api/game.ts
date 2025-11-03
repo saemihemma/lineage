@@ -20,6 +20,21 @@ export class GameAPI {
     return loadStateFromLocalStorage();
   }
 
+  /**
+   * Get CSRF token from cookie
+   */
+  private getCsrfToken(): string | null {
+    // Read CSRF token from cookie
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'csrf_token') {
+        return decodeURIComponent(value);
+      }
+    }
+    return null;
+  }
+
   private async makeRequest<T>(
     endpoint: string,
     options?: RequestInit
@@ -28,12 +43,14 @@ export class GameAPI {
     
     try {
       const sessionId = getOrCreateSessionId();
+      const csrfToken = this.getCsrfToken();
 
       // Log request details for debugging
       console.log(`🌐 API Request: ${options?.method || 'GET'} ${endpoint}`, {
         url,
         baseUrl: this.baseUrl,
         sessionId: sessionId,
+        hasCsrfToken: !!csrfToken,
         hasCredentials: true,
       });
 
@@ -42,6 +59,7 @@ export class GameAPI {
         headers: {
           'Content-Type': 'application/json',
           'X-Session-ID': sessionId, // Send persistent session ID for rate limiting
+          ...(csrfToken && { 'X-CSRF-Token': csrfToken }), // Add CSRF token if available
           ...options?.headers,
         },
         credentials: 'include', // Important for cookies

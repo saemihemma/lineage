@@ -121,10 +121,15 @@ def get_repair_cost_multiplier(state: GameState) -> float:
     return 1.0
 
 
-def gain_attention(state: GameState, womb_id: Optional[int] = None) -> GameState:
+def gain_attention(state: GameState, attention_delta: Optional[float] = None, womb_id: Optional[int] = None) -> GameState:
     """
     Gain global attention (typically called after actions like grow_clone, build_womb, expeditions).
     Attention is global (shared across all wombs), not per-womb.
+    
+    Args:
+        state: Current game state
+        attention_delta: Amount of attention to gain (if None, uses config default)
+        womb_id: Unused (kept for backward compat)
     
     Returns new state with updated global attention.
     """
@@ -134,10 +139,16 @@ def gain_attention(state: GameState, womb_id: Optional[int] = None) -> GameState
     if not hasattr(new_state, 'global_attention'):
         new_state.global_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)
     
-    # Calculate attention gain with synergy
-    base_gain = CONFIG.get("WOMB_ATTENTION_GAIN_ON_ACTION", 5.0)
-    mult = get_attention_gain_multiplier(new_state)
-    gain = base_gain * mult
+    # Use provided attention_delta or fall back to config
+    if attention_delta is None:
+        # Fallback to old config for backward compat
+        base_gain = CONFIG.get("WOMB_ATTENTION_GAIN_ON_ACTION", 5.0)
+        mult = get_attention_gain_multiplier(new_state)
+        gain = base_gain * mult
+    else:
+        # Use outcome's attention_delta (from gameplay.json)
+        mult = get_attention_gain_multiplier(new_state)
+        gain = attention_delta * mult
     
     # Increase global attention (cap at max)
     max_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_MAX", 100.0)
@@ -256,38 +267,31 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
 
 def calculate_repair_cost(womb: Womb) -> dict:
     """
-    Calculate resource cost to repair womb to full durability.
-    Returns dict of resource costs.
+    Calculate resource cost to repair womb.
+    
+    Systems v1: Uses fixed cost from gameplay_config.wombs.repair.cost.
     """
-    missing_durability = womb.max_durability - womb.durability
-    cost_per_point = CONFIG.get("WOMB_REPAIR_COST_PER_DURABILITY", {"Tritanium": 0.5, "Metal Ore": 0.3})
+    from core.config import GAMEPLAY_CONFIG
     
-    cost = {}
-    for resource, per_point in cost_per_point.items():
-        cost[resource] = int(missing_durability * per_point)
+    repair_config = GAMEPLAY_CONFIG.get("wombs", {}).get("repair", {})
+    cost = repair_config.get("cost", {"Tritanium": 8, "Organic": 6})
     
-    return cost
+    # Return a copy to avoid modifying the config
+    return cost.copy()
 
 
 def calculate_repair_time(state: GameState, womb: Womb) -> int:
     """
-    Calculate repair time in seconds based on missing durability and Constructive synergy.
+    Calculate repair time in seconds.
+    
+    Systems v1: Uses fixed time from gameplay_config.wombs.repair.time_seconds.
     """
-    missing_durability = womb.max_durability - womb.durability
-    max_durability = womb.max_durability
+    from core.config import GAMEPLAY_CONFIG
     
-    if max_durability == 0:
-        return 0
+    repair_config = GAMEPLAY_CONFIG.get("wombs", {}).get("repair", {})
+    base_time = repair_config.get("time_seconds", 25)
     
-    # Base time scales with percentage missing
-    time_min = CONFIG.get("WOMB_REPAIR_TIME_MIN", 20)
-    time_max = CONFIG.get("WOMB_REPAIR_TIME_MAX", 40)
-    
-    # Scale time based on damage percentage
-    damage_percent = missing_durability / max_durability
-    base_time = time_min + (time_max - time_min) * damage_percent
-    
-    # Apply Constructive synergy
+    # Apply Constructive synergy (reduces time)
     mult = get_repair_cost_multiplier(state)
     repair_time = int(base_time * mult)
     

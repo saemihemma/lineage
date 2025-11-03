@@ -24,10 +24,26 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
         Tuple of (new_state, message)
     """
     from game.wombs import get_unlocked_womb_count, create_womb
+    from core.config import GAMEPLAY_CONFIG
+    from core.game_logic import check_practice_unlock
     
-    # Check unlock conditions
-    unlocked_count = get_unlocked_womb_count(state)
+    # Systems v1: Check multi_womb unlock if trying to build second+ womb
     current_count = len(state.wombs)
+    if current_count >= 1:
+        if not check_practice_unlock(state.practices_xp, "multi_womb", GAMEPLAY_CONFIG):
+            practices_config = GAMEPLAY_CONFIG.get("practices", {})
+            constructive_config = practices_config.get("Constructive", {})
+            unlocks = constructive_config.get("unlocks", {})
+            required_level = unlocks.get("multi_womb", 6)
+            xp_per_level = CONFIG.get("PRACTICE_XP_PER_LEVEL", 100)
+            current_level = state.practices_xp.get("Constructive", 0) // xp_per_level
+            raise RuntimeError(
+                f"Cannot build multiple wombs. "
+                f"Requires Constructive practice level {required_level} (current: {current_level})."
+            )
+    
+    # Check unlock conditions (existing system)
+    unlocked_count = get_unlocked_womb_count(state)
     
     if current_count >= unlocked_count:
         raise RuntimeError(f"Cannot build more wombs. Unlocked: {unlocked_count}/{CONFIG.get('WOMB_MAX_COUNT', 4)}")
@@ -50,10 +66,13 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
     # Award practice XP (modifies practices_xp in place, but on copy)
     award_practice_xp(new_state, "Constructive", 10)
     
-    # Gain attention on existing wombs (if any)
-    if new_state.wombs:
-        from game.wombs import gain_attention
-        new_state = gain_attention(new_state)
+    # Gain attention when building womb (always, even for first womb)
+    from game.wombs import gain_attention
+    from core.config import GAMEPLAY_CONFIG
+    attention_config = GAMEPLAY_CONFIG.get("attention", {})
+    gain_config = attention_config.get("gain", {})
+    attention_delta = gain_config.get("build_womb", 20.0)  # Default to 20 if not in config
+    new_state = gain_attention(new_state, attention_delta=attention_delta)
     
     womb_num = current_count + 1
     return new_state, f"Building Womb {womb_num}..."
@@ -76,7 +95,22 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     from backend.engine.outcomes import (
         OutcomeContext, SeedParts, resolve_grow
     )
-    from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
+    from core.config import GAMEPLAY_CONFIG, GAMEPLAY_CONFIG_VERSION
+    from core.game_logic import check_practice_unlock, get_clone_kind_tier
+    
+    # Systems v1: Check practice unlocks for clone kind
+    tier_key = get_clone_kind_tier(kind)
+    if tier_key and not check_practice_unlock(state.practices_xp, tier_key, GAMEPLAY_CONFIG):
+        practices_config = GAMEPLAY_CONFIG.get("practices", {})
+        constructive_config = practices_config.get("Constructive", {})
+        unlocks = constructive_config.get("unlocks", {})
+        required_level = unlocks.get(tier_key, 0)
+        xp_per_level = CONFIG.get("PRACTICE_XP_PER_LEVEL", 100)
+        current_level = state.practices_xp.get("Constructive", 0) // xp_per_level
+        raise RuntimeError(
+            f"Cannot grow {CLONE_TYPES[kind].display}. "
+            f"Requires Constructive practice level {required_level} (current: {current_level})."
+        )
     
     # Check if womb is available (using new womb system or fallback to assembler_built)
     if not check_womb_available(state) and not state.assembler_built:
@@ -89,23 +123,29 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
         if not active_womb.is_functional():
             raise RuntimeError(f"Womb {active_womb.id} is not functional. Durability: {active_womb.durability:.1f}/{active_womb.max_durability:.1f}")
     
-    # Capture womb_id for deterministic trait generation
+    # Capture womb_id for deterministic trait generation and RNG seeding
     womb_id = active_womb.id if active_womb else 0
     
-    # Phase 6: Build outcome context for deterministic resolution
+    # Systems v1: Capture task_started_at when task is queued (will be persisted with task)
+    task_started_at = time.time()
+    
+    # Systems v1: Build outcome context for deterministic resolution
     grow_id = str(uuid.uuid4())
     seed_parts = SeedParts(
-        user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
-        session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
-        action_id=grow_id,
-        config_version=OUTCOMES_CONFIG_VERSION,
-        timestamp=time.time()
+        self_name=state.self_name or "",
+        womb_id=womb_id,
+        task_started_at=task_started_at,
+        config_version=GAMEPLAY_CONFIG_VERSION,
+        action_id=grow_id
     )
     
     # Get best womb durability
     womb_durability = 100.0  # Default
     if active_womb:
         womb_durability = active_womb.durability
+    
+    # Count active wombs for overload calculation
+    active_wombs_count = len([w for w in state.wombs if w.is_functional()])
     
     ctx = OutcomeContext(
         action='grow',
@@ -117,8 +157,9 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
         clone_kind=kind,
         soul_percent=state.soul_percent,
         config=CONFIG,
-        outcomes_config=OUTCOMES_CONFIG,
-        seed_parts=seed_parts
+        gameplay_config=GAMEPLAY_CONFIG,
+        seed_parts=seed_parts,
+        active_wombs_count=active_wombs_count
     )
     
     # Resolve outcome using deterministic engine
@@ -179,15 +220,16 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
     }
     
     # Award practice XP (from config)
-    from core.config import OUTCOMES_CONFIG
-    grow_config = OUTCOMES_CONFIG.get("grow", {})
+    from core.config import GAMEPLAY_CONFIG
+    grow_config = GAMEPLAY_CONFIG.get("grow", {})
     practice_xp = grow_config.get("practice_xp", {}).get("constructive", 6)
     award_practice_xp(new_state, "Constructive", practice_xp)
     
-    # Gain attention on active womb (if any)
+    # Gain attention on active womb (if any) - use outcome's attention_delta
     if new_state.wombs:
         from game.wombs import gain_attention
-        new_state = gain_attention(new_state)
+        attention_delta = outcome.stats.attention_delta
+        new_state = gain_attention(new_state, attention_delta=attention_delta)
     
     msg = f"{CLONE_TYPES[kind].display} growing... SELF now {new_state.soul_percent:.1f}% (consumed ~{int(outcome.soul_split_percent * 100)}%)."
     # Create a Clone object for return (but don't add to state yet)
@@ -248,16 +290,22 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
     new_state = state.copy()
     new_clone = new_state.clones[cid]
     
-    # Phase 2/3: Build outcome context for deterministic resolution
-    # Phase 3: Use config_version from outcomes_config.json
-    from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
+    # Systems v1: Build outcome context for deterministic resolution
+    from core.config import GAMEPLAY_CONFIG, GAMEPLAY_CONFIG_VERSION
+    from game.wombs import find_active_womb
+    
+    # Capture womb_id and task_started_at for deterministic seeding
+    active_womb = find_active_womb(new_state)
+    womb_id = active_womb.id if active_womb else 0
+    task_started_at = time.time()
+    
     expedition_id = str(uuid.uuid4())
     seed_parts = SeedParts(
-        user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
-        session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
-        action_id=expedition_id,
-        config_version=OUTCOMES_CONFIG_VERSION,  # Phase 3: From outcomes_config.json
-        timestamp=time.time()
+        self_name=state.self_name or "",
+        womb_id=womb_id,
+        task_started_at=task_started_at,
+        config_version=GAMEPLAY_CONFIG_VERSION,
+        action_id=expedition_id
     )
     
     # Get best womb durability
@@ -266,6 +314,9 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
         functional_wombs = [w for w in new_state.wombs if w.is_functional()]
         if functional_wombs:
             womb_durability = functional_wombs[0].durability
+    
+    # Count active wombs for overload calculation
+    active_wombs_count = len(functional_wombs) if new_state.wombs else 0
     
     ctx = OutcomeContext(
         action='expedition',
@@ -276,8 +327,9 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
         womb_durability=womb_durability,
         expedition_kind=kind,
         config=CONFIG,  # For backward compat (practice levels, etc.)
-        outcomes_config=OUTCOMES_CONFIG,  # Phase 3: From outcomes_config.json
-        seed_parts=seed_parts
+        gameplay_config=GAMEPLAY_CONFIG,
+        seed_parts=seed_parts,
+        active_wombs_count=active_wombs_count
     )
     
     # Resolve outcome using deterministic engine
@@ -318,10 +370,11 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str, Optiona
     elif kind == "EXPLORATION":
         award_practice_xp(new_state, "Cognitive", 5)
     
-    # Gain attention on active womb after successful expedition
+    # Gain attention on active womb after successful expedition - use outcome's attention_delta
     if new_state.wombs:
         from game.wombs import gain_attention
-        new_state = gain_attention(new_state)
+        attention_delta = outcome.stats.attention_delta
+        new_state = gain_attention(new_state, attention_delta=attention_delta)
     
     # Build message
     loot_str = ", ".join([f"{k}+{v}" for k, v in outcome.loot.items()])
@@ -350,7 +403,8 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[D
     from backend.engine.outcomes import (
         OutcomeContext, SeedParts, resolve_upload
     )
-    from core.config import OUTCOMES_CONFIG, OUTCOMES_CONFIG_VERSION
+    from core.config import GAMEPLAY_CONFIG, GAMEPLAY_CONFIG_VERSION
+    from game.wombs import find_active_womb
     
     c = state.clones.get(cid)
     if not c:
@@ -360,14 +414,19 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[D
     if c.uploaded:
         return state, "Clone has already been uploaded.", None
     
-    # Phase 6: Build outcome context for deterministic resolution
+    # Systems v1: Build outcome context for deterministic resolution
+    # Capture womb_id and task_started_at for deterministic seeding
+    active_womb = find_active_womb(state)
+    womb_id = active_womb.id if active_womb else 0
+    task_started_at = time.time()
+    
     upload_id = str(uuid.uuid4())
     seed_parts = SeedParts(
-        user_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
-        session_id=getattr(state, '_session_id', state.applied_clone_id or "unknown"),
-        action_id=upload_id,
-        config_version=OUTCOMES_CONFIG_VERSION,
-        timestamp=time.time()
+        self_name=state.self_name or "",
+        womb_id=womb_id,
+        task_started_at=task_started_at,
+        config_version=GAMEPLAY_CONFIG_VERSION,
+        action_id=upload_id
     )
     
     # Get best womb durability (for context, but upload doesn't use it)
@@ -376,6 +435,9 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[D
         functional_wombs = [w for w in state.wombs if w.is_functional()]
         if functional_wombs:
             womb_durability = functional_wombs[0].durability
+    
+    # Count active wombs for overload calculation
+    active_wombs_count = len(functional_wombs) if state.wombs else 0
     
     ctx = OutcomeContext(
         action='upload',
@@ -386,8 +448,9 @@ def upload_clone(state: GameState, cid: str) -> Tuple[GameState, str, Optional[D
         womb_durability=womb_durability,
         soul_percent=state.soul_percent,
         config=CONFIG,
-        outcomes_config=OUTCOMES_CONFIG,
-        seed_parts=seed_parts
+        gameplay_config=GAMEPLAY_CONFIG,
+        seed_parts=seed_parts,
+        active_wombs_count=active_wombs_count
     )
     
     # Resolve outcome using deterministic engine

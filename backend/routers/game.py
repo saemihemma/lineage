@@ -104,6 +104,7 @@ def set_session_cookie(response: JSONResponse, session_id: str, cookie_name: str
     """
     Helper to set session cookie with consistent settings.
     Simplified - just for session tracking (game state is in localStorage).
+    Also sets CSRF token cookie for POST request protection.
     """
     response.set_cookie(
         key=cookie_name,
@@ -111,6 +112,19 @@ def set_session_cookie(response: JSONResponse, session_id: str, cookie_name: str
         httponly=True,
         samesite="lax",
         secure=IS_PRODUCTION,  # True in production (HTTPS), False in dev (HTTP)
+        max_age=SESSION_EXPIRY,
+        path="/"
+    )
+    
+    # Also set CSRF token cookie (NOT HttpOnly, so client can read it for headers)
+    from core.csrf import generate_csrf_cookie_value
+    csrf_token = generate_csrf_cookie_value(session_id)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,  # Client needs to read this for X-CSRF-Token header
+        samesite="lax",
+        secure=IS_PRODUCTION,
         max_age=SESSION_EXPIRY,
         path="/"
     )
@@ -461,12 +475,11 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                     award_practice_xp(new_state, "Kinetic", practice_xp)
                     
                     # Phase 5: Gain attention from outcome (attention_delta from config)
-                    attention_delta = outcome_info.get('attention_delta', 5.0)
+                    attention_delta = outcome_info.get('attention_delta', 0.0)
                     if attention_delta > 0:
                         from game.wombs import gain_attention
-                        # Apply attention delta (gain_attention adds config value, but we want the outcome value)
-                        # For now, gain_attention uses config value, which matches our outcome config
-                        new_state = gain_attention(new_state)
+                        # Use outcome's attention_delta (from gameplay.json)
+                        new_state = gain_attention(new_state, attention_delta=attention_delta)
                     
                     # Store completion message in task data for frontend to retrieve
                     if resource == "Shilajit":
@@ -690,7 +703,8 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
         time_mult = perk_constructive_craft_time_mult(new_state)
         duration = int(round(base_seconds * time_mult))
     elif task_type == "grow_clone":
-        kind = task_params.get('clone_kind', 'BASIC')
+        # Support both 'kind' (new) and 'clone_kind' (backward compat)
+        kind = task_params.get('kind') or task_params.get('clone_kind', 'BASIC')
         t_min, t_max = CONFIG["CLONE_TIME"].get(kind, (30, 45))
         base_seconds = new_state.rng.randint(t_min, t_max)
         time_mult = perk_constructive_craft_time_mult(new_state)
@@ -1534,7 +1548,8 @@ async def grow_clone_endpoint(
             }, entity_id=grow_id)
 
         # Start timer task with clone data stored (including outcome info)
-        final_state, task_id = start_task(new_state, "grow_clone", clone_kind=kind, pending_clone_data=clone_data)
+        # Store as 'kind' for frontend compatibility (not 'clone_kind')
+        final_state, task_id = start_task(new_state, "grow_clone", kind=kind, pending_clone_data=clone_data)
 
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
