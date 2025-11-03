@@ -15,17 +15,26 @@ class GameState(PlayerState):
     """
     active_tasks: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # For task persistence
     ui_layout: Dict[str, Any] = field(default_factory=dict)  # For UI layout persistence (paned window positions)
+    _rng_instance: Optional[random.Random] = None  # Cached RNG instance (not serialized)
     
     def __post_init__(self):
         """Initialize RNG if seed is set"""
         # Ensure seed is initialized
         if self.rng_seed is None:
             self.rng_seed = random.randint(0, 2**31 - 1)
+        # Initialize cached RNG instance
+        self._rng_instance = random.Random(self.rng_seed)
     
     @property
     def rng(self) -> random.Random:
-        """Get RNG instance for this state"""
-        return self.get_rng()
+        """Get RNG instance for this state (cached for state preservation)"""
+        # Use cached instance if available and seed matches
+        if self._rng_instance is None or self.rng_seed is None:
+            self._rng_instance = random.Random(self.rng_seed)
+        elif hasattr(self._rng_instance, '_seed') and self._rng_instance._seed != self.rng_seed:
+            # Seed changed, recreate RNG
+            self._rng_instance = random.Random(self.rng_seed)
+        return self._rng_instance
     
     def copy(self) -> 'GameState':
         """Create a copy of this state (for immutable updates)"""
@@ -56,5 +65,11 @@ class GameState(PlayerState):
             setattr(new_state, 'ftue', copy.deepcopy(ftue))
         else:
             setattr(new_state, 'ftue', {})
+        # Copy RNG state by copying the internal state of the Random object
+        # This preserves RNG sequence across state copies
+        if hasattr(self, '_rng_instance') and self._rng_instance is not None:
+            new_state._rng_instance = random.Random()
+            # Copy the internal state of the RNG
+            new_state._rng_instance.setstate(self._rng_instance.getstate())
         return new_state
 

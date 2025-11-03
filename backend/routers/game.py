@@ -665,6 +665,11 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
         active_tasks=data.get("active_tasks", {}),
         ui_layout=data.get("ui_layout", {})
     )
+    # RNG instance is initialized in __post_init__, so it should be ready
+    # But ensure it's initialized if somehow it wasn't
+    import random
+    if getattr(state, '_rng_instance', None) is None:
+        state._rng_instance = random.Random(state.rng_seed)
     
     # Load wombs
     wombs_data = data.get("wombs", [])

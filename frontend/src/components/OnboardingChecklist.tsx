@@ -88,11 +88,8 @@ export function OnboardingChecklist({ state }: OnboardingChecklistProps) {
 
   const allCompleted = currentStepIndex === -1;
 
-  // Don't show if all steps completed
-  if (allCompleted) {
-    return null;
-  }
-
+  // Always show the checklist, even when all steps are completed
+  // Users should be able to see what they've accomplished
   const currentStep = currentStepIndex >= 0 ? steps[currentStepIndex] : null;
 
   return (

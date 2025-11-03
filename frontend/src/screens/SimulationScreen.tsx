@@ -307,12 +307,8 @@ export function SimulationScreen() {
     );
   }, [state]);
 
-  // Auto-collapse FTUE when complete - MUST BE BEFORE EARLY RETURNS
-  useEffect(() => {
-    if (ftueComplete) {
-      setPanelOpen('leftOpen', 'ftue', false);
-    }
-  }, [ftueComplete, setPanelOpen]);
+  // Keep FTUE panel open even when complete - users should see their progress
+  // Removed auto-collapse so checklist stays visible
 
   // Auto-expand Progress when tasks start - MUST BE BEFORE EARLY RETURNS
   useEffect(() => {

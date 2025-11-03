@@ -193,8 +193,6 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     elif kind == "EXPLORATION":
         award_practice_xp(new_state, "Cognitive", 5)
     
-    new_clone.survived_runs += 1
-    
     shilajit_found = False
     if kind == "EXPLORATION":
         if state.rng.random() < 0.15:
@@ -202,6 +200,7 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
             shilajit_found = True
     
     # Calculate death probability based on clone traits, XP, and mission compatibility
+    # IMPORTANT: Check death BEFORE incrementing survived_runs
     def calculate_death_probability(clone, expedition_kind: str, base_prob: float) -> float:
         """
         Calculate adjusted death probability based on:
@@ -264,13 +263,18 @@ def run_expedition(state: GameState, kind: str) -> Tuple[GameState, str]:
     death_roll = state.rng.random()
     
     if death_roll < adjusted_death_prob:
+        # Clone died - reduce XP and mark as dead
         frac = state.rng.uniform(0.25, 0.75)
         for k in new_clone.xp:
             new_clone.xp[k] = int(new_clone.xp[k] * (1.0 - frac))
         new_clone.alive = False
         if new_state.applied_clone_id == cid:
             new_state.applied_clone_id = ""
+        # Do NOT increment survived_runs - clone died
         return new_state, f"Your clone was lost on the {kind.lower()} expedition. A portion of its learned skill erodes."
+    
+    # Clone survived - increment survived_runs
+    new_clone.survived_runs += 1
     
     # Gain attention on active womb after successful expedition
     if new_state.wombs:
