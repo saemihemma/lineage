@@ -16,7 +16,7 @@
 .mission-control-grid {
   display: grid;
   grid-template-columns: 320px 1fr 360px;
-  grid-template-rows: 1fr minmax(180px, auto);
+  grid-template-rows: 1fr minmax(180px, 300px);
   grid-template-areas:
     "left center right"
     "bottom-left bottom bottom-right";
@@ -58,6 +58,10 @@
 .mission-control-terminal {
   grid-area: bottom;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 300px; /* Fixed max height to prevent terminal from taking over screen */
 }
 
 .mission-control-bottom-right {
