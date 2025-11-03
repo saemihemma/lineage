@@ -384,6 +384,15 @@ def check_and_complete_tasks(state: GameState) -> GameState:
     for task_id, task_data in list(new_state.active_tasks.items()):
         start_time = task_data.get('start_time', 0)
         duration = task_data.get('duration', 0)
+        task_type = task_data.get('type', 'unknown')
+        
+        # Debug: log task timing details
+        elapsed = current_time - start_time
+        remaining = max(0, (start_time + duration) - current_time)
+        if duration <= 0:
+            logger.warning(f"⚠️ Task {task_id} ({task_type}) has invalid duration: {duration}. start_time: {start_time}, current: {current_time}")
+        elif remaining <= 0:
+            logger.info(f"✅ Task {task_id} ({task_type}) completed: elapsed={elapsed:.1f}s, duration={duration}s")
         
         if current_time >= start_time + duration:
             # Task is complete
