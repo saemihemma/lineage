@@ -296,10 +296,8 @@ def get_session_id(session_id: Optional[str] = Cookie(None), request: Optional[R
         # Log more details about why new session was created
         cookie_header = request.headers.get("Cookie", "") if request else "N/A"
         logger.debug(f"New session created: {session_id[:8]}...")
-        if request:
-            logger.debug(f"   Request headers: Cookie={cookie_header[:100]}...")
     else:
-        logger.debug(f"📋 Existing session: {session_id[:8]}...")
+        logger.debug(f"Existing session: {session_id[:8]}...")
     return session_id
 
 
