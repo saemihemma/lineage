@@ -16,7 +16,7 @@
 .mission-control-grid {
   display: grid;
   grid-template-columns: 320px 1fr 360px;
-  grid-template-rows: 1fr minmax(200px, auto);
+  grid-template-rows: 1fr minmax(180px, auto);
   grid-template-areas:
     "left center right"
     "bottom-left bottom bottom-right";
@@ -43,6 +43,7 @@
 
 .mission-control-right {
   grid-area: right;
+  grid-row: 1 / -1; /* Span both rows so SELF can align with gather */
   overflow: hidden;
   display: flex;
   flex-direction: column;
