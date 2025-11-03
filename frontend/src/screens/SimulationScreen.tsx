@@ -334,7 +334,7 @@ export function SimulationScreen() {
   };
 
   const handleGrowCloneClick = () => {
-    if (!hasWomb(state)) {
+    if (!state || !hasWomb(state)) {
       addTerminalMessage('ERROR: Build the Womb first before growing clones.');
       return;
     }
