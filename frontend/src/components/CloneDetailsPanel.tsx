@@ -46,7 +46,7 @@ export function CloneDetailsPanel({
   
   // Canonical trait order
   const traitOrder = ['PWC', 'SSC', 'MGC', 'DLT', 'ENF', 'ELK', 'FRK'];
-  const cloneTraits: Record<string, number> = (clone.traits || {}) as Record<string, number>;
+  const cloneTraits: Record<string, number> = (clone.traits || {}) as unknown as Record<string, number>;
 
   return (
     <div className="panel clone-details-panel">
