@@ -14,14 +14,17 @@ def get_unlocked_womb_count(state: GameState) -> int:
     Calculate how many wombs the player has unlocked based on practice levels.
     
     Unlock conditions:
-    - Start with 0 wombs (must build first)
+    - Start with 1 womb available (can build first womb without requirements)
     - +1 when any Practice reaches Level 4
     - +1 when any Practice reaches Level 7
     - +1 when two Practices reach Level 9
     - Cap at WOMB_MAX_COUNT
     """
     max_count = CONFIG.get("WOMB_MAX_COUNT", 4)
-    unlocked = 0
+    existing_count = len(state.wombs)
+    
+    # Always start with 1 womb available (first womb has no requirements)
+    base_unlocked = 1
     
     # Get practice levels
     kinetic_level = state.practice_level("Kinetic")
@@ -34,20 +37,20 @@ def get_unlocked_womb_count(state: GameState) -> int:
     # Count practices at L9
     practices_at_l9 = sum(1 for level in levels if level >= 9)
     
-    # Apply unlock conditions
+    # Apply unlock conditions for additional wombs
+    additional_unlocks = 0
     if CONFIG.get("WOMB_UNLOCK_ANY_PRACTICE_L4", True) and max_level >= 4:
-        unlocked += 1
+        additional_unlocks += 1
     if CONFIG.get("WOMB_UNLOCK_ANY_PRACTICE_L7", True) and max_level >= 7:
-        unlocked += 1
+        additional_unlocks += 1
     if CONFIG.get("WOMB_UNLOCK_TWO_PRACTICES_L9", True) and practices_at_l9 >= 2:
-        unlocked += 1
+        additional_unlocks += 1
     
-    # Clamp to max count (minimum 1 if player already has wombs built)
-    existing_count = len(state.wombs)
-    if existing_count > 0 and unlocked == 0:
-        unlocked = 1  # At least one if they've built any
+    # Total unlocked = base (1) + additional unlocks
+    total_unlocked = base_unlocked + additional_unlocks
     
-    return min(unlocked + existing_count, max_count) if unlocked > 0 else max(0, existing_count)
+    # Cap at max count
+    return min(total_unlocked, max_count)
 
 
 def find_active_womb(state: GameState) -> Optional[Womb]:
