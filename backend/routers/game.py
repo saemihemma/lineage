@@ -983,8 +983,8 @@ async def get_game_state(
     
     if state.active_tasks != old_active_tasks:
         # Tasks were completed - emit completion events
-        logger.info(f"🔄 Tasks completed during load, saving updated state for session {session_id[:8]}... (wombs: {old_womb_count} → {new_womb_count})")
-        save_game_state(db, session_id, state)
+        logger.info(f"🔄 Tasks completed during load, saving updated state for session {sid[:8]}... (wombs: {old_womb_count} → {new_womb_count})")
+        save_game_state(db, sid, state)
         for task_id, old_task_data in old_active_tasks.items():
             if task_id not in state.active_tasks:
                 # Task was completed
@@ -1015,7 +1015,7 @@ async def get_game_state(
     elif new_womb_count != old_womb_count:
         # Wombs changed but tasks didn't (edge case - should save anyway)
         logger.warning(f"⚠️ Wombs changed ({old_womb_count} → {new_womb_count}) but active_tasks unchanged - saving anyway")
-        save_game_state(db, session_id, state)
+        save_game_state(db, sid, state)
 
     # Generate CSRF token for this session
     csrf_token = generate_csrf_cookie_value(sid)
@@ -1200,26 +1200,12 @@ async def save_game_state_endpoint(
             else:
                 # Shouldn't happen, but handle gracefully
                 response = JSONResponse(content={"status": "error", "message": str(version_error)})
-            response.set_cookie(
-                key="session_id",
-                value=sid,
-                httponly=True,
-                samesite="lax",
-                secure=IS_PRODUCTION,
-                max_age=SESSION_EXPIRY
-            )
+            set_session_cookie(response, sid, "session_id")
             return response
 
         response = JSONResponse(content={"status": "saved"})
         # Always set cookie (even if not new session, ensures cookie is refreshed)
-        response.set_cookie(
-            key="session_id",
-            value=sid,
-            httponly=True,
-            samesite="lax",
-            secure=IS_PRODUCTION,
-            max_age=SESSION_EXPIRY
-        )
+        set_session_cookie(response, sid, "session_id")
         return response
     except Exception as e:
         error_msg = sanitize_error_message(e)
