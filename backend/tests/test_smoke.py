@@ -1,4 +1,15 @@
-"""Smoke tests for golden path - ensures critical user journey never breaks"""
+"""Smoke tests for golden path - ensures critical user journey never breaks
+
+IMPORTANT: These tests MUST pass before committing code!
+Run before every commit: python -m pytest backend/tests/test_smoke.py -v
+
+These tests validate:
+- Complete user journey (session → gather → build → expedition → upload)
+- No backend errors (500s, exceptions)
+- Timer/progress bar mechanics
+- All critical API endpoints
+- HMAC signing, CSRF protection
+"""
 import pytest
 import time
 from fastapi.testclient import TestClient
@@ -362,3 +373,225 @@ class TestGoldenPathVariations:
 
         print(f"✅ All expedition types tested: MINING={final_clone['xp']['MINING']}, "
               f"COMBAT={final_clone['xp']['COMBAT']}, EXPLORATION={final_clone['xp']['EXPLORATION']}")
+
+
+class TestCriticalEndpoints:
+    """
+    Test all critical API endpoints for errors.
+
+    These tests ensure no endpoint returns 500 errors before committing code.
+    """
+
+    def test_all_critical_endpoints_return_success(self, client):
+        """
+        Test all critical GET endpoints return 200 (no 500 errors).
+
+        This catches backend errors that would break the game:
+        - Import errors (missing modules)
+        - AttributeErrors (wrong method calls)
+        - Syntax errors
+        - Database errors
+        """
+        print("\n🔍 Testing critical endpoints for errors...")
+
+        # Create session first
+        response = client.get("/api/game/state")
+        assert response.status_code == 200, "Session creation failed"
+        session_id = response.cookies.get("session_id")
+
+        critical_endpoints = [
+            # Config endpoints
+            ("GET", "/api/config/gameplay", None, "Config endpoint"),
+            ("GET", "/api/config/version", None, "Config version"),
+
+            # Time endpoint
+            ("GET", "/api/game/time", None, "Server time"),
+
+            # Debug endpoint
+            ("GET", "/api/game/debug/upload_breakdown", {"session_id": session_id}, "Upload breakdown"),
+
+            # Health check
+            ("GET", "/api/health", None, "Health check"),
+
+            # Leaderboard
+            ("GET", "/api/leaderboard", None, "Leaderboard"),
+
+            # Game state
+            ("GET", "/api/game/state", {"session_id": session_id}, "Game state"),
+            ("GET", "/api/game/tasks/status", {"session_id": session_id}, "Task status"),
+        ]
+
+        failed_endpoints = []
+
+        for method, endpoint, cookies, description in critical_endpoints:
+            print(f"   Testing {method} {endpoint}...")
+
+            if method == "GET":
+                response = client.get(endpoint, cookies=cookies or {})
+            else:
+                response = client.post(endpoint, cookies=cookies or {})
+
+            if response.status_code == 500:
+                failed_endpoints.append({
+                    "endpoint": endpoint,
+                    "description": description,
+                    "error": response.json() if response.headers.get("content-type") == "application/json" else response.text
+                })
+                print(f"   ❌ FAILED: {endpoint} returned 500")
+            elif response.status_code >= 400:
+                # 400s are acceptable (missing params, auth, etc.), but log them
+                print(f"   ⚠️  WARNING: {endpoint} returned {response.status_code}")
+            else:
+                print(f"   ✅ {endpoint} returned {response.status_code}")
+
+        if failed_endpoints:
+            error_msg = "\n\n❌ CRITICAL ENDPOINTS FAILING WITH 500 ERRORS:\n"
+            for failure in failed_endpoints:
+                error_msg += f"\n{failure['endpoint']} ({failure['description']}):\n"
+                error_msg += f"  Error: {failure['error']}\n"
+
+            assert False, error_msg
+
+        print(f"\n✅ All {len(critical_endpoints)} critical endpoints passed!")
+
+    def test_timer_mechanics_with_active_tasks(self, client):
+        """
+        Test that timers/progress bars work correctly.
+
+        Validates:
+        - active_tasks dictionary tracks timers
+        - Task has start_time, duration, kind
+        - Timer can be checked with /api/game/tasks/status
+        """
+        print("\n⏱️  Testing timer/progress bar mechanics...")
+
+        # Create session
+        response = client.get("/api/game/state")
+        session_id = response.cookies.get("session_id")
+        csrf_token = response.cookies.get("csrf_token")
+
+        # Setup resources for womb
+        state = client.get("/api/game/state", cookies={"session_id": session_id}).json()
+        state["resources"]["Tritanium"] = 100
+        state["resources"]["Metal Ore"] = 50
+
+        client.post(
+            "/api/game/state",
+            json=state,
+            cookies={"session_id": session_id, "csrf_token": csrf_token},
+            headers={"X-CSRF-Token": csrf_token}
+        )
+
+        # Start womb build (should create a timer)
+        print("   Starting Womb build (should create timer)...")
+        response = client.post(
+            "/api/game/build-womb",
+            cookies={"session_id": session_id, "csrf_token": csrf_token},
+            headers={"X-CSRF-Token": csrf_token}
+        )
+
+        assert response.status_code == 200, f"Womb build failed: {response.json()}"
+
+        result = response.json()
+        state_after_build = result["state"]
+
+        # Verify active_tasks has the timer
+        assert "active_tasks" in state_after_build, "No active_tasks in state"
+        assert len(state_after_build["active_tasks"]) > 0, "No tasks created for womb build"
+
+        # Get task details
+        task_id = list(state_after_build["active_tasks"].keys())[0]
+        task = state_after_build["active_tasks"][task_id]
+
+        assert "start_time" in task, "Task missing start_time"
+        assert "duration" in task, "Task missing duration"
+        assert "type" in task, "Task missing type"
+
+        print(f"   ✅ Timer created: {task['type']} (duration: {task['duration']}s)")
+
+        # Check timer status endpoint
+        print("   Checking /api/game/tasks/status endpoint...")
+        response = client.get(
+            "/api/game/tasks/status",
+            cookies={"session_id": session_id}
+        )
+
+        assert response.status_code == 200, "Task status endpoint failed"
+
+        task_status = response.json()
+        assert "tasks" in task_status, "Task status missing tasks array"
+        assert len(task_status["tasks"]) > 0, "Task status shows no active tasks"
+        assert "active" in task_status, "Task status missing active field"
+        assert task_status["active"] == True, "Task status should be active"
+
+        print(f"   ✅ Task status endpoint working")
+
+        # Verify timer progress (elapsed time should be >= 0)
+        first_task = task_status["tasks"][0]
+        assert "elapsed" in first_task, "Task missing elapsed time"
+        assert "duration" in first_task, "Task missing duration"
+        assert first_task["elapsed"] >= 0, "Negative elapsed time (clock skew?)"
+        assert first_task["elapsed"] <= first_task["duration"], "Elapsed > duration?"
+
+        print(f"   ✅ Timer progress: {first_task['elapsed']:.1f}s / {first_task['duration']}s")
+        print(f"\n✅ Timer mechanics validated!")
+
+    def test_no_errors_in_response_bodies(self, client):
+        """
+        Test that API responses don't contain Python tracebacks or errors.
+
+        This catches unhandled exceptions that get serialized into responses.
+        """
+        print("\n🔍 Checking for errors in API response bodies...")
+
+        # Create session
+        response = client.get("/api/game/state")
+        session_id = response.cookies.get("session_id")
+
+        endpoints_to_check = [
+            ("/api/config/gameplay", None),
+            ("/api/game/state", {"session_id": session_id}),
+            ("/api/game/time", None),
+            ("/api/leaderboard", None),
+        ]
+
+        error_keywords = [
+            "Traceback",
+            "Exception",
+            "AttributeError",
+            "KeyError",
+            "TypeError",
+            "ValueError",
+            "ImportError",
+        ]
+
+        failed_responses = []
+
+        for endpoint, cookies in endpoints_to_check:
+            response = client.get(endpoint, cookies=cookies or {})
+
+            if response.status_code == 200:
+                body = response.text
+
+                # Check for error keywords in response
+                for keyword in error_keywords:
+                    if keyword in body:
+                        failed_responses.append({
+                            "endpoint": endpoint,
+                            "keyword": keyword,
+                            "snippet": body[:500]
+                        })
+                        print(f"   ❌ {endpoint} contains '{keyword}' in response")
+                        break
+                else:
+                    print(f"   ✅ {endpoint} response clean")
+
+        if failed_responses:
+            error_msg = "\n\n❌ RESPONSES CONTAIN ERROR KEYWORDS:\n"
+            for failure in failed_responses:
+                error_msg += f"\n{failure['endpoint']} contains '{failure['keyword']}':\n"
+                error_msg += f"  Snippet: {failure['snippet'][:200]}...\n"
+
+            assert False, error_msg
+
+        print(f"\n✅ All responses clean (no error keywords found)!")
