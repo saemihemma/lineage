@@ -1843,7 +1843,17 @@ async def get_events_feed(
         # Log full exception for debugging 404 issue
         import traceback
         logger.error(f"Events feed exception traceback: {traceback.format_exc()}")
-        return JSONResponse(content=[])
+        response = JSONResponse(content=[])
+        # Still set cookie even on error
+        response.set_cookie(
+            key="session_id",
+            value=sid,
+            httponly=True,
+            samesite="lax",
+            secure=IS_PRODUCTION,
+            max_age=SESSION_EXPIRY
+        )
+        return response
 
 
 @router.get("/limits/status")
