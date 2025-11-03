@@ -110,22 +110,22 @@ class SQLiteAdapter(DatabaseAdapter):
             ON leaderboard(soul_level DESC, soul_xp DESC)
         """)
         
-        # Telemetry events table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS telemetry_events (
-                id TEXT PRIMARY KEY,
-                session_id TEXT,
-                event_type TEXT NOT NULL,
-                data TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create index on session_id and timestamp
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_telemetry_session 
-            ON telemetry_events(session_id, timestamp)
-        """)
+        # Optional tables - commented out for now (can be added back later if needed)
+        # Telemetry events table (for analytics)
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS telemetry_events (
+        #         id TEXT PRIMARY KEY,
+        #         session_id TEXT,
+        #         event_type TEXT NOT NULL,
+        #         data TEXT,
+        #         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_telemetry_session 
+        #     ON telemetry_events(session_id, timestamp)
+        # """)
         
         # Game states table - REMOVED: Game state now stored in localStorage on frontend
         # cursor.execute("""
@@ -143,79 +143,74 @@ class SQLiteAdapter(DatabaseAdapter):
         #     ON game_states(updated_at)
         # """)
 
-        # Expedition outcomes table (anti-cheat)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS expedition_outcomes (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                expedition_kind TEXT NOT NULL,
-                clone_id TEXT NOT NULL,
-                start_ts REAL NOT NULL,
-                end_ts REAL NOT NULL,
-                result TEXT NOT NULL,
-                loot_json TEXT,
-                xp_gained INTEGER DEFAULT 0,
-                survived BOOLEAN DEFAULT 1,
-                signature TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # Expedition outcomes table (anti-cheat) - optional, commented out
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS expedition_outcomes (
+        #         id TEXT PRIMARY KEY,
+        #         session_id TEXT NOT NULL,
+        #         expedition_kind TEXT NOT NULL,
+        #         clone_id TEXT NOT NULL,
+        #         start_ts REAL NOT NULL,
+        #         end_ts REAL NOT NULL,
+        #         result TEXT NOT NULL,
+        #         loot_json TEXT,
+        #         xp_gained INTEGER DEFAULT 0,
+        #         survived BOOLEAN DEFAULT 1,
+        #         signature TEXT NOT NULL,
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_expedition_outcomes_session
+        #     ON expedition_outcomes(session_id, created_at DESC)
+        # """)
 
-        # Create index on session_id for queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_expedition_outcomes_session
-            ON expedition_outcomes(session_id, created_at DESC)
-        """)
+        # Anomaly flags table (anti-cheat) - optional, commented out
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS anomaly_flags (
+        #         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #         session_id TEXT NOT NULL,
+        #         action_type TEXT NOT NULL,
+        #         anomaly_description TEXT NOT NULL,
+        #         action_rate REAL,
+        #         flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
+        #     ON anomaly_flags(session_id, flagged_at DESC)
+        # """)
 
-        # Anomaly flags table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS anomaly_flags (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                action_type TEXT NOT NULL,
-                anomaly_description TEXT NOT NULL,
-                action_rate REAL,
-                flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Create index on session_id for admin queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
-            ON anomaly_flags(session_id, flagged_at DESC)
-        """)
-
-        # Enhanced events table (A2: Event Logging & HUD)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                event_subtype TEXT,
-                entity_id TEXT,
-                payload_json TEXT,
-                privacy_level TEXT DEFAULT 'private',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Create composite index on session_id and created_at for feed queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_events_session_created
-            ON events(session_id, created_at DESC)
-        """)
-
-        # Create index on event_type for filtering
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_events_type
-            ON events(event_type, created_at DESC)
-        """)
-
-        # Create index on created_at for cursor-based pagination
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_events_created_cursor
-            ON events(created_at DESC, id)
-        """)
+        # Enhanced events table (A2: Event Logging & HUD) - optional, commented out
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS events (
+        #         id TEXT PRIMARY KEY,
+        #         session_id TEXT NOT NULL,
+        #         event_type TEXT NOT NULL,
+        #         event_subtype TEXT,
+        #         entity_id TEXT,
+        #         payload_json TEXT,
+        #         privacy_level TEXT DEFAULT 'private',
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_events_session_created
+        #     ON events(session_id, created_at DESC)
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_events_type
+        #     ON events(event_type, created_at DESC)
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_events_created_cursor
+        #     ON events(created_at DESC, id)
+        # """)
 
         # Schema initialization doesn't need explicit commit with autocommit=True
         # But we'll keep commit for safety
@@ -367,22 +362,22 @@ class PostgreSQLAdapter(DatabaseAdapter):
             ON leaderboard(soul_level DESC, soul_xp DESC)
         """)
         
-        # Telemetry events table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS telemetry_events (
-                id VARCHAR(255) PRIMARY KEY,
-                session_id VARCHAR(255),
-                event_type VARCHAR(255) NOT NULL,
-                data TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create index on session_id and timestamp
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_telemetry_session 
-            ON telemetry_events(session_id, timestamp)
-        """)
+        # Optional tables - commented out for now (can be added back later if needed)
+        # Telemetry events table (for analytics)
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS telemetry_events (
+        #         id VARCHAR(255) PRIMARY KEY,
+        #         session_id VARCHAR(255),
+        #         event_type VARCHAR(255) NOT NULL,
+        #         data TEXT,
+        #         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_telemetry_session 
+        #     ON telemetry_events(session_id, timestamp)
+        # """)
         
         # Game states table - REMOVED: Game state now stored in localStorage on frontend
         # cursor.execute("""
@@ -400,79 +395,74 @@ class PostgreSQLAdapter(DatabaseAdapter):
         #     ON game_states(updated_at)
         # """)
 
-        # Expedition outcomes table (anti-cheat)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS expedition_outcomes (
-                id VARCHAR(255) PRIMARY KEY,
-                session_id VARCHAR(255) NOT NULL,
-                expedition_kind VARCHAR(50) NOT NULL,
-                clone_id VARCHAR(255) NOT NULL,
-                start_ts DOUBLE PRECISION NOT NULL,
-                end_ts DOUBLE PRECISION NOT NULL,
-                result VARCHAR(50) NOT NULL,
-                loot_json TEXT,
-                xp_gained INTEGER DEFAULT 0,
-                survived BOOLEAN DEFAULT TRUE,
-                signature VARCHAR(64) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # Expedition outcomes table (anti-cheat) - optional, commented out
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS expedition_outcomes (
+        #         id VARCHAR(255) PRIMARY KEY,
+        #         session_id VARCHAR(255) NOT NULL,
+        #         expedition_kind VARCHAR(50) NOT NULL,
+        #         clone_id VARCHAR(255) NOT NULL,
+        #         start_ts DOUBLE PRECISION NOT NULL,
+        #         end_ts DOUBLE PRECISION NOT NULL,
+        #         result VARCHAR(50) NOT NULL,
+        #         loot_json TEXT,
+        #         xp_gained INTEGER DEFAULT 0,
+        #         survived BOOLEAN DEFAULT TRUE,
+        #         signature VARCHAR(64) NOT NULL,
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_expedition_outcomes_session
+        #     ON expedition_outcomes(session_id, created_at DESC)
+        # """)
 
-        # Create index on session_id for queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_expedition_outcomes_session
-            ON expedition_outcomes(session_id, created_at DESC)
-        """)
+        # Anomaly flags table (anti-cheat) - optional, commented out
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS anomaly_flags (
+        #         id SERIAL PRIMARY KEY,
+        #         session_id VARCHAR(255) NOT NULL,
+        #         action_type VARCHAR(50) NOT NULL,
+        #         anomaly_description TEXT NOT NULL,
+        #         action_rate DOUBLE PRECISION,
+        #         flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
+        #     ON anomaly_flags(session_id, flagged_at DESC)
+        # """)
 
-        # Anomaly flags table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS anomaly_flags (
-                id SERIAL PRIMARY KEY,
-                session_id VARCHAR(255) NOT NULL,
-                action_type VARCHAR(50) NOT NULL,
-                anomaly_description TEXT NOT NULL,
-                action_rate DOUBLE PRECISION,
-                flagged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Create index on session_id for admin queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_anomaly_flags_session
-            ON anomaly_flags(session_id, flagged_at DESC)
-        """)
-
-        # Enhanced events table (A2: Event Logging & HUD)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS events (
-                id VARCHAR(255) PRIMARY KEY,
-                session_id VARCHAR(255) NOT NULL,
-                event_type VARCHAR(50) NOT NULL,
-                event_subtype VARCHAR(50),
-                entity_id VARCHAR(255),
-                payload_json TEXT,
-                privacy_level VARCHAR(20) DEFAULT 'private',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Create composite index on session_id and created_at for feed queries
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_events_session_created
-            ON events(session_id, created_at DESC)
-        """)
-
-        # Create index on event_type for filtering
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_events_type
-            ON events(event_type, created_at DESC)
-        """)
-
-        # Create index on created_at for cursor-based pagination
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_events_created_cursor
-            ON events(created_at DESC, id)
-        """)
+        # Enhanced events table (A2: Event Logging & HUD) - optional, commented out
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS events (
+        #         id VARCHAR(255) PRIMARY KEY,
+        #         session_id VARCHAR(255) NOT NULL,
+        #         event_type VARCHAR(50) NOT NULL,
+        #         event_subtype VARCHAR(50),
+        #         entity_id VARCHAR(255),
+        #         payload_json TEXT,
+        #         privacy_level VARCHAR(20) DEFAULT 'private',
+        #         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #     )
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_events_session_created
+        #     ON events(session_id, created_at DESC)
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_events_type
+        #     ON events(event_type, created_at DESC)
+        # """)
+        # 
+        # cursor.execute("""
+        #     CREATE INDEX IF NOT EXISTS idx_events_created_cursor
+        #     ON events(created_at DESC, id)
+        # """)
 
         # Schema initialization doesn't need explicit commit with autocommit=True
         # But we'll keep commit for safety
