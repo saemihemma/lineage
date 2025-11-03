@@ -271,13 +271,29 @@ export function SimulationScreen() {
       const result = await action();
       if (result.state) {
         // Merge active_tasks instead of replacing (prevents flicker)
+        // Important: result.state.active_tasks should contain the new task
+        const existingTasks = state.active_tasks || {};
+        const newTasks = result.state.active_tasks || {};
+        
+        // Merge tasks (new tasks override existing ones with same ID, add new ones)
+        const mergedTasks = {
+          ...existingTasks,
+          ...newTasks, // This adds the new task from backend
+        };
+        
         const mergedState = {
           ...result.state,
-          active_tasks: {
-            ...state.active_tasks, // Preserve existing tasks
-            ...result.state.active_tasks, // Add/update new tasks
-          },
+          active_tasks: mergedTasks,
         };
+        
+        // Debug: log if task was actually added
+        const taskKeys = Object.keys(mergedTasks);
+        const hadTasks = Object.keys(existingTasks).length;
+        const hasTasks = taskKeys.length;
+        if (hasTasks > hadTasks) {
+          console.log(`✅ Task added: ${taskKeys.length} total tasks`);
+        }
+        
         updateState(mergedState);
 
         // For timed actions (build womb, gather, grow clone), don't show message immediately

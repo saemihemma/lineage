@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/game/migrations/0001_migration.py
+# hypothesis_version: 6.144.0
+
+[100.0, 'Biomass', 'Cognitive', 'Constructive', 'Kinetic', 'Metal Ore', 'Organic', 'Shilajit', 'Synthetic', 'Tritanium', 'active_tasks', 'applied_clone_id', 'assembler_built', 'clones', 'last_saved_ts', 'practices_xp', 'resources', 'rng_seed', 'self_name', 'soul_percent', 'soul_xp', 'ui_layout', 'version']

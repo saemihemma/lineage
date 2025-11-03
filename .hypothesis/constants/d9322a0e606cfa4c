@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/game/migrations/0002_migration.py
+# hypothesis_version: 6.144.0
+
+[100.0, 'WOMB_MAX_ATTENTION', 'WOMB_MAX_DURABILITY', 'assembler_built', 'attention', 'durability', 'id', 'max_attention', 'max_durability', 'version', 'wombs']

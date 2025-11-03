@@ -45,9 +45,14 @@ export function useGameState() {
     }
 
     // Only poll if state exists and has active tasks
-    if (!state || !state.active_tasks || Object.keys(state.active_tasks).length === 0) {
+    const activeTasks = state?.active_tasks;
+    const hasActiveTasks = activeTasks && Object.keys(activeTasks).length > 0;
+    
+    if (!state || !hasActiveTasks) {
       return;
     }
+
+    console.log(`🔵 Starting task polling: ${Object.keys(activeTasks).length} active task(s)`);
 
     // Start polling every 1 second to check for task completion
     pollingIntervalRef.current = setInterval(async () => {
@@ -65,19 +70,27 @@ export function useGameState() {
           const prevTaskKeys = Object.keys(prevTasks);
           const newTaskKeys = Object.keys(newTasks);
           
-          if (prevTaskKeys.length !== newTaskKeys.length || 
-              prevTaskKeys.some(id => !newTasks[id]) ||
-              JSON.stringify(prevTasks) !== JSON.stringify(newTasks)) {
-            // Tasks changed - update state to reflect completion
+          // Only update if tasks actually changed (completed or new tasks appeared)
+          const tasksChanged = prevTaskKeys.length !== newTaskKeys.length || 
+                              prevTaskKeys.some(id => !newTasks[id]) ||
+                              newTaskKeys.some(id => !prevTasks[id]) ||
+                              JSON.stringify(prevTasks) !== JSON.stringify(newTasks);
+          
+          if (tasksChanged) {
+            console.log(`🟢 Tasks changed: ${prevTaskKeys.length} → ${newTaskKeys.length}`);
+            // Tasks changed - update state to reflect completion or new tasks
             return updatedState;
           }
           
+          // No change - keep previous state (prevents unnecessary re-renders)
           return prevState;
         });
 
         // Check if we should stop polling (no more active tasks)
-        const hasActiveTasks = updatedState.active_tasks && Object.keys(updatedState.active_tasks).length > 0;
-        if (!hasActiveTasks && pollingIntervalRef.current) {
+        // Use updatedState to check if tasks still exist (don't rely on stale closure state)
+        const stillHasActiveTasks = updatedState.active_tasks && Object.keys(updatedState.active_tasks).length > 0;
+        if (!stillHasActiveTasks && pollingIntervalRef.current) {
+          console.log(`🔴 No more active tasks - stopping polling`);
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
@@ -90,6 +103,7 @@ export function useGameState() {
     // Cleanup on unmount or when state changes
     return () => {
       if (pollingIntervalRef.current) {
+        console.log(`🟡 Cleaning up task polling`);
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }

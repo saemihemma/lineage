@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/game/rules.py
+# hypothesis_version: 6.144.0
+
+[0.0, 0.05, 0.15, 0.25, 0.5, 0.75, 1.0, 5.0, 100.0, ', ', 'ASSEMBLER_COST', 'CLONE_COSTS', 'COMBAT', 'Clone not found.', 'Clone unavailable.', 'Cognitive', 'Constructive', 'DEATH_PROB', 'EXPLORATION', 'GATHER_AMOUNT', 'GATHER_TIME', 'Kinetic', 'MINER', 'MINER_XP_MULT', 'MINING', 'REWARDS', 'SOUL_LEVEL_STEP', 'SOUL_XP_RETAIN_RANGE', 'Shilajit', 'Womb', 'alive', 'created_at', 'id', 'kind', 'survived_runs', 'traits', 'uploaded', 'xp']
