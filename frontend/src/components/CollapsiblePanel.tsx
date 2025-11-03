@@ -48,7 +48,7 @@ export function CollapsiblePanel({
       <div 
         className="collapsible-panel-content"
         style={{ 
-          maxHeight: isOpen ? '10000px' : '0',
+          maxHeight: isOpen ? (id === 'terminal' ? 'none' : '10000px') : '0',
           opacity: isOpen ? 1 : 0,
         }}
       >

@@ -74,7 +74,7 @@
 }
 
 /* Terminal panel constraints - fixed height, scrollable */
-.terminal-panel {
+#terminal.terminal-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -82,11 +82,12 @@
   overflow: hidden;
 }
 
-.terminal-panel .collapsible-panel-content {
+#terminal.terminal-panel .collapsible-panel-content {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  max-height: none !important; /* Override inline style to allow proper flex sizing */
 }
 

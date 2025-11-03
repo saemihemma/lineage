@@ -1,5 +1,5 @@
 .fuel-bar-container {
-  display: flex;
+  display: none; /* Hidden for now, but kept in code for future use */
   align-items: center;
   gap: 8px;
   margin-left: 20px;
