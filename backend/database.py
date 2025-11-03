@@ -271,15 +271,49 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 self.conn = None
         
         if self.conn is None:
-            self.conn = psycopg2.connect(
-                self.db_url,
-                cursor_factory=RealDictCursor  # Returns dict-like rows similar to sqlite3.Row
-            )
-            # Enable autocommit mode - each query is its own transaction
-            # This prevents "transaction aborted" errors when one query fails
-            # For multi-query operations that need transactions, we'll use explicit BEGIN/COMMIT
-            self.conn.autocommit = True
-            self.init_schema(self.conn)
+            # Add connection timeout and retry logic for Railway PostgreSQL
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            max_retries = 3
+            retry_delay = 1  # seconds
+            
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"🔌 Attempting PostgreSQL connection (attempt {attempt + 1}/{max_retries})...")
+                    self.conn = psycopg2.connect(
+                        self.db_url,
+                        cursor_factory=RealDictCursor,  # Returns dict-like rows similar to sqlite3.Row
+                        connect_timeout=10  # 10 second connection timeout
+                    )
+                    # Enable autocommit mode - each query is its own transaction
+                    # This prevents "transaction aborted" errors when one query fails
+                    # For multi-query operations that need transactions, we'll use explicit BEGIN/COMMIT
+                    self.conn.autocommit = True
+                    
+                    # Test connection with a simple query
+                    test_cursor = self.conn.cursor()
+                    test_cursor.execute("SELECT 1")
+                    test_cursor.fetchone()
+                    test_cursor.close()
+                    
+                    logger.info("✅ PostgreSQL connection established successfully")
+                    self.init_schema(self.conn)
+                    break  # Success, exit retry loop
+                    
+                except psycopg2.OperationalError as e:
+                    logger.warning(f"⚠️ PostgreSQL connection failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                    if attempt < max_retries - 1:
+                        logger.info(f"   Retrying in {retry_delay} seconds...")
+                        import time
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        logger.error(f"❌ Failed to connect to PostgreSQL after {max_retries} attempts")
+                        raise
+                except Exception as e:
+                    logger.error(f"❌ Unexpected error connecting to PostgreSQL: {str(e)}")
+                    raise
         
         return self.conn
     
@@ -555,10 +589,35 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
         cursor.execute(sql, params)
         return cursor
     except Exception as e:
-        # Check if this is a PostgreSQL "transaction aborted" error
+        # Check if this is a PostgreSQL connection/session error
         error_str = str(e).lower()
         error_type = str(type(e).__name__)
         
+        # Check for connection lost errors
+        connection_errors = [
+            "server closed the connection",
+            "connection was lost",
+            "connection timed out",
+            "terminating connection",
+            "session error",
+            "server closed the connection unexpectedly"
+        ]
+        
+        if any(err in error_str for err in connection_errors):
+            logger.warning(f"⚠️ PostgreSQL connection lost: {error_str[:100]}. Will force reconnection on next query.")
+            # Force connection recreation by closing global connection
+            try:
+                global _db_instance
+                if _db_instance and hasattr(_db_instance, 'adapter') and _db_instance.adapter:
+                    _db_instance.adapter.close()
+                    _db_instance.adapter.conn = None
+                    if hasattr(_db_instance, 'conn'):
+                        _db_instance.conn = None
+                    logger.info("🔄 Closed stale PostgreSQL connection, will recreate")
+            except Exception as close_error:
+                logger.debug(f"Could not force close connection: {close_error}")
+        
+        # Check if this is a PostgreSQL "transaction aborted" error
         if ("current transaction is aborted" in error_str or 
             "infailedsqltransaction" in error_type.lower() or
             "transaction" in error_str and "aborted" in error_str):
@@ -575,4 +634,5 @@ def execute_query(conn: DatabaseConnection, sql: str, params: tuple = ()) -> Any
                 raise
         else:
             # Not a transaction error, re-raise
+            logger.error(f"Database query error: {error_type}: {error_str[:200]}")
             raise
