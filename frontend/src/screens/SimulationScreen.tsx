@@ -148,12 +148,10 @@ export function SimulationScreen() {
         if (savedName) {
           displayName = savedName;
           console.log('📝 SimulationScreen: Syncing name from localStorage to state');
-          // Try to update state with saved name
+          // Update state with saved name (auto-saves to localStorage)
           if (state) {
             const updatedState = { ...state, self_name: savedName };
-            gameAPI.saveState(updatedState).catch((err) => {
-              console.warn('❌ SimulationScreen: Failed to sync name from localStorage:', err);
-            });
+            updateState(updatedState);
           }
         }
       }
