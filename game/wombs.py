@@ -207,8 +207,8 @@ def decay_attention(state: GameState) -> GameState:
     current_time = time.time()
     hours_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 3600.0)
     
-    # Decay per hour
-    decay_per_hour = CONFIG.get("WOMB_ATTENTION_DECAY_PER_HOUR", 1.0)
+    # Decay per hour (3.0 per hour)
+    decay_per_hour = CONFIG.get("WOMB_ATTENTION_DECAY_PER_HOUR", 3.0)
     total_decay = decay_per_hour * hours_elapsed
     
     # Cognitive synergy reduces decay
@@ -457,21 +457,22 @@ def check_and_apply_womb_systems(state: GameState) -> Tuple[GameState, Optional[
     - Random attacks
     
     This should be called after state-changing operations.
-    Updates last_saved_ts to current time for accurate decay calculation.
+    Updates last_saved_ts to current time AFTER decay calculation.
     
     Returns:
         (new_state, attack_message)
         attack_message is None if no attack occurred, otherwise contains the thematic message
     """
     import time
-    # Update last_saved_ts to current time so decay is calculated from now
     new_state = state.copy()
-    new_state.last_saved_ts = time.time()
     
-    # Apply decay, passive durability decay, and attacks
+    # Apply decay FIRST using OLD timestamp, then update timestamp
     new_state = decay_attention(new_state)
     new_state = apply_passive_durability_decay(new_state)
     new_state, attacked_id, attack_msg = attack_womb(new_state)
+    
+    # Update last_saved_ts AFTER decay calculation (for next decay calculation)
+    new_state.last_saved_ts = time.time()
     
     return new_state, attack_msg
 

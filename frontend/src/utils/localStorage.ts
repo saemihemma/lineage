@@ -135,7 +135,9 @@ export function saveStateToLocalStorage(state: GameState): void {
         Cognitive: calculatePracticeLevel(state.practices_xp.Cognitive || 0),
         Constructive: calculatePracticeLevel(state.practices_xp.Constructive || 0),
       },
-      last_saved_ts: Date.now() / 1000,
+      // Preserve last_saved_ts from backend if present, otherwise use current time
+      // This ensures backend's timestamp (updated after decay calculation) is preserved
+      last_saved_ts: state.last_saved_ts || Date.now() / 1000,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));

@@ -5,7 +5,7 @@
       "max": 100.0,
       "initial": 0.0,
       "gain_on_action": 5.0,
-      "decay_per_hour": 1.0
+      "decay_per_hour": 3.0
     },
     "feral_drone_attacks": {
       "base_chance_at_max_attention": 0.25,

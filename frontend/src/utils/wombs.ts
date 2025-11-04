@@ -201,14 +201,14 @@ export function applyAttentionDecay(state: GameState): GameState {
     newState.global_attention = 0.0;
   }
   
-  // Calculate minutes since last save
+  // Calculate hours since last save (matches backend)
   const currentTime = Date.now() / 1000; // Current time in seconds
   const lastSavedTs = newState.last_saved_ts || currentTime;
-  const minutesElapsed = Math.max(0.0, (currentTime - lastSavedTs) / 60.0);
+  const hoursElapsed = Math.max(0.0, (currentTime - lastSavedTs) / 3600.0);
   
-  // Decay per minute: 3.0 per minute (balanced for active gameplay)
-  const decayPerMinute = 3.0;
-  const totalDecay = decayPerMinute * minutesElapsed;
+  // Decay per hour: 3.0 per hour (matches backend)
+  const decayPerHour = 3.0;
+  const totalDecay = decayPerHour * hoursElapsed;
   
   // Cognitive synergy affects decay
   // Note: Backend formula is decay_mult = 2.0 - mult

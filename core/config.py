@@ -151,7 +151,7 @@ CONFIG = {
     "WOMB_GLOBAL_ATTENTION_MAX": _womb_attention.get("max", 100.0),
     "WOMB_GLOBAL_ATTENTION_INITIAL": _womb_attention.get("initial", 0.0),
     "WOMB_ATTENTION_GAIN_ON_ACTION": _womb_attention.get("gain_on_action", 5.0),
-    "WOMB_ATTENTION_DECAY_PER_HOUR": _womb_attention.get("decay_per_hour", 1.0),
+    "WOMB_ATTENTION_DECAY_PER_HOUR": _womb_attention.get("decay_per_hour", 3.0),
     "WOMB_FERAL_ATTACK_CHANCE_AT_MAX": _womb_attacks.get("base_chance_at_max_attention", 0.25),
     "WOMB_ATTACK_DAMAGE_MIN": _womb_attacks.get("damage_min", 5.0),
     "WOMB_ATTACK_DAMAGE_MAX": _womb_attacks.get("damage_max", 15.0),

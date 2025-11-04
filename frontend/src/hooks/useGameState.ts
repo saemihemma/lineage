@@ -193,6 +193,18 @@ export function useGameState() {
           return prevState;
         }
 
+        // Prevent double decay: only decay if last_saved_ts is old enough (> 60 seconds)
+        // This prevents frontend decay when backend just updated state (which already applied decay)
+        const currentTime = Date.now() / 1000;
+        const lastSavedTs = prevState.last_saved_ts || currentTime;
+        const secondsSinceSave = currentTime - lastSavedTs;
+        
+        // If state was just updated from backend (< 60 seconds ago), skip decay
+        // Backend already applied decay when processing the action
+        if (secondsSinceSave < 60) {
+          return prevState;
+        }
+
         // Apply attention decay
         const decayedState = applyAttentionDecay(prevState);
         
