@@ -212,9 +212,9 @@
     "Constructive": {
       "cost_mult_per_level": 0.995,
       "unlocks": {
-        "tier2": 4,
-        "tier3": 9,
-        "multi_womb": 6
+        "tier2": 2,
+        "tier3": 4,
+        "multi_womb": null
       }
     }
   },
@@ -248,7 +248,7 @@
         "Tritanium": 10,
         "Organic": 8
       },
-      "time_seconds": 30,
+      "time_seconds": 3,
       "restore_range": [0.15, 0.30]
     }
   },
@@ -314,7 +314,7 @@
     "soul_split_variance": 0.02,
     "attention_delta": 6.0,
     "practice_xp": {
-      "constructive": 6
+      "constructive": 40
     },
     "time_base": {
       "BASIC": [30, 45],

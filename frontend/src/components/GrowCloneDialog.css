@@ -65,6 +65,32 @@
   font-size: 14px;
 }
 
+.clone-type-option.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #0f1419;
+  border-color: #222222;
+}
+
+.clone-type-option.disabled:hover {
+  border-color: #222222;
+  background-color: #0f1419;
+}
+
+.clone-type-option.disabled input[type="radio"] {
+  cursor: not-allowed;
+}
+
+.clone-type-option span.disabled-text {
+  color: #9aa4ad;
+}
+
+.clone-type-option .unlock-requirement {
+  font-size: 12px;
+  color: #ff9933;
+  font-style: italic;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

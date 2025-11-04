@@ -973,6 +973,7 @@ export function SimulationScreen() {
         onClose={() => setShowGrowDialog(false)}
         onGrow={handleGrowClone}
         disabled={isBusy}
+        state={state}
       />
 
       {/* Leaderboard Dialog */}

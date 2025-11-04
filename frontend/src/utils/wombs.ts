@@ -108,6 +108,51 @@ export function getAverageAttentionPercent(state: GameState): number {
 }
 
 /**
+ * Check if a clone type is unlocked based on Construction practice level
+ * BASIC: Always available
+ * MINER: Requires Construction level 2 (tier2)
+ * VOLATILE: Requires Construction level 4 (tier3)
+ */
+export function isCloneTypeUnlocked(state: GameState, cloneKind: string): boolean {
+  // BASIC is always available
+  if (cloneKind === 'BASIC') {
+    return true;
+  }
+
+  // Get Construction practice level (safe access with fallbacks)
+  const constructiveLevel = state.practice_levels?.Constructive ?? 0;
+  
+  // MINER requires Construction level 2 (tier2)
+  if (cloneKind === 'MINER') {
+    return constructiveLevel >= 2;
+  }
+  
+  // VOLATILE requires Construction level 4 (tier3)
+  if (cloneKind === 'VOLATILE') {
+    return constructiveLevel >= 4;
+  }
+  
+  // Unknown clone type - default to unlocked (shouldn't happen)
+  return true;
+}
+
+/**
+ * Get unlock requirement text for a clone type
+ */
+export function getCloneUnlockRequirement(cloneKind: string): string | null {
+  if (cloneKind === 'BASIC') {
+    return null; // No requirement
+  }
+  if (cloneKind === 'MINER') {
+    return 'Requires Construction L2';
+  }
+  if (cloneKind === 'VOLATILE') {
+    return 'Requires Construction L4';
+  }
+  return null;
+}
+
+/**
  * Calculate practice level from practice XP
  */
 function calculatePracticeLevel(practiceXp: number): number {
