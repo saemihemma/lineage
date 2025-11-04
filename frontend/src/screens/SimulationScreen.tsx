@@ -184,12 +184,20 @@ export function SimulationScreen() {
     
     const now = Date.now() / 1000;
     if (now >= cooldownUntil) {
-      // Cooldown expired, reset tick
+      // Cooldown expired, clear it from state and reset tick
       if (cooldownTick > 0) setCooldownTick(0);
+      // Clear expired cooldown from state
+      if (state.prayer_cooldown_until) {
+        updateState({
+          ...state,
+          prayer_cooldown_until: undefined
+        });
+      }
       return;
     }
     
     // Still on cooldown - update every second
+    // Remove cooldownTick from dependencies to prevent infinite loops
     const interval = setInterval(() => {
       const currentTime = Date.now() / 1000;
       // Use ref to get latest state
@@ -199,15 +207,19 @@ export function SimulationScreen() {
         return;
       }
       if (currentTime >= currentState.prayer_cooldown_until) {
-        // Cooldown just expired, stop interval
+        // Cooldown just expired, clear it and stop interval
         setCooldownTick(0);
+        updateState({
+          ...currentState,
+          prayer_cooldown_until: undefined
+        });
         return;
       }
       setCooldownTick(prev => prev + 1); // Force re-render
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [state?.prayer_cooldown_until, cooldownTick]);
+  }, [state?.prayer_cooldown_until, updateState]); // Added updateState to dependencies
 
   // Track task progress locally (no backend polling needed)
   useEffect(() => {
@@ -399,6 +411,12 @@ export function SimulationScreen() {
     setIsPraying(true);
     try {
       const result = await gameAPI.prayToTrinary();
+      console.log('📿 Prayer response:', {
+        hasState: !!result.state,
+        prayer_cooldown_until: result.state?.prayer_cooldown_until,
+        currentTime: Date.now() / 1000,
+        remaining: result.state?.prayer_cooldown_until ? Math.max(0, result.state.prayer_cooldown_until - Date.now() / 1000) : 0
+      });
       if (result.state) {
         updateState(result.state);
       }

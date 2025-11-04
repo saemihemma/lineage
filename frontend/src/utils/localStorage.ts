@@ -96,6 +96,13 @@ export function loadStateFromLocalStorage(): GameState | null {
     if (typeof parsed.global_attention !== 'number') {
       parsed.global_attention = 0.0;  // Initialize global attention if missing (for old saves)
     }
+    // Clear expired prayer cooldown (if it exists and is in the past)
+    if (parsed.prayer_cooldown_until && typeof parsed.prayer_cooldown_until === 'number') {
+      const now = Date.now() / 1000;
+      if (parsed.prayer_cooldown_until < now) {
+        parsed.prayer_cooldown_until = undefined; // Clear expired cooldown
+      }
+    }
     if (!parsed.resources) {
       parsed.resources = {
         "Tritanium": 60,
