@@ -414,6 +414,47 @@ export function SimulationScreen() {
     
     // Check for blocking tasks only if this action requires exclusive access
     if (!allowDuringTasks && isBusy) {
+      // Generate helpful feedback about what's blocking
+      const activeTasks = state.active_tasks || {};
+      const taskEntries = Object.entries(activeTasks);
+      if (taskEntries.length > 0) {
+        const [, taskData] = taskEntries[0];
+        const taskType = taskData.type || 'unknown';
+        const startTime = taskData.start_time || 0;
+        const duration = taskData.duration || 0;
+        const now = Date.now() / 1000;
+        const elapsed = now - startTime;
+        const remaining = Math.max(0, duration - elapsed);
+        
+        // Get task description
+        let taskDesc = 'Unknown task';
+        if (taskType === 'grow_clone') {
+          const kind = taskData.kind || 'clone';
+          taskDesc = `Growing ${kind} clone`;
+        } else if (taskType === 'build_womb') {
+          taskDesc = 'Building womb';
+        } else if (taskType === 'repair_womb') {
+          const wombId = taskData.womb_id || 0;
+          taskDesc = `Repairing Womb ${wombId + 1}`;
+        } else if (taskType === 'gather_resource') {
+          const resource = taskData.resource || 'resources';
+          taskDesc = `Gathering ${resource}`;
+        }
+        
+        const remainingSeconds = Math.ceil(remaining);
+        const remainingMinutes = Math.floor(remainingSeconds / 60);
+        const remainingSecs = remainingSeconds % 60;
+        let timeStr = '';
+        if (remainingMinutes > 0) {
+          timeStr = `${remainingMinutes}m ${remainingSecs}s`;
+        } else {
+          timeStr = `${remainingSeconds}s`;
+        }
+        
+        addTerminalMessage(`⏳ Cannot ${actionName}: ${taskDesc} is in progress. ${timeStr} remaining.`);
+      } else {
+        addTerminalMessage(`⏳ Cannot ${actionName}: A task is already in progress.`);
+      }
       console.warn(`Action blocked: ${actionName} (exclusive task in progress)`);
       return;
     }
