@@ -2,7 +2,7 @@
  * Wombs Panel - Unified view showing all unlocked wombs (built + unbuilt)
  */
 import type { GameState } from '../types/game';
-import { getWombCount, getUnlockedWombCount, getNextUnlockHint } from '../utils/wombs';
+import { getWombCount, getUnlockedWombCount } from '../utils/wombs';
 import './WombsPanel.css';
 
 interface WombsPanelProps {

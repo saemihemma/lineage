@@ -171,8 +171,10 @@ export function SimulationScreen() {
       return;
     }
     
+    const cooldownUntil = state.prayer_cooldown_until; // Capture value
+    
     const now = Date.now() / 1000;
-    if (now >= state.prayer_cooldown_until) {
+    if (now >= cooldownUntil) {
       // Cooldown expired, reset tick
       if (cooldownTick > 0) setCooldownTick(0);
       return;
@@ -181,7 +183,13 @@ export function SimulationScreen() {
     // Still on cooldown - update every second
     const interval = setInterval(() => {
       const currentTime = Date.now() / 1000;
-      if (currentTime >= state.prayer_cooldown_until) {
+      // Use ref to get latest state
+      const currentState = stateRef.current;
+      if (!currentState?.prayer_cooldown_until) {
+        setCooldownTick(0);
+        return;
+      }
+      if (currentTime >= currentState.prayer_cooldown_until) {
         // Cooldown just expired, stop interval
         setCooldownTick(0);
         return;
