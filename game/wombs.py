@@ -288,19 +288,45 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     return new_state, attacked_womb.id, message
 
 
-def calculate_repair_cost(womb: Womb) -> dict:
+def calculate_repair_cost(womb: Womb, state: GameState) -> dict:
     """
     Calculate resource cost to repair womb.
     
-    Systems v1: Uses fixed cost from gameplay_config.wombs.repair.cost.
+    Cost is 10x per durability point compared to building a new womb.
+    Building cost: {"Tritanium": 30, "Metal Ore": 20, "Biomass": 5} for 100 durability
+    Per durability: 0.3 Tritanium, 0.2 Metal Ore, 0.05 Biomass
+    10x per durability: 3.0 Tritanium, 2.0 Metal Ore, 0.5 Biomass per point
+    
+    Charges for maximum possible restore amount (30% = 30 durability points).
     """
-    from core.config import GAMEPLAY_CONFIG
+    from core.config import GAMEPLAY_CONFIG, CONFIG
+    from core.game_logic import inflate_costs
     
+    # Get base building cost (before inflation)
+    base_build_cost = CONFIG["ASSEMBLER_COST"]  # {"Tritanium": 30, "Metal Ore": 20, "Biomass": 5}
+    max_durability = womb.max_durability  # Typically 100.0
+    
+    # Calculate cost per durability point (10x building cost)
+    cost_per_durability = {}
+    for resource, amount in base_build_cost.items():
+        cost_per_durability[resource] = (amount / max_durability) * 10.0
+    
+    # Get repair config for restore range
     repair_config = GAMEPLAY_CONFIG.get("wombs", {}).get("repair", {})
-    cost = repair_config.get("cost", {"Tritanium": 8, "Organic": 6})
+    restore_range = repair_config.get("restore_range", [0.15, 0.30])
+    max_restore_percent = restore_range[1]  # Maximum restore (30%)
+    max_restore_durability = max_durability * max_restore_percent  # 30 durability points
     
-    # Return a copy to avoid modifying the config
-    return cost.copy()
+    # Calculate cost for maximum possible restore
+    repair_cost = {}
+    for resource, per_point_cost in cost_per_durability.items():
+        repair_cost[resource] = int(round(per_point_cost * max_restore_durability))
+    
+    # Apply SELF level inflation (same as building)
+    level = state.soul_level()
+    inflated_cost = inflate_costs(repair_cost, level)
+    
+    return inflated_cost
 
 
 def calculate_repair_time(state: GameState, womb: Womb) -> int:
@@ -335,7 +361,7 @@ def create_womb(womb_id: int) -> Womb:
 def apply_passive_durability_decay(state: GameState) -> GameState:
     """
     Apply passive durability decay to wombs over time.
-    Small random damage occurs naturally as wombs age and wear.
+    Wombs naturally degrade at a fixed rate per minute.
     
     Returns new state with decayed womb durability.
     """
@@ -353,20 +379,17 @@ def apply_passive_durability_decay(state: GameState) -> GameState:
     if not passive_decay.get("enabled", True):
         return new_state
     
-    # Calculate hours since last save
+    # Calculate minutes since last save
     current_time = time.time()
-    hours_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 3600.0)
+    minutes_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 60.0)
     
-    # Decay per hour (small random damage)
-    decay_per_hour_min = passive_decay.get("damage_per_hour_min", 0.1)  # 0.1 durability per hour
-    decay_per_hour_max = passive_decay.get("damage_per_hour_max", 0.3)  # 0.3 durability per hour
+    # Decay per minute (fixed rate)
+    decay_per_minute = passive_decay.get("damage_per_minute", 2.0)  # 2.0 durability per minute
     
     # Apply decay to each womb
     for womb in new_state.wombs:
         if womb.durability > 0:
-            # Random damage per hour (different for each womb)
-            damage_per_hour = new_state.rng.uniform(decay_per_hour_min, decay_per_hour_max)
-            total_damage = damage_per_hour * hours_elapsed
+            total_damage = decay_per_minute * minutes_elapsed
             
             # Apply damage (but don't let it go below 0)
             womb.durability = max(0.0, womb.durability - total_damage)

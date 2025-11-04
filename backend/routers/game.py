@@ -2205,7 +2205,7 @@ async def repair_womb_endpoint(
     
     try:
         # Calculate repair cost and time
-        repair_cost = calculate_repair_cost(target_womb)
+        repair_cost = calculate_repair_cost(target_womb, state)
         repair_time = calculate_repair_time(state, target_womb)
         
         # Check if player can afford repair

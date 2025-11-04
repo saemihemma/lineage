@@ -238,8 +238,7 @@
     },
     "passive_decay": {
       "enabled": true,
-      "damage_per_hour_min": 0.1,
-      "damage_per_hour_max": 0.3
+      "damage_per_minute": 2.0
     },
     "repair": {
       "cost": {
