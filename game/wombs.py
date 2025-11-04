@@ -342,35 +342,37 @@ def calculate_repair_cost(womb: Womb, state: GameState) -> dict:
     """
     Calculate resource cost to repair womb.
     
-    Cost is 10x per durability point compared to building a new womb.
+    Cost is 3x per durability point compared to building a new womb.
     Building cost: {"Tritanium": 30, "Metal Ore": 20, "Biomass": 5} for 100 durability
     Per durability: 0.3 Tritanium, 0.2 Metal Ore, 0.05 Biomass
-    10x per durability: 3.0 Tritanium, 2.0 Metal Ore, 0.5 Biomass per point
+    3x per durability: 0.9 Tritanium, 0.6 Metal Ore, 0.15 Biomass per point
     
-    Charges for maximum possible restore amount (30% = 30 durability points).
+    Charges for actual restore amount (5 points or remaining if less).
     """
-    from core.config import GAMEPLAY_CONFIG, CONFIG
+    from core.config import CONFIG
     from core.game_logic import inflate_costs
     
     # Get base building cost (before inflation)
     base_build_cost = CONFIG["ASSEMBLER_COST"]  # {"Tritanium": 30, "Metal Ore": 20, "Biomass": 5}
     max_durability = womb.max_durability  # Typically 100.0
     
-    # Calculate cost per durability point (10x building cost)
+    # Calculate missing durability and restore amount (5 points or remaining)
+    missing_durability = max_durability - womb.durability
+    restore_amount = min(5.0, missing_durability)  # Restore 5 or remaining if less
+    
+    if restore_amount <= 0:
+        # Already at max, no repair needed
+        return {resource: 0 for resource in base_build_cost.keys()}
+    
+    # Calculate cost per durability point (3x building cost)
     cost_per_durability = {}
     for resource, amount in base_build_cost.items():
-        cost_per_durability[resource] = (amount / max_durability) * 10.0
+        cost_per_durability[resource] = (amount / max_durability) * 3.0
     
-    # Get repair config for restore range
-    repair_config = GAMEPLAY_CONFIG.get("wombs", {}).get("repair", {})
-    restore_range = repair_config.get("restore_range", [0.15, 0.30])
-    max_restore_percent = restore_range[1]  # Maximum restore (30%)
-    max_restore_durability = max_durability * max_restore_percent  # 30 durability points
-    
-    # Calculate cost for maximum possible restore
+    # Calculate cost for actual restore amount
     repair_cost = {}
     for resource, per_point_cost in cost_per_durability.items():
-        repair_cost[resource] = int(round(per_point_cost * max_restore_durability))
+        repair_cost[resource] = int(round(per_point_cost * restore_amount))
     
     # Apply SELF level inflation (same as building)
     level = state.soul_level()

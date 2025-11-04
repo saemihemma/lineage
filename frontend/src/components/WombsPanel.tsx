@@ -123,7 +123,7 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
 
             const durabilityColor = durabilityPercent >= 50 ? 'good' : durabilityPercent >= 25 ? 'warning' : 'critical';
             const isFunctional = womb.durability > 0;
-            const needsRepair = womb.durability < womb.max_durability;
+            const needsRepair = durabilityPercent < 50;  // Only show "needs repair" below 50%
             
             return (
               <div 
@@ -147,7 +147,7 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
                   <div className="womb-card-durability">
                     <div className="womb-card-durability-label">Health</div>
                     <div className="womb-card-durability-value">
-                      {Math.round(womb.durability)} / {Math.round(womb.max_durability)}
+                      {womb.durability.toFixed(1)} / {womb.max_durability.toFixed(1)}
                     </div>
                     <div className="womb-card-durability-bar">
                       <div 
@@ -157,13 +157,13 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
                     </div>
                   </div>
                   
-                  {/* Always show repair button if onRepair handler exists */}
-                  {onRepair && (
+                  {/* Show repair button only when durability < 50% */}
+                  {onRepair && needsRepair && (
                     <button
                       className="womb-card-action-btn"
                       onClick={() => onRepair(womb.id)}
-                      disabled={disabled || womb.durability >= womb.max_durability}
-                      title={womb.durability >= womb.max_durability ? "Womb is at full durability" : "Repair womb"}
+                      disabled={disabled}
+                      title="Repair womb (restores 5 durability points)"
                     >
                       Repair
                     </button>

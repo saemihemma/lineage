@@ -725,21 +725,13 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
             
             # Complete repair_womb if this was a repair task
             if task_type == "repair_womb":
-                from core.config import GAMEPLAY_CONFIG
-                import random
-                
                 womb_id = task_data.get('womb_id')
                 if womb_id is not None:
                     target_womb = next((w for w in new_state.wombs if w.id == womb_id), None)
                     if target_womb:
-                        # Systems v1: Restore durability by random amount from config range
-                        repair_config = GAMEPLAY_CONFIG.get("wombs", {}).get("repair", {})
-                        restore_range = repair_config.get("restore_range", [0.15, 0.30])
-                        restore_min, restore_max = restore_range[0], restore_range[1]
-                        
-                        # Calculate restore amount as percentage of max durability
-                        restore_percent = new_state.rng.uniform(restore_min, restore_max)
-                        restore_amount = target_womb.max_durability * restore_percent
+                        # Restore 5 durability points (or remaining if less)
+                        missing_durability = target_womb.max_durability - target_womb.durability
+                        restore_amount = min(5.0, missing_durability)  # Restore 5 or remaining
                         
                         # Restore durability (cap at max)
                         target_womb.durability = min(
@@ -749,7 +741,7 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                         
                         task_data['completion_message'] = (
                             f"Womb {womb_id} repaired. "
-                            f"Durability restored by {restore_percent*100:.1f}% "
+                            f"Durability restored by {restore_amount:.1f} points "
                             f"({target_womb.durability:.1f}/{target_womb.max_durability:.1f})."
                         )
             
