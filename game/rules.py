@@ -237,6 +237,15 @@ def grow_clone(state: GameState, kind: str) -> Tuple[GameState, Clone, float, st
         from game.wombs import gain_attention
         attention_delta = outcome.stats.attention_delta
         new_state = gain_attention(new_state, attention_delta=attention_delta)
+        
+        # Apply heat cross-link: when any womb grows, all active wombs gain +2 attention
+        from core.config import GAMEPLAY_CONFIG
+        womb_config = GAMEPLAY_CONFIG.get("wombs", {})
+        heat_crosslink = womb_config.get("heat_crosslink_add", 2)
+        active_wombs_count = len([w for w in new_state.wombs if w.is_functional()])
+        if active_wombs_count > 1:
+            crosslink_attention = heat_crosslink * (active_wombs_count - 1)
+            new_state = gain_attention(new_state, attention_delta=crosslink_attention)
     
     # Format message with flavor text using state's RNG
     from backend.routers.game import format_clone_crafted_message

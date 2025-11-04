@@ -884,8 +884,19 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
     
     # Check for conflicting tasks
     if new_state.active_tasks:
-        if task_type in ["build_womb", "grow_clone", "repair_womb"]:
-            # Building/growing/repairing blocks on ANY active task
+        if task_type == "grow_clone":
+            # Parallel grow: Check if grow slot available
+            from game.wombs import get_available_grow_slots
+            available_slots = get_available_grow_slots(new_state, new_state.active_tasks)
+            if available_slots <= 0:
+                raise RuntimeError("No available grow slots. All wombs are busy or at parallel limit.")
+            # Allow grow_clone, but still block other exclusive tasks
+            for task_id, task_data in new_state.active_tasks.items():
+                existing_task_type = task_data.get('type')
+                if existing_task_type in ["build_womb", "repair_womb"]:
+                    raise RuntimeError("Cannot grow clones while building or repairing. Please wait.")
+        elif task_type in ["build_womb", "repair_womb"]:
+            # Building/repairing blocks on ANY active task (including grows)
             raise RuntimeError("A task is already in progress. Please wait.")
         elif task_type == "gather_resource":
             # Gathering can run alongside expeditions, but check for duplicate resource gathering
@@ -895,9 +906,10 @@ def start_task(state: GameState, task_type: str, **task_params) -> tuple[GameSta
                 # Can't gather same resource twice, but can gather different resources
                 if existing_task_type == "gather_resource" and task_data.get('resource') == resource:
                     raise RuntimeError(f"Already gathering {resource}. Please wait for completion.")
-                # Can't gather if building/growing/repairing (exclusive tasks)
-                if existing_task_type in ["build_womb", "grow_clone", "repair_womb"]:
-                    raise RuntimeError("Cannot gather resources while building, growing, or repairing. Please wait.")
+                # Can't gather if building/repairing (exclusive tasks)
+                # Note: grow_clone is now parallel, so gathering can run alongside grows
+                if existing_task_type in ["build_womb", "repair_womb"]:
+                    raise RuntimeError("Cannot gather resources while building or repairing. Please wait.")
     
     # Calculate duration
     if task_type == "build_womb":
@@ -1733,9 +1745,16 @@ async def grow_clone_endpoint(
                 detail="Game state required in request body. Please refresh the page."
             )
 
-    # Check for active tasks
-    if state.active_tasks:
-        raise HTTPException(status_code=400, detail="A task is already in progress")
+    # Check for available grow slots (parallel grow system)
+    from game.wombs import get_available_grow_slots
+    available_slots = get_available_grow_slots(state, state.active_tasks or {})
+    if available_slots <= 0:
+        # Check if blocked by non-grow task
+        if state.active_tasks:
+            for task_data in state.active_tasks.values():
+                if task_data.get('type') in ["build_womb", "repair_womb"]:
+                    raise HTTPException(status_code=400, detail="Cannot grow clones while building or repairing. Please wait.")
+        raise HTTPException(status_code=400, detail="No available grow slots. All wombs are busy or at parallel limit.")
 
     try:
         # Phase 6: Store session_id in state for seed generation (temporary approach)

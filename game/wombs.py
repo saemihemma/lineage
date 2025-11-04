@@ -82,6 +82,36 @@ def check_womb_available(state: GameState) -> bool:
     return find_active_womb(state) is not None
 
 
+def get_available_grow_slots(state: GameState, active_tasks: dict) -> int:
+    """
+    Calculate available grow slots based on functional wombs and parallel grow limit.
+    
+    Returns the number of concurrent grow tasks that can run.
+    """
+    from core.config import GAMEPLAY_CONFIG
+    
+    # Count functional wombs
+    functional_wombs = [w for w in state.wombs if w.is_functional()]
+    functional_count = len(functional_wombs)
+    
+    if functional_count == 0:
+        return 0
+    
+    # Get parallel grow limit from config
+    womb_config = GAMEPLAY_CONFIG.get("wombs", {})
+    parallel_limit = womb_config.get("parallel_grow_limit", 4)
+    
+    # Count active grow tasks
+    active_grow_tasks = sum(1 for task_data in active_tasks.values() 
+                           if task_data.get('type') == 'grow_clone')
+    
+    # Available slots = min(functional_wombs, parallel_limit) - active_grow_tasks
+    max_slots = min(functional_count, parallel_limit)
+    available = max(0, max_slots - active_grow_tasks)
+    
+    return available
+
+
 def get_attention_gain_multiplier(state: GameState) -> float:
     """
     Calculate attention gain multiplier based on Cognitive practice level.
@@ -265,10 +295,24 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     damage_pct = base_damage_pct * mult  # Kinetic reduces damage
     
     # Calculate absolute damage
-    damage = attacked_womb.max_durability * damage_pct
+    primary_damage = attacked_womb.max_durability * damage_pct
     
-    # Apply damage to womb
-    attacked_womb.durability = max(0.0, attacked_womb.durability - damage)
+    # Apply damage to primary womb
+    attacked_womb.durability = max(0.0, attacked_womb.durability - primary_damage)
+    
+    # Apply splash damage to other functional wombs (10-25% of primary damage)
+    womb_config = GAMEPLAY_CONFIG.get("wombs", {})
+    splash_range = womb_config.get("feral_splash_damage_mult", [0.10, 0.25])
+    splash_min, splash_max = splash_range[0], splash_range[1]
+    
+    splash_damages = []
+    other_wombs = [w for w in functional_wombs if w.id != attacked_womb.id]
+    if other_wombs:
+        splash_mult = new_state.rng.uniform(splash_min, splash_max)
+        splash_damage = primary_damage * splash_mult
+        for other_womb in other_wombs:
+            other_womb.durability = max(0.0, other_womb.durability - splash_damage)
+            splash_damages.append((other_womb.id, splash_damage))
     
     # Reduce global attention after attack (10% ± variance)
     reduction_base = CONFIG.get("WOMB_ATTACK_ATTENTION_REDUCTION_BASE", 10.0)
@@ -282,8 +326,14 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
     else:
         message = "Feral drone swarm detected. Womb integrity compromised."
     
-    # Add damage info to message
-    message += f" Womb {attacked_womb.id + 1} took {damage:.1f} damage ({damage_pct*100:.1f}%). Durability: {attacked_womb.durability:.1f}/{attacked_womb.max_durability:.1f}"
+    # Add primary damage info to message
+    message += f" Womb {attacked_womb.id + 1} took {primary_damage:.1f} damage ({damage_pct*100:.1f}%). Durability: {attacked_womb.durability:.1f}/{attacked_womb.max_durability:.1f}"
+    
+    # Add splash damage info if any
+    if splash_damages:
+        splash_womb_ids = [f"Womb {wid + 1}" for wid, _ in splash_damages]
+        splash_msg = f" Splash damage ({splash_mult*100:.1f}%) to {', '.join(splash_womb_ids)}."
+        message += splash_msg
     
     return new_state, attacked_womb.id, message
 

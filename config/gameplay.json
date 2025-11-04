@@ -232,10 +232,13 @@
   },
   "wombs": {
     "durability_time_mult_per_10": 1.02,
+    "parallel_grow_limit": 4,
     "overload": {
       "per_active_womb_attention": 4,
       "per_active_womb_time_mult": 1.03
     },
+    "heat_crosslink_add": 2,
+    "feral_splash_damage_mult": [0.10, 0.25],
     "passive_decay": {
       "enabled": true,
       "damage_per_minute": 2.0
