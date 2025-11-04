@@ -332,10 +332,53 @@ def create_womb(womb_id: int) -> Womb:
     )
 
 
+def apply_passive_durability_decay(state: GameState) -> GameState:
+    """
+    Apply passive durability decay to wombs over time.
+    Small random damage occurs naturally as wombs age and wear.
+    
+    Returns new state with decayed womb durability.
+    """
+    from core.config import GAMEPLAY_CONFIG
+    
+    new_state = state.copy()
+    
+    if not new_state.wombs:
+        return new_state
+    
+    # Get passive decay config from gameplay.json
+    womb_config = GAMEPLAY_CONFIG.get("wombs", {})
+    passive_decay = womb_config.get("passive_decay", {})
+    
+    if not passive_decay.get("enabled", True):
+        return new_state
+    
+    # Calculate hours since last save
+    current_time = time.time()
+    hours_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 3600.0)
+    
+    # Decay per hour (small random damage)
+    decay_per_hour_min = passive_decay.get("damage_per_hour_min", 0.1)  # 0.1 durability per hour
+    decay_per_hour_max = passive_decay.get("damage_per_hour_max", 0.3)  # 0.3 durability per hour
+    
+    # Apply decay to each womb
+    for womb in new_state.wombs:
+        if womb.durability > 0:
+            # Random damage per hour (different for each womb)
+            damage_per_hour = new_state.rng.uniform(decay_per_hour_min, decay_per_hour_max)
+            total_damage = damage_per_hour * hours_elapsed
+            
+            # Apply damage (but don't let it go below 0)
+            womb.durability = max(0.0, womb.durability - total_damage)
+    
+    return new_state
+
+
 def check_and_apply_womb_systems(state: GameState) -> Tuple[GameState, Optional[str]]:
     """
     Check and apply womb systems on state changes:
     - Decay attention
+    - Passive durability decay
     - Random attacks
     
     This should be called after state-changing operations.
@@ -350,8 +393,9 @@ def check_and_apply_womb_systems(state: GameState) -> Tuple[GameState, Optional[
     new_state = state.copy()
     new_state.last_saved_ts = time.time()
     
-    # Apply decay and attacks
+    # Apply decay, passive durability decay, and attacks
     new_state = decay_attention(new_state)
+    new_state = apply_passive_durability_decay(new_state)
     new_state, attacked_id, attack_msg = attack_womb(new_state)
     
     return new_state, attack_msg

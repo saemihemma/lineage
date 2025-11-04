@@ -1607,8 +1607,12 @@ async def gather_resource_endpoint(
         if outcome.feral_attack:
             response_data["feral_attack"] = outcome.feral_attack
             response_data["attack_message"] = format_feral_attack_message(outcome.feral_attack, "gather")
-        elif attack_message:
-            response_data["attack_message"] = attack_message
+        # Womb durability attack (can happen alongside feral_attack)
+        if attack_message:
+            if "attack_message" in response_data:
+                response_data["attack_message"] += f"\n{attack_message}"
+            else:
+                response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
@@ -1790,8 +1794,12 @@ async def grow_clone_endpoint(
         if feral_attack_info:
             response_data["feral_attack"] = feral_attack_info
             response_data["attack_message"] = format_feral_attack_message(feral_attack_info, "grow")
-        elif attack_message:
-            response_data["attack_message"] = attack_message
+        # Womb durability attack (can happen alongside feral_attack)
+        if attack_message:
+            if "attack_message" in response_data:
+                response_data["attack_message"] += f"\n{attack_message}"
+            else:
+                response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
@@ -2029,9 +2037,13 @@ async def run_expedition_endpoint(
         if feral_attack_info:
             response_data["feral_attack"] = feral_attack_info
             response_data["attack_message"] = format_feral_attack_message(feral_attack_info, "expedition")
-        # Womb durability attack (from check_and_apply_womb_systems)
-        elif attack_message:
-            response_data["attack_message"] = attack_message
+        # Womb durability attack (from check_and_apply_womb_systems) - can happen alongside feral_attack
+        if attack_message:
+            # If there's already an attack_message, append womb attack message
+            if "attack_message" in response_data:
+                response_data["attack_message"] += f"\n{attack_message}"
+            else:
+                response_data["attack_message"] = attack_message
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")

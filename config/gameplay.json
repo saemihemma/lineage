@@ -236,6 +236,11 @@
       "per_active_womb_attention": 4,
       "per_active_womb_time_mult": 1.03
     },
+    "passive_decay": {
+      "enabled": true,
+      "damage_per_hour_min": 0.1,
+      "damage_per_hour_max": 0.3
+    },
     "repair": {
       "cost": {
         "Tritanium": 10,
