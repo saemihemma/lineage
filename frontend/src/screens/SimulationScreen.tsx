@@ -165,12 +165,27 @@ export function SimulationScreen() {
 
   // Update prayer cooldown timer display (force re-render every second when on cooldown)
   useEffect(() => {
-    if (!state?.prayer_cooldown_until) return;
+    if (!state?.prayer_cooldown_until) {
+      // No cooldown, make sure tick is reset
+      if (cooldownTick > 0) setCooldownTick(0);
+      return;
+    }
     
     const now = Date.now() / 1000;
-    if (now >= state.prayer_cooldown_until) return; // Cooldown expired
+    if (now >= state.prayer_cooldown_until) {
+      // Cooldown expired, reset tick
+      if (cooldownTick > 0) setCooldownTick(0);
+      return;
+    }
     
+    // Still on cooldown - update every second
     const interval = setInterval(() => {
+      const currentTime = Date.now() / 1000;
+      if (currentTime >= state.prayer_cooldown_until) {
+        // Cooldown just expired, stop interval
+        setCooldownTick(0);
+        return;
+      }
       setCooldownTick(prev => prev + 1); // Force re-render
     }, 1000);
     
@@ -349,9 +364,11 @@ export function SimulationScreen() {
   const handlePrayToTrinary = useCallback(async () => {
     if (!state) return;
     
+    // Check cooldown with current time
     const currentTime = Date.now() / 1000;
-    if (state.prayer_cooldown_until && currentTime < state.prayer_cooldown_until) {
-      const remaining = Math.ceil(state.prayer_cooldown_until - currentTime);
+    const cooldownUntil = state.prayer_cooldown_until;
+    if (cooldownUntil && currentTime < cooldownUntil) {
+      const remaining = Math.ceil(cooldownUntil - currentTime);
       addTerminalMessage(`Prayer is on cooldown. Wait ${remaining} more seconds.`);
       return;
     }
@@ -596,14 +613,28 @@ export function SimulationScreen() {
             <button
               className="pray-button"
               onClick={handlePrayToTrinary}
-              disabled={!!(state.prayer_cooldown_until && (Date.now() / 1000) < state.prayer_cooldown_until)}
-              title={state.prayer_cooldown_until && (Date.now() / 1000) < state.prayer_cooldown_until
-                ? `Prayer on cooldown: ${Math.ceil(state.prayer_cooldown_until - (Date.now() / 1000))}s`
-                : 'Pray to Trinary - Mysterious effects await...'}
+              disabled={(() => {
+                if (!state.prayer_cooldown_until) return false;
+                const now = Date.now() / 1000;
+                return now < state.prayer_cooldown_until;
+              })()}
+              title={(() => {
+                if (!state.prayer_cooldown_until) return 'Pray to Trinary - Mysterious effects await...';
+                const now = Date.now() / 1000;
+                if (now < state.prayer_cooldown_until) {
+                  return `Prayer on cooldown: ${Math.ceil(state.prayer_cooldown_until - now)}s`;
+                }
+                return 'Pray to Trinary - Mysterious effects await...';
+              })()}
             >
-              {state.prayer_cooldown_until && (Date.now() / 1000) < state.prayer_cooldown_until
-                ? `Pray to Trinary (${Math.ceil(state.prayer_cooldown_until - (Date.now() / 1000))}s)`
-                : 'Pray to Trinary'}
+              {(() => {
+                if (!state.prayer_cooldown_until) return 'Pray to Trinary';
+                const now = Date.now() / 1000;
+                if (now < state.prayer_cooldown_until) {
+                  return `Pray to Trinary (${Math.ceil(state.prayer_cooldown_until - now)}s)`;
+                }
+                return 'Pray to Trinary';
+              })()}
             </button>
           </div>
         </div>

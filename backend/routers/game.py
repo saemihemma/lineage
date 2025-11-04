@@ -2309,18 +2309,26 @@ async def pray_to_trinary_endpoint(
                     "message": f"⚠️ TRINARY SACRIFICE: The Trinary demanded a sacrifice. Clone {clone_id} was consumed..."
                 }
         
+        # Prevent stacking: Clear any existing prayer bonus before applying new one
+        if new_state.last_pray_effect:
+            new_state.last_pray_effect = None
+        
         # Check for active gather task (gathering prayer)
         active_gather_task = None
         if new_state.active_tasks:
             for task_id, task_data in new_state.active_tasks.items():
                 if task_data.get('type') == 'gather_resource':
+                    # Check if this task already has prayer reduction (prevent stacking)
+                    if task_data.get('prayer_time_reduction'):
+                        # Already has prayer bonus, skip
+                        continue
                     active_gather_task = (task_id, task_data)
                     break
         
         if active_gather_task:
-            # Gathering prayer: reduce duration by 15-30%
+            # Gathering prayer: reduce duration by 25-45% (increased from 15-30%)
             task_id, task_data = active_gather_task
-            reduction_percent = random.uniform(0.15, 0.30)
+            reduction_percent = random.uniform(0.25, 0.45)
             original_duration = task_data.get('duration', 30)
             new_duration = int(round(original_duration * (1 - reduction_percent)))
             task_data['duration'] = new_duration
@@ -2332,7 +2340,7 @@ async def pray_to_trinary_endpoint(
                 "new_duration": new_duration
             }
         else:
-            # Expedition prayer: store bonus for next expedition
+            # Expedition prayer: store bonus for next expedition (only if no existing bonus)
             death_reduction = random.uniform(0.02, 0.05)
             reward_mult = random.uniform(1.05, 1.15)
             new_state.last_pray_effect = {

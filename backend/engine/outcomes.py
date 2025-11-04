@@ -1267,6 +1267,13 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
     retain = rng.uniform(retain_min, retain_max)
     soul_xp_gained = int(total_xp * retain)
     
+    # Systems v1: Survivor bonus - clones with 3+ survived runs get 20% XP bonus
+    base_xp_gained = soul_xp_gained
+    survivor_bonus = 1.0
+    if ctx.clone.survived_runs >= 3:
+        survivor_bonus = 1.2  # 20% bonus
+        soul_xp_gained = int(soul_xp_gained * survivor_bonus)
+    
     # 7. Calculate soul restoration (quality-based, uncapped) + age bonus
     soul_restore_per_100_xp = upload_config.get("soul_restore_per_100_xp", 0.5)
     soul_restore_percent = total_xp * soul_restore_per_100_xp / 100.0
@@ -1314,6 +1321,9 @@ def resolve_upload(ctx: OutcomeContext) -> Outcome:
             "total_xp": total_xp,
             "retain_range": retain_range,
             "retain": retain,
+            "base_gained": base_xp_gained,
+            "survivor_bonus": survivor_bonus,
+            "survived_runs": ctx.clone.survived_runs,
             "gained": soul_xp_gained
         },
         "soul_restore": {

@@ -191,13 +191,13 @@
       "max_mult": 1.85
     },
     "level_effects": {
-      "reward_mult_per_level": 0.0020,
-      "time_mult_per_level": 0.9980,
-      "death_add_per_level": -0.0004,
+      "reward_mult_per_level": 0.02,
+      "time_mult_per_level": 0.98,
+      "death_add_per_level": -0.01,
       "caps": {
-        "reward_mult_max": 1.20,
-        "time_mult_min": 0.85,
-        "death_add_floor": -0.08
+        "reward_mult_max": 1.50,
+        "time_mult_min": 0.70,
+        "death_add_floor": -0.25
       }
     }
   },
@@ -317,8 +317,8 @@
     "success_chance_base": 1.0
   },
   "upload": {
-    "soul_xp_retain_range": [0.6, 0.9],
-    "soul_restore_per_100_xp": 0.5,
+    "soul_xp_retain_range": [0.75, 0.95],
+    "soul_restore_per_100_xp": 0.7,
     "attention_delta": 0.0,
     "notes": "Restoration = total_xp * soul_restore_per_100_xp / 100. Uncapped, can exceed 100%. Quality-based soft-cap formula."
   }
