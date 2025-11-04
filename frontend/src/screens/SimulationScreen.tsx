@@ -42,6 +42,7 @@ export function SimulationScreen() {
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const prevClonesRef = useRef<Record<string, any>>({});
   const [cooldownTick, setCooldownTick] = useState(0); // Force re-render for cooldown timer
+  const [isPraying, setIsPraying] = useState(false); // Prevent stacking of prayer requests
 
   // Create stable version string for active_tasks to avoid object reference dependencies
   // Only recalculate when active_tasks actually changes, not when any part of state changes
@@ -66,6 +67,14 @@ export function SimulationScreen() {
     const [, progress] = sorted[0];
     return { value: progress.value, label: progress.label };
   })();
+
+  // Calculate prayer cooldown remaining (reactive to cooldownTick for real-time updates)
+  const prayerCooldownRemaining = useMemo(() => {
+    if (!state?.prayer_cooldown_until) return 0;
+    const now = Date.now() / 1000;
+    const remaining = Math.max(0, state.prayer_cooldown_until - now);
+    return Math.ceil(remaining);
+  }, [state?.prayer_cooldown_until, cooldownTick]);
 
   // Keep state ref in sync
   useEffect(() => {
@@ -372,6 +381,12 @@ export function SimulationScreen() {
   const handlePrayToTrinary = useCallback(async () => {
     if (!state) return;
     
+    // Prevent stacking - don't allow multiple simultaneous requests
+    if (isPraying) {
+      addTerminalMessage('Prayer request already in progress. Please wait...');
+      return;
+    }
+    
     // Check cooldown with current time
     const currentTime = Date.now() / 1000;
     const cooldownUntil = state.prayer_cooldown_until;
@@ -381,6 +396,7 @@ export function SimulationScreen() {
       return;
     }
     
+    setIsPraying(true);
     try {
       const result = await gameAPI.prayToTrinary();
       if (result.state) {
@@ -401,8 +417,10 @@ export function SimulationScreen() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to pray to Trinary';
       addTerminalMessage(`Error: ${errorMsg}`);
+    } finally {
+      setIsPraying(false);
     }
-  }, [state, addTerminalMessage, updateState]);
+  }, [state, addTerminalMessage, updateState, isPraying]);
 
   const handleAction = async (action: () => Promise<any>, actionName: string, allowDuringTasks: boolean = false) => {
     // Expeditions and immediate actions can run during gathering tasks
@@ -662,28 +680,20 @@ export function SimulationScreen() {
             <button
               className="pray-button"
               onClick={handlePrayToTrinary}
-              disabled={(() => {
-                if (!state.prayer_cooldown_until) return false;
-                const now = Date.now() / 1000;
-                return now < state.prayer_cooldown_until;
-              })()}
-              title={(() => {
-                if (!state.prayer_cooldown_until) return 'Pray to Trinary - Mysterious effects await...';
-                const now = Date.now() / 1000;
-                if (now < state.prayer_cooldown_until) {
-                  return `Prayer on cooldown: ${Math.ceil(state.prayer_cooldown_until - now)}s`;
-                }
-                return 'Pray to Trinary - Mysterious effects await...';
-              })()}
+              disabled={isPraying || prayerCooldownRemaining > 0}
+              title={
+                isPraying 
+                  ? 'Prayer request in progress...'
+                  : prayerCooldownRemaining > 0
+                    ? `Prayer on cooldown: ${prayerCooldownRemaining}s`
+                    : 'Pray to Trinary - Mysterious effects await...'
+              }
             >
-              {(() => {
-                if (!state.prayer_cooldown_until) return 'Pray to Trinary';
-                const now = Date.now() / 1000;
-                if (now < state.prayer_cooldown_until) {
-                  return `Pray to Trinary (${Math.ceil(state.prayer_cooldown_until - now)}s)`;
-                }
-                return 'Pray to Trinary';
-              })()}
+              {isPraying 
+                ? 'Praying...'
+                : prayerCooldownRemaining > 0
+                  ? `Pray to Trinary (${prayerCooldownRemaining}s)`
+                  : 'Pray to Trinary'}
             </button>
           </div>
         </div>
