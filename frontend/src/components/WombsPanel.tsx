@@ -125,10 +125,16 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
             const isFunctional = womb.durability > 0;
             const needsRepair = durabilityPercent < 50;  // Only show "needs repair" below 50%
             
+            // Flavorful tooltip with subtle functional hints
+            const wombTooltip = isFunctional 
+              ? "The vessel of becoming. Where clones are shaped from essence. Integrity must be maintained, or the vessel fails."
+              : "The vessel is broken. Repair restores its function and allows the cycle to continue.";
+            
             return (
               <div 
                 key={wombId} 
                 className={`womb-card ${!isFunctional ? 'womb-card-damaged' : ''}`}
+                title={wombTooltip}
               >
                 <div className="womb-card-header">
                   <div className="womb-card-title">Womb {womb.id + 1}</div>
