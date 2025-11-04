@@ -16,9 +16,9 @@ const XP_PER_LEVEL = 100;
 
 // Tooltips for practices (flavor + functional)
 const PRACTICE_TOOLTIPS: Record<string, string> = {
-  Kinetic: 'The body remembers. Physical mastery sharpens reflexes and strengthens vessels. Increases expedition success & rewards (MINING/COMBAT). At Level 3+, reduces feral drone attack chance.',
-  Cognitive: 'The mind accelerates. Mental refinement streamlines processes and reduces entropy. Reduces time for all actions globally. At Level 3+, slows attention decay.',
-  Constructive: 'The synthesis perfects. Creative mastery finds efficiency in form and function. Reduces costs for all actions globally. At Level 3+, improves womb repair efficiency.'
+  Kinetic: 'The body remembers. Physical mastery sharpens reflexes and strengthens vessels. Favors expeditions of force.',
+  Cognitive: 'The mind accelerates. Mental refinement streamlines processes and reduces entropy. Time bends to your will.',
+  Constructive: 'The synthesis perfects. Creative mastery finds efficiency in form and function. Resources flow more easily.'
 };
 
 export function PracticesPanel({ practicesXp, practiceLevels, state }: PracticesPanelProps) {
