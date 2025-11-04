@@ -2,7 +2,7 @@
  * Wombs Panel - Unified view showing all unlocked wombs (built + unbuilt)
  */
 import type { GameState } from '../types/game';
-import { getWombCount, getUnlockedWombCount } from '../utils/wombs';
+import { getWombCount, getUnlockedWombCount, getParallelWombStatus } from '../utils/wombs';
 import './WombsPanel.css';
 
 interface WombsPanelProps {
@@ -18,12 +18,33 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
   const unlockedCount = getUnlockedWombCount(state);
   const maxWombs = 4; // Always show all 4 womb slots
   
+  // Get parallel womb status
+  const parallelStatus = getParallelWombStatus(state);
+  
   // Create array of all 4 womb slots (0 to 3)
   const wombSlots = Array.from({ length: maxWombs }, (_, i) => i);
   
+  // Build parallel status tooltip
+  const parallelTooltip = parallelStatus.isParallelActive
+    ? `Parallel Active: ${parallelStatus.functionalCount} functional womb(s)\n` +
+      `Grow Slots: ${parallelStatus.activeGrowTasks}/${parallelStatus.maxSlots} in use\n` +
+      `Overload: +${4 * (parallelStatus.functionalCount - 1)} attention, ${(1.03 ** (parallelStatus.functionalCount - 1)).toFixed(2)}x time\n` +
+      `Risk: Feral attacks cause splash damage to all wombs`
+    : '';
+  
   return (
     <div className="panel wombs-panel">
-      <div className="panel-header">Wombs ({wombCount}/{unlockedCount})</div>
+      <div className="panel-header">
+        <span>Wombs ({wombCount}/{unlockedCount})</span>
+        {parallelStatus.isParallelActive && (
+          <span 
+            className="parallel-status-badge" 
+            title={parallelTooltip}
+          >
+            Parallel Active ({parallelStatus.activeGrowTasks}/{parallelStatus.maxSlots})
+          </span>
+        )}
+      </div>
       <div className="panel-content">
         <div className="wombs-grid">
           {wombSlots.map((wombId) => {

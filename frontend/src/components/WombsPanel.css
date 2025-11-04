@@ -2,6 +2,27 @@
   min-height: 0;
 }
 
+.wombs-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.parallel-status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: help;
+  white-space: nowrap;
+}
+
 .wombs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

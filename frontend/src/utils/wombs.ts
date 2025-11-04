@@ -132,6 +132,64 @@ function getAttentionGainMultiplier(state: GameState): number {
 }
 
 /**
+ * Calculate available grow slots based on functional wombs and parallel limit
+ * Mirrors backend get_available_grow_slots logic
+ */
+export function getAvailableGrowSlots(state: GameState): number {
+  const functionalWombs = getFunctionalWombs(state);
+  const functionalCount = functionalWombs.length;
+  
+  if (functionalCount === 0) return 0;
+  
+  // Parallel grow limit (default 4, should match config)
+  const parallelLimit = 4;
+  
+  // Count active grow tasks
+  const activeTasks = state.active_tasks || {};
+  const activeGrowTasks = Object.values(activeTasks).filter(
+    (task: any) => task.type === 'grow_clone'
+  ).length;
+  
+  // Available slots = min(functional_wombs, parallel_limit) - active_grow_tasks
+  const maxSlots = Math.min(functionalCount, parallelLimit);
+  const available = Math.max(0, maxSlots - activeGrowTasks);
+  
+  return available;
+}
+
+/**
+ * Get parallel womb status info
+ */
+export function getParallelWombStatus(state: GameState): {
+  functionalCount: number;
+  activeGrowTasks: number;
+  maxSlots: number;
+  availableSlots: number;
+  isParallelActive: boolean;
+} {
+  const functionalWombs = getFunctionalWombs(state);
+  const functionalCount = functionalWombs.length;
+  const parallelLimit = 4;
+  
+  const activeTasks = state.active_tasks || {};
+  const activeGrowTasks = Object.values(activeTasks).filter(
+    (task: any) => task.type === 'grow_clone'
+  ).length;
+  
+  const maxSlots = Math.min(functionalCount, parallelLimit);
+  const availableSlots = Math.max(0, maxSlots - activeGrowTasks);
+  const isParallelActive = functionalCount > 1;
+  
+  return {
+    functionalCount,
+    activeGrowTasks,
+    maxSlots,
+    availableSlots,
+    isParallelActive
+  };
+}
+
+/**
  * Apply attention decay based on idle time
  * Mirrors backend decay_attention logic
  */
