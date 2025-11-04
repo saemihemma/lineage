@@ -676,7 +676,18 @@ export function SimulationScreen() {
         <div className="topbar-left">
           <h1 className="game-title">LINEAGE</h1>
           <div className="self-stats">
-            SELF: {state.self_name || localStorage.getItem('lineage_self_name') || 'Unnamed'} | Level: {state.soul_level} | Soul: {(state.soul_percent || 0).toFixed(1)}%
+            SELF: {state.self_name || localStorage.getItem('lineage_self_name') || 'Unnamed'} | 
+            <span 
+              title="The SELF grows wiser with each upload. Higher levels grant subtle bonuses to expeditions and reduce the cost of existence."
+            >
+              Level: {state.soul_level}
+            </span>
+            {' | '}
+            <span
+              title="Soul integrity. Spent to craft clones, restored by uploading them. The vessel returns to the source."
+            >
+              Soul: {(state.soul_percent || 0).toFixed(1)}%
+            </span>
             <button
               className="pray-button"
               onClick={handlePrayToTrinary}
