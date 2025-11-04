@@ -21,9 +21,10 @@
 }
 
 .womb-card-unbuilt {
-  opacity: 0.5;
+  opacity: 0.4;
   background: #0f1419;
   border-color: #1a1f25;
+  filter: grayscale(0.3);
 }
 
 .womb-card-damaged {

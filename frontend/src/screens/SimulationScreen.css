@@ -127,14 +127,14 @@
 
 .mission-control-center #womb {
   flex: 0 0 auto;
-  max-height: 180px;
+  max-height: 400px;
   min-height: 120px;
   overflow: hidden;
 }
 
 .mission-control-center #womb .collapsible-panel-content {
   overflow-y: auto;
-  max-height: 140px;
+  max-height: 360px;
 }
 
 .mission-control-center #clones {

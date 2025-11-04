@@ -107,3 +107,64 @@ export function getAverageAttentionPercent(state: GameState): number {
   return Math.min(100, Math.max(0, state.global_attention || 0));
 }
 
+/**
+ * Calculate practice level from practice XP
+ */
+function calculatePracticeLevel(practiceXp: number): number {
+  const PRACTICE_XP_PER_LEVEL = 100;
+  return Math.floor(practiceXp / PRACTICE_XP_PER_LEVEL);
+}
+
+/**
+ * Get attention gain multiplier based on Cognitive practice level
+ * Cognitive L3+ reduces attention gain (and affects decay)
+ * Mirrors backend get_attention_gain_multiplier logic
+ */
+function getAttentionGainMultiplier(state: GameState): number {
+  const threshold = 3;
+  const mult = 0.95; // From CONFIG.WOMB_SYNERGY_COGNITIVE_ATTENTION_MULT
+  
+  const cognitiveLevel = calculatePracticeLevel(state.practices_xp?.Cognitive || 0);
+  if (cognitiveLevel >= threshold) {
+    return mult;
+  }
+  return 1.0;
+}
+
+/**
+ * Apply attention decay based on idle time
+ * Mirrors backend decay_attention logic
+ */
+export function applyAttentionDecay(state: GameState): GameState {
+  const newState = { ...state };
+  
+  // Initialize global_attention if not present
+  if (newState.global_attention === undefined) {
+    newState.global_attention = 0.0;
+  }
+  
+  // Calculate hours since last save
+  const currentTime = Date.now() / 1000; // Current time in seconds
+  const lastSavedTs = newState.last_saved_ts || currentTime;
+  const hoursElapsed = Math.max(0.0, (currentTime - lastSavedTs) / 3600.0);
+  
+  // Decay per hour (from CONFIG.WOMB_ATTENTION_DECAY_PER_HOUR)
+  const decayPerHour = 1.0;
+  const totalDecay = decayPerHour * hoursElapsed;
+  
+  // Cognitive synergy affects decay
+  // Note: Backend formula is decay_mult = 2.0 - mult
+  // If mult = 0.95 (reduces attention gain), decay_mult = 1.05 (increases decay slightly)
+  const mult = getAttentionGainMultiplier(newState);
+  const decayMult = 2.0 - mult;
+  const actualDecay = totalDecay * decayMult;
+  
+  // Apply decay to global attention (can't go below 0)
+  newState.global_attention = Math.max(0.0, (newState.global_attention || 0) - actualDecay);
+  
+  // Update last_saved_ts to current time for next decay calculation
+  newState.last_saved_ts = currentTime;
+  
+  return newState;
+}
+

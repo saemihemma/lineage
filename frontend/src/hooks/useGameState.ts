@@ -6,12 +6,14 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { GameState } from '../types/game';
 import { loadStateFromLocalStorage, saveStateToLocalStorage, createDefaultState } from '../utils/localStorage';
 import { checkAndCompleteTasks } from '../utils/tasks';
+import { applyAttentionDecay } from '../utils/wombs';
 
 export function useGameState() {
   const [state, setState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const taskCheckIntervalRef = useRef<number | null>(null);
+  const attentionDecayIntervalRef = useRef<number | null>(null);
   const completedTaskMessagesRef = useRef<Map<string, string>>(new Map());
 
   // Load initial state from localStorage
@@ -30,18 +32,28 @@ export function useGameState() {
         saveStateToLocalStorage(gameState);
       }
       
+      // Apply attention decay on load (to account for time passed while game was closed)
+      const decayedState = applyAttentionDecay(gameState);
+      
       // Log state details for debugging
-      const wombCount = gameState.wombs?.length || 0;
+      const wombCount = decayedState.wombs?.length || 0;
       console.log('📦 State loaded:', {
-        hasWombs: Array.isArray(gameState.wombs),
+        hasWombs: Array.isArray(decayedState.wombs),
         wombCount,
-        assemblerBuilt: gameState.assembler_built,
-        selfName: gameState.self_name,
-        hasClones: Object.keys(gameState.clones || {}).length > 0,
-        activeTasks: Object.keys(gameState.active_tasks || {}).length,
+        assemblerBuilt: decayedState.assembler_built,
+        selfName: decayedState.self_name,
+        hasClones: Object.keys(decayedState.clones || {}).length > 0,
+        activeTasks: Object.keys(decayedState.active_tasks || {}).length,
+        globalAttention: decayedState.global_attention,
+        attentionDecayed: decayedState.global_attention !== gameState.global_attention,
       });
       
-      setState(gameState);
+      // Save decayed state if attention changed
+      if (decayedState.global_attention !== gameState.global_attention) {
+        saveStateToLocalStorage(decayedState);
+      }
+      
+      setState(decayedState);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load game state';
       setError(errorMsg);
@@ -158,6 +170,54 @@ export function useGameState() {
       }
     };
   }, [activeTasksVersion]); // Depend on stable version string instead of entire state object
+
+  // Periodic attention decay check (every minute)
+  useEffect(() => {
+    // Clear any existing interval
+    if (attentionDecayIntervalRef.current) {
+      clearInterval(attentionDecayIntervalRef.current);
+      attentionDecayIntervalRef.current = null;
+    }
+
+    // Only run if we have state loaded
+    if (!state) {
+      return;
+    }
+
+    console.log('🔵 Starting attention decay checking');
+
+    // Check every minute for attention decay
+    attentionDecayIntervalRef.current = setInterval(() => {
+      setState((prevState) => {
+        if (!prevState) {
+          return prevState;
+        }
+
+        // Apply attention decay
+        const decayedState = applyAttentionDecay(prevState);
+        
+        // Only update if attention actually changed (to avoid unnecessary re-renders)
+        if (decayedState.global_attention !== prevState.global_attention) {
+          // Auto-save when attention decays
+          saveStateToLocalStorage(decayedState);
+          // Update ref with new state
+          stateRef.current = decayedState;
+          return decayedState;
+        }
+        
+        return prevState;
+      });
+    }, 60000); // Check every 60 seconds (1 minute)
+
+    // Cleanup on unmount or when state changes
+    return () => {
+      if (attentionDecayIntervalRef.current) {
+        console.log(`🟡 Cleaning up attention decay checking`);
+        clearInterval(attentionDecayIntervalRef.current);
+        attentionDecayIntervalRef.current = null;
+      }
+    };
+  }, [state ? 'loaded' : 'unloaded']); // Re-run when state is loaded/unloaded
 
   // Save state to localStorage
   const saveState = useCallback((newState: GameState) => {
