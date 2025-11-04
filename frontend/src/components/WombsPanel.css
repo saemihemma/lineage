@@ -27,6 +27,18 @@
   filter: grayscale(0.3);
 }
 
+.womb-card-locked {
+  opacity: 0.25;
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+}
+
+.womb-card-status-badge.unlocked {
+  background: rgba(154, 164, 173, 0.2);
+  color: #9aa4ad;
+  border: 1px solid rgba(154, 164, 173, 0.3);
+}
+
 .womb-card-damaged {
   border-color: #f44336;
   background: rgba(244, 67, 54, 0.05);

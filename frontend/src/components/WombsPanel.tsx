@@ -16,9 +16,10 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
   const wombs = state.wombs || [];
   const wombCount = getWombCount(state);
   const unlockedCount = getUnlockedWombCount(state);
+  const maxWombs = 4; // Always show all 4 womb slots
   
-  // Create array of all unlocked womb slots (0 to unlockedCount-1)
-  const wombSlots = Array.from({ length: unlockedCount }, (_, i) => i);
+  // Create array of all 4 womb slots (0 to 3)
+  const wombSlots = Array.from({ length: maxWombs }, (_, i) => i);
   
   return (
     <div className="panel wombs-panel">
@@ -33,6 +34,8 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
             
             if (!isBuilt) {
               // Unbuilt womb - show greyed out placeholder
+              const isLocked = wombId >= unlockedCount; // Beyond unlocked count = locked
+              
               // Get unlock hint for this specific womb
               const getUnlockHintForWomb = (wombIndex: number): string => {
                 if (wombIndex === 0) return "Available to build now";
@@ -66,16 +69,18 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
               return (
                 <div 
                   key={wombId} 
-                  className="womb-card womb-card-unbuilt"
+                  className={`womb-card womb-card-unbuilt ${isLocked ? 'womb-card-locked' : ''}`}
                   title={unlockHint}
                 >
                   <div className="womb-card-header">
                     <div className="womb-card-title">Womb {wombId + 1}</div>
-                    <div className="womb-card-status-badge locked">LOCKED</div>
+                    <div className={`womb-card-status-badge ${isLocked ? 'locked' : 'unlocked'}`}>
+                      {isLocked ? 'LOCKED' : 'NOT BUILT'}
+                    </div>
                   </div>
                   <div className="womb-card-content-unbuilt">
-                    <div className="womb-card-hint">Not built yet</div>
-                    {isNextUnbuilt && onBuild && (
+                    <div className="womb-card-hint">{isLocked ? unlockHint : 'Not built yet'}</div>
+                    {isNextUnbuilt && onBuild && !isLocked && (
                       <button
                         className="womb-card-build-btn"
                         onClick={onBuild}

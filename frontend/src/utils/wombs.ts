@@ -143,14 +143,14 @@ export function applyAttentionDecay(state: GameState): GameState {
     newState.global_attention = 0.0;
   }
   
-  // Calculate hours since last save
+  // Calculate minutes since last save
   const currentTime = Date.now() / 1000; // Current time in seconds
   const lastSavedTs = newState.last_saved_ts || currentTime;
-  const hoursElapsed = Math.max(0.0, (currentTime - lastSavedTs) / 3600.0);
+  const minutesElapsed = Math.max(0.0, (currentTime - lastSavedTs) / 60.0);
   
-  // Decay per hour (from CONFIG.WOMB_ATTENTION_DECAY_PER_HOUR)
-  const decayPerHour = 1.0;
-  const totalDecay = decayPerHour * hoursElapsed;
+  // Decay per minute: 3.0 per minute (balanced for active gameplay)
+  const decayPerMinute = 3.0;
+  const totalDecay = decayPerMinute * minutesElapsed;
   
   // Cognitive synergy affects decay
   // Note: Backend formula is decay_mult = 2.0 - mult
