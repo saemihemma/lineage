@@ -143,7 +143,8 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
 
             const durabilityColor = durabilityPercent >= 50 ? 'good' : durabilityPercent >= 25 ? 'warning' : 'critical';
             const isFunctional = womb.durability > 0;
-            const needsRepair = durabilityPercent < 50;  // Only show "needs repair" below 50%
+            const needsRepair = durabilityPercent < 50;  // Badge shows below 50%
+            const canRepair = womb.durability < womb.max_durability;  // Button shows if not at max
             
             // Flavorful tooltip with subtle functional hints
             const wombTooltip = isFunctional 
@@ -183,8 +184,8 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
                     </div>
                   </div>
                   
-                  {/* Show repair button only when durability < 50% */}
-                  {onRepair && needsRepair && (
+                  {/* Show repair button when durability < max (can repair at any level) */}
+                  {onRepair && canRepair && (
                     <button
                       className="womb-card-action-btn"
                       onClick={() => onRepair(womb.id)}

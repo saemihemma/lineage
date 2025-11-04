@@ -149,9 +149,17 @@ export function checkAndCompleteTasks(state: GameState): { state: GameState; com
         if (wombId !== undefined && newState.wombs) {
           const targetWomb = newState.wombs.find(w => w.id === wombId);
           if (targetWomb) {
-            // Restore durability to full
-            targetWomb.durability = targetWomb.max_durability;
-            const message = `Womb ${wombId + 1} repaired to full durability.`;
+            // Restore 5 durability points (or remaining if less) - matches backend logic
+            const missingDurability = targetWomb.max_durability - targetWomb.durability;
+            const restoreAmount = Math.min(5.0, missingDurability);
+            
+            // Restore durability (cap at max)
+            targetWomb.durability = Math.min(
+              targetWomb.max_durability,
+              targetWomb.durability + restoreAmount
+            );
+            
+            const message = `Womb ${wombId + 1} repaired. Durability restored by ${restoreAmount.toFixed(1)} points (${targetWomb.durability.toFixed(1)}/${targetWomb.max_durability.toFixed(1)}).`;
             completedMessages.push(message);
             taskData.completion_message = message;
           }

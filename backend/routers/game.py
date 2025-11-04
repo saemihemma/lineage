@@ -468,7 +468,11 @@ def sanitize_error_message(error: Exception) -> str:
         "Clone unavailable",
         "Cannot apply an uploaded clone",
         "No clone applied to the spaceship",
-        "A task is already in progress"
+        "A task is already in progress",
+        "Womb",
+        "not found",
+        "already at full durability",
+        "repaired"
     ]):
         return error_str
     
