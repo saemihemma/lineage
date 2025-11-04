@@ -203,13 +203,13 @@ def decay_attention(state: GameState) -> GameState:
     if not hasattr(new_state, 'global_attention'):
         new_state.global_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_INITIAL", 0.0)
     
-    # Calculate hours since last save
+    # Calculate minutes since last save
     current_time = time.time()
-    hours_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 3600.0)
+    minutes_elapsed = max(0.0, (current_time - new_state.last_saved_ts) / 60.0)
     
-    # Decay per hour (3.0 per hour)
-    decay_per_hour = CONFIG.get("WOMB_ATTENTION_DECAY_PER_HOUR", 3.0)
-    total_decay = decay_per_hour * hours_elapsed
+    # Decay per minute (3.0 per minute)
+    decay_per_minute = CONFIG.get("WOMB_ATTENTION_DECAY_PER_MINUTE", 3.0)
+    total_decay = decay_per_minute * minutes_elapsed
     
     # Cognitive synergy reduces decay
     mult = get_attention_gain_multiplier(new_state)
