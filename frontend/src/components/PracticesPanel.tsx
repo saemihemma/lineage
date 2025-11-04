@@ -14,6 +14,13 @@ interface PracticesPanelProps {
 const PRACTICE_TRACKS = ['Kinetic', 'Cognitive', 'Constructive'] as const;
 const XP_PER_LEVEL = 100;
 
+// Tooltips for practices (flavor + functional)
+const PRACTICE_TOOLTIPS: Record<string, string> = {
+  Kinetic: 'The body remembers. Physical mastery sharpens reflexes and strengthens vessels. Increases expedition success & rewards (MINING/COMBAT). At Level 3+, reduces feral drone attack chance.',
+  Cognitive: 'The mind accelerates. Mental refinement streamlines processes and reduces entropy. Reduces time for all actions globally. At Level 3+, slows attention decay.',
+  Constructive: 'The synthesis perfects. Creative mastery finds efficiency in form and function. Reduces costs for all actions globally. At Level 3+, improves womb repair efficiency.'
+};
+
 export function PracticesPanel({ practicesXp, practiceLevels, state }: PracticesPanelProps) {
   const calculateProgress = (xp: number): number => {
     return (xp % XP_PER_LEVEL);
@@ -38,7 +45,11 @@ export function PracticesPanel({ practicesXp, practiceLevels, state }: Practices
           const progressPercent = (progress / XP_PER_LEVEL) * 100;
 
           return (
-            <div key={track} className="practice-track">
+            <div 
+              key={track} 
+              className="practice-track"
+              title={PRACTICE_TOOLTIPS[track]}
+            >
               <div className="practice-header">
                 <span className="practice-name">{track}:</span>
                 <span className="practice-level">
