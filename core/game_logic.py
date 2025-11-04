@@ -126,6 +126,12 @@ def can_afford(resources: Dict[str, int], cost: Dict[str, int]) -> bool:
     return True
 
 
+def spend(resources: Dict[str, int], cost: Dict[str, int]) -> None:
+    """Deduct cost from resources (modifies resources in-place)"""
+    for resource, amount in cost.items():
+        resources[resource] = resources.get(resource, 0) - amount
+
+
 def format_resource_error(resources: Dict[str, int], cost: Dict[str, int], item_name: str) -> str:
     """Format a resource error message"""
     missing = []
