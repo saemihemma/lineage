@@ -425,12 +425,21 @@ export function SimulationScreen() {
       }
       // Show effect messages if any
       if (result.effect) {
+        console.log('📿 Trinary prayer effect received:', {
+          hasEffect: !!result.effect,
+          effectKeys: Object.keys(result.effect || {}),
+          hasKillClone: !!result.effect.kill_clone,
+          killCloneMessage: result.effect.kill_clone?.message
+        });
         if (result.effect.kill_clone) {
+          console.log('💀 TRINARY KILL MESSAGE RECEIVED:', result.effect.kill_clone.message);
           addTerminalMessage(result.effect.kill_clone.message);
         }
         if (result.effect.expedition_prayer) {
           addTerminalMessage(result.effect.expedition_prayer.message);
         }
+      } else {
+        console.log('📿 Trinary prayer response - no effect object');
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to pray to Trinary';

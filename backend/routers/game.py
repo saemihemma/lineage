@@ -742,6 +742,16 @@ def check_and_complete_tasks(state: GameState, session_id: Optional[str] = None)
                         rng=new_state.rng
                     )
                     
+                    # Set FTUE flag for gather 30 tritanium tutorial step
+                    if resource == "Tritanium" and new_total >= 30:
+                        ftue = getattr(new_state, 'ftue', None)
+                        if ftue is None:
+                            ftue = {}
+                            setattr(new_state, 'ftue', ftue)
+                        if not ftue.get('step_gather_30_tritanium', False):
+                            ftue['step_gather_30_tritanium'] = True
+                            setattr(new_state, 'ftue', ftue)
+                    
                     # Phase 5: Include feral attack message if occurred
                     if outcome_info.get('feral_attack'):
                         feral_info = outcome_info['feral_attack']
@@ -1141,6 +1151,12 @@ def dict_to_game_state(data: Dict[str, Any]) -> GameState:
     
     # Retroactively set FTUE flags for existing saves if conditions are met
     # This helps players who had saves before FTUE was implemented
+    if not ftue_data.get('step_gather_30_tritanium', False):
+        # Check if tritanium inventory >= 30
+        tritanium = state.resources.get("Tritanium", 0)
+        if tritanium >= 30:
+            ftue_data['step_gather_30_tritanium'] = True
+    
     if not ftue_data.get('step_first_expedition', False):
         # Check if any clone has expedition XP
         for clone in state.clones.values():
@@ -2392,7 +2408,11 @@ async def pray_to_trinary_endpoint(
         effect_description = {}
         
         # Roll for kill clone (1% chance)
-        if random.random() < 0.01 and new_state.applied_clone_id:
+        kill_roll = random.random()
+        has_active_clone = bool(new_state.applied_clone_id)
+        logger.info(f"🔮 Trinary prayer - Kill roll: {kill_roll:.4f}, Has active clone: {has_active_clone}, Clone ID: {new_state.applied_clone_id}")
+        
+        if kill_roll < 0.01 and has_active_clone:
             clone_id = new_state.applied_clone_id
             if clone_id in new_state.clones:
                 clone = new_state.clones[clone_id]
@@ -2403,6 +2423,13 @@ async def pray_to_trinary_endpoint(
                     "clone_id": clone_id,
                     "message": f"⚠️ TRINARY SACRIFICE: The Trinary demanded a sacrifice. Clone {clone_id} was consumed..."
                 }
+                logger.warning(f"💀 TRINARY KILL TRIGGERED! Clone {clone_id} was sacrificed (roll: {kill_roll:.4f})")
+            else:
+                logger.warning(f"⚠️ Trinary kill roll passed ({kill_roll:.4f}) but clone {clone_id} not found in clones dict")
+        elif kill_roll < 0.01 and not has_active_clone:
+            logger.info(f"🔮 Trinary kill roll passed ({kill_roll:.4f}) but no active clone to sacrifice")
+        else:
+            logger.debug(f"🔮 Trinary kill roll failed ({kill_roll:.4f} >= 0.01) - no kill")
         
         # Prevent stacking: Clear any existing prayer bonus before applying new one
         if new_state.last_pray_effect:
@@ -2461,6 +2488,11 @@ async def pray_to_trinary_endpoint(
         }
         if attack_message:
             response_data["attack_message"] = attack_message
+        
+        # Log effect delivery for debugging
+        if effect_description.get("kill_clone"):
+            logger.info(f"📤 Sending kill_clone effect to frontend: {effect_description['kill_clone']}")
+        logger.debug(f"📤 Trinary prayer response - Effects: {list(effects)}, Effect description keys: {list(effect_description.keys())}")
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
