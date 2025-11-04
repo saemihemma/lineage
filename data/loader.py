@@ -97,6 +97,7 @@ def load_data() -> Dict[str, Any]:
         "exploration_expedition_fail_messages": load_json_file("exploration_expedition_fail_messages.json") or {},
         "upload_to_self_messages": load_json_file("upload_to_self_messages.json") or {},
         "level_up_messages": load_json_file("level_up_messages.json") or {},
+        "rate_limit_messages": load_json_file("rate_limit_messages.json") or {},
         "outcomes_config": load_json_file("outcomes_config.json") or {},
         "gameplay": load_config_file("gameplay.json") or {}
     }

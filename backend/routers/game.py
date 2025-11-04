@@ -49,6 +49,7 @@ _EXPLORATION_EXPEDITION_SUCCESS_MESSAGES = _flavor_data.get("exploration_expedit
 _EXPLORATION_EXPEDITION_FAIL_MESSAGES = _flavor_data.get("exploration_expedition_fail_messages", {}).get("messages", [])
 _UPLOAD_TO_SELF_MESSAGES = _flavor_data.get("upload_to_self_messages", {}).get("messages", [])
 _LEVEL_UP_MESSAGES = _flavor_data.get("level_up_messages", {}).get("messages", [])
+_RATE_LIMIT_MESSAGES = _flavor_data.get("rate_limit_messages", {}).get("messages", [])
 
 
 def format_clone_crafted_message(clone_kind: str, clone_id: str, traits: Dict[str, int], rng: random.Random) -> str:
@@ -229,6 +230,40 @@ def format_level_up_message(new_level: int, rng: random.Random) -> str:
     return f"{flavor_msg}. {functional_details}"
 
 
+def format_rate_limit_message(retry_after: int, rng: random.Random) -> str:
+    """
+    Format rate limit message with Keeper flavor text + time estimate.
+    
+    Args:
+        retry_after: Seconds until rate limit resets
+        rng: Random number generator for flavor text selection
+    
+    Returns:
+        Formatted message string
+    """
+    # Get random flavor message
+    if _RATE_LIMIT_MESSAGES:
+        flavor_msg = rng.choice(_RATE_LIMIT_MESSAGES)
+    else:
+        flavor_msg = "Keeper: The Static is flooded. Wait for the channels to clear."
+    
+    # Format time estimate (convert seconds to human-readable)
+    if retry_after < 60:
+        time_str = f"{retry_after} second{'s' if retry_after != 1 else ''}"
+    else:
+        minutes = retry_after // 60
+        seconds = retry_after % 60
+        if seconds == 0:
+            time_str = f"{minutes} minute{'s' if minutes != 1 else ''}"
+        else:
+            time_str = f"{minutes} minute{'s' if minutes != 1 else ''} and {seconds} second{'s' if seconds != 1 else ''}"
+    
+    # Build functional details
+    functional_details = f"Try again in {time_str}."
+    
+    return f"{flavor_msg}. {functional_details}"
+
+
 def format_feral_attack_message(feral_attack_info: Dict[str, Any], action_type: str = "unknown") -> str:
     """
     Format a feral drone attack message with random flavor text + functional effects.
@@ -383,9 +418,13 @@ def enforce_rate_limit(session_id: str, endpoint: str):
     allowed, retry_after = check_rate_limit(session_id, endpoint, limit)
 
     if not allowed:
+        # Generate Keeper-style message with time estimate
+        rng = random.Random()  # Simple RNG for message selection
+        message = format_rate_limit_message(retry_after, rng)
+        
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            detail=message,
             headers={"Retry-After": str(retry_after)}
         )
 

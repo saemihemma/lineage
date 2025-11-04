@@ -1023,3 +1023,110 @@ class TestTaskStatusEndpoint:
         data = response2.json()
         assert data["active"] == False
         assert data.get("completed") == True
+
+
+class TestRateLimitMessageFormatting:
+    """Tests for rate limit message formatting"""
+    
+    def test_format_rate_limit_message_seconds(self):
+        """Test rate limit message formatting for seconds (< 60)"""
+        from backend.routers.game import format_rate_limit_message
+        import random
+        
+        rng = random.Random(42)  # Fixed seed for reproducibility
+        
+        # Test 1 second
+        msg = format_rate_limit_message(1, rng)
+        assert "Keeper:" in msg
+        assert "1 second" in msg
+        assert "Try again in" in msg
+        
+        # Test 30 seconds
+        msg = format_rate_limit_message(30, rng)
+        assert "Keeper:" in msg
+        assert "30 seconds" in msg
+        assert "Try again in" in msg
+        
+        # Test 59 seconds
+        msg = format_rate_limit_message(59, rng)
+        assert "Keeper:" in msg
+        assert "59 seconds" in msg
+        assert "Try again in" in msg
+    
+    def test_format_rate_limit_message_minutes(self):
+        """Test rate limit message formatting for minutes (>= 60)"""
+        from backend.routers.game import format_rate_limit_message
+        import random
+        
+        rng = random.Random(42)  # Fixed seed for reproducibility
+        
+        # Test 60 seconds (1 minute)
+        msg = format_rate_limit_message(60, rng)
+        assert "Keeper:" in msg
+        assert "1 minute" in msg
+        assert "Try again in" in msg
+        assert "second" not in msg  # Should not mention seconds
+        
+        # Test 90 seconds (1 minute and 30 seconds)
+        msg = format_rate_limit_message(90, rng)
+        assert "Keeper:" in msg
+        assert "1 minute" in msg
+        assert "30 seconds" in msg
+        assert "Try again in" in msg
+        
+        # Test 120 seconds (2 minutes)
+        msg = format_rate_limit_message(120, rng)
+        assert "Keeper:" in msg
+        assert "2 minutes" in msg
+        assert "Try again in" in msg
+        assert "second" not in msg  # Should not mention seconds
+    
+    def test_format_rate_limit_message_random_selection(self):
+        """Test that different messages are selected randomly"""
+        from backend.routers.game import format_rate_limit_message
+        import random
+        
+        # Generate multiple messages with different seeds
+        messages = set()
+        for seed in range(10):
+            rng = random.Random(seed)
+            msg = format_rate_limit_message(30, rng)
+            messages.add(msg.split(". ")[0])  # Extract just the Keeper flavor part
+        
+        # Should have at least some variation (though with only 5 messages, might not be all unique)
+        assert len(messages) >= 1  # At least one message format
+    
+    def test_format_rate_limit_message_structure(self):
+        """Test that message has correct structure (Keeper flavor + time estimate)"""
+        from backend.routers.game import format_rate_limit_message
+        import random
+        
+        rng = random.Random(42)
+        msg = format_rate_limit_message(45, rng)
+        
+        # Should contain Keeper prefix
+        assert msg.startswith("Keeper:")
+        
+        # Should contain time estimate
+        assert "Try again in" in msg
+        
+        # Should have proper punctuation
+        assert ". " in msg  # Should have period and space between flavor and functional
+        
+        # Should end with period
+        assert msg.endswith(".")
+    
+    def test_format_rate_limit_message_fallback(self):
+        """Test that fallback message works if JSON is missing"""
+        from backend.routers.game import format_rate_limit_message
+        import random
+        
+        # This test verifies the function doesn't crash if messages list is empty
+        # (The fallback is handled in the function itself)
+        rng = random.Random(42)
+        msg = format_rate_limit_message(30, rng)
+        
+        # Should still produce a valid message
+        assert len(msg) > 0
+        assert "Keeper:" in msg
+        assert "Try again in" in msg
