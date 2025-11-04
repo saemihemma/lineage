@@ -2,7 +2,7 @@
  * Wombs Panel - Unified view showing all unlocked wombs (built + unbuilt)
  */
 import type { GameState } from '../types/game';
-import { getWombCount, getUnlockedWombCount } from '../utils/wombs';
+import { getWombCount, getUnlockedWombCount, getNextUnlockHint } from '../utils/wombs';
 import './WombsPanel.css';
 
 interface WombsPanelProps {
@@ -33,8 +33,42 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
             
             if (!isBuilt) {
               // Unbuilt womb - show greyed out placeholder
+              // Get unlock hint for this specific womb
+              const getUnlockHintForWomb = (wombIndex: number): string => {
+                if (wombIndex === 0) return "Available to build now";
+                if (wombIndex === 1) {
+                  const levels = state.practice_levels;
+                  const maxLevel = Math.max(levels.Kinetic, levels.Cognitive, levels.Constructive);
+                  if (maxLevel < 4) return "Unlock: Reach any Practice Level 4";
+                  return "Available to build";
+                }
+                if (wombIndex === 2) {
+                  const levels = state.practice_levels;
+                  const maxLevel = Math.max(levels.Kinetic, levels.Cognitive, levels.Constructive);
+                  if (maxLevel < 7) return "Unlock: Reach any Practice Level 7";
+                  return "Available to build";
+                }
+                if (wombIndex === 3) {
+                  const levels = state.practice_levels;
+                  const practicesAtL9 = [
+                    levels.Kinetic >= 9,
+                    levels.Cognitive >= 9,
+                    levels.Constructive >= 9
+                  ].filter(Boolean).length;
+                  if (practicesAtL9 < 2) return "Unlock: Two Practices at Level 9";
+                  return "Available to build";
+                }
+                return "Locked";
+              };
+              
+              const unlockHint = getUnlockHintForWomb(wombId);
+              
               return (
-                <div key={wombId} className="womb-card womb-card-unbuilt">
+                <div 
+                  key={wombId} 
+                  className="womb-card womb-card-unbuilt"
+                  title={unlockHint}
+                >
                   <div className="womb-card-header">
                     <div className="womb-card-title">Womb {wombId + 1}</div>
                     <div className="womb-card-status-badge locked">LOCKED</div>
@@ -46,6 +80,7 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
                         className="womb-card-build-btn"
                         onClick={onBuild}
                         disabled={disabled}
+                        title={unlockHint}
                       >
                         Build Womb
                       </button>
@@ -96,11 +131,13 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
                     </div>
                   </div>
                   
-                  {needsRepair && onRepair && (
+                  {/* Always show repair button if onRepair handler exists */}
+                  {onRepair && (
                     <button
                       className="womb-card-action-btn"
                       onClick={() => onRepair(womb.id)}
-                      disabled={disabled}
+                      disabled={disabled || womb.durability >= womb.max_durability}
+                      title={womb.durability >= womb.max_durability ? "Womb is at full durability" : "Repair womb"}
                     >
                       Repair
                     </button>
