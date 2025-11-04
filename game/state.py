@@ -65,6 +65,13 @@ class GameState(PlayerState):
             setattr(new_state, 'ftue', copy.deepcopy(ftue))
         else:
             setattr(new_state, 'ftue', {})
+        # Copy prayer_cooldown_until and last_pray_effect (optional attributes)
+        prayer_cooldown_until = getattr(self, 'prayer_cooldown_until', None)
+        if prayer_cooldown_until is not None:
+            setattr(new_state, 'prayer_cooldown_until', prayer_cooldown_until)
+        last_pray_effect = getattr(self, 'last_pray_effect', None)
+        if last_pray_effect is not None:
+            setattr(new_state, 'last_pray_effect', copy.deepcopy(last_pray_effect))
         # Copy RNG state by copying the internal state of the Random object
         # This preserves RNG sequence across state copies
         if hasattr(self, '_rng_instance') and self._rng_instance is not None:
