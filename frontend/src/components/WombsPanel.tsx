@@ -87,11 +87,31 @@ export function WombsPanel({ state, onRepair, onBuild, disabled = false }: Wombs
               
               const unlockHint = getUnlockHintForWomb(wombId);
               
+              // Flavorful tooltip with functional motivation for locked/unbuilt wombs
+              const getWombUnlockTooltip = (wombIndex: number, isLocked: boolean): string => {
+                if (!isLocked) {
+                  return "The vessel awaits construction. Each womb multiplies your capacity to forge clones.";
+                }
+                // Locked wombs - give functional reasons to pursue them
+                if (wombIndex === 1) {
+                  return "Unlock: Reach any Practice Level 4. Multiple wombs allow parallel cloning, increasing your capacity to grow clones simultaneously.";
+                }
+                if (wombIndex === 2) {
+                  return "Unlock: Reach any Practice Level 7. More wombs mean faster clone production, though they draw more attention from feral forces.";
+                }
+                if (wombIndex === 3) {
+                  return "Unlock: Two Practices at Level 9. The final vessel. Maximum parallel capacity, but high risk of coordinated attacks.";
+                }
+                return unlockHint;
+              };
+              
+              const unlockTooltip = getWombUnlockTooltip(wombId, isLocked);
+              
               return (
                 <div 
                   key={wombId} 
                   className={`womb-card womb-card-unbuilt ${isLocked ? 'womb-card-locked' : ''}`}
-                  title={unlockHint}
+                  title={unlockTooltip}
                 >
                   <div className="womb-card-header">
                     <div className="womb-card-title">Womb {wombId + 1}</div>
