@@ -13,7 +13,7 @@ def check_practice_unlock(practices_xp: Dict[str, int], unlock_key: str, gamepla
     
     Args:
         practices_xp: Dictionary of practice XP values
-        unlock_key: One of 'tier2', 'tier3', 'multi_womb'
+        unlock_key: One of 'tier2', 'tier3' (used for clone tier unlocks)
         gameplay_config: Optional config (uses GAMEPLAY_CONFIG if None)
     
     Returns:
