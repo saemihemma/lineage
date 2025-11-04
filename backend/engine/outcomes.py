@@ -1070,36 +1070,36 @@ def resolve_grow(ctx: OutcomeContext) -> Outcome:
             time_mult_penalty = action_effects.get("time_mult", 1.0)
             cost_mult_penalty = action_effects.get("cost_mult", 1.0)
             
-        # Apply feral effects as mods
-        if time_mult_penalty != 1.0:
-            feral_time_mod = Mod(
-                target='time_mult',
-                op='mult',
-                value=time_mult_penalty,
-                source=f'FeralAttack:{attention_band.upper()}'
-            )
-            mods.append(feral_time_mod)
-            final_stats.time_mult *= time_mult_penalty
-        
-        if cost_mult_penalty != 1.0:
-            feral_cost_mod = Mod(
-                target='cost_mult',
-                op='mult',
-                value=cost_mult_penalty,
-                source=f'FeralAttack:{attention_band.upper()}'
-            )
-            mods.append(feral_cost_mod)
-            final_stats.cost_mult *= cost_mult_penalty
-        
-        # Store attack info for event emission
-        feral_attack = {
-            "band": attention_band,
-            "action": "grow",
-            "effects": {
-                "time_mult": time_mult_penalty,
-                "cost_mult": cost_mult_penalty
+            # Apply feral effects as mods
+            if time_mult_penalty != 1.0:
+                feral_time_mod = Mod(
+                    target='time_mult',
+                    op='mult',
+                    value=time_mult_penalty,
+                    source=f'FeralAttack:{attention_band.upper()}'
+                )
+                mods.append(feral_time_mod)
+                final_stats.time_mult *= time_mult_penalty
+            
+            if cost_mult_penalty != 1.0:
+                feral_cost_mod = Mod(
+                    target='cost_mult',
+                    op='mult',
+                    value=cost_mult_penalty,
+                    source=f'FeralAttack:{attention_band.upper()}'
+                )
+                mods.append(feral_cost_mod)
+                final_stats.cost_mult *= cost_mult_penalty
+            
+            # Store attack info for event emission
+            feral_attack = {
+                "band": attention_band,
+                "action": "grow",
+                "effects": {
+                    "time_mult": time_mult_penalty,
+                    "cost_mult": cost_mult_penalty
+                }
             }
-        }
     
     # 8. Calculate cost with piecewise breakpoints (Systems v1)
     cost_mult_base = compute_clone_cost_multiplier(ctx.self_level, ctx.gameplay_config)
