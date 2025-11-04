@@ -656,7 +656,32 @@ export function SimulationScreen() {
   };
 
   const handleRepairWomb = (wombId: number) => {
-    handleAction(() => gameAPI.repairWomb(wombId), `repair womb ${wombId + 1}`);
+    const womb = state?.wombs?.find(w => w.id === wombId);
+    console.log(`🔧 Repair attempt: Womb ${wombId + 1}, durability=${womb?.durability?.toFixed(1) || 'unknown'}/${womb?.max_durability?.toFixed(1) || 'unknown'}`);
+    handleAction(
+      async () => {
+        try {
+          const result = await gameAPI.repairWomb(wombId);
+          console.log(`🔧 Repair response:`, {
+            hasState: !!result.state,
+            message: result.message,
+            cost: result.cost,
+            repair_time: result.repair_time,
+            task_id: result.task_id
+          });
+          return result;
+        } catch (err) {
+          console.error(`🔧 Repair error:`, {
+            error: err,
+            message: err instanceof Error ? err.message : String(err),
+            wombId,
+            wombState: womb
+          });
+          throw err;
+        }
+      },
+      `repair womb ${wombId + 1}`
+    );
   };
 
   if (loading) {

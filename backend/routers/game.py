@@ -511,7 +511,21 @@ def sanitize_error_message(error: Exception) -> str:
         "Womb",
         "not found",
         "already at full durability",
-        "repaired"
+        "repaired",
+        "repair",
+        "task",
+        "grow slots",
+        "available",
+        "busy",
+        "wait",
+        "insufficient",
+        "cannot afford",
+        "missing",
+        "cost",
+        "duration",
+        "calculate",
+        "start",
+        "complete"
     ]):
         return error_str
     
@@ -2258,14 +2272,21 @@ async def repair_womb_endpoint(
         raise HTTPException(status_code=400, detail="A task is already in progress. Please wait.")
     
     try:
+        # Log repair attempt details for debugging
+        logger.info(f"🔧 Repair attempt: Womb {womb_id}, durability={target_womb.durability:.1f}/{target_womb.max_durability:.1f}")
+        
         # Calculate repair cost and time
         repair_cost = calculate_repair_cost(target_womb, state)
         repair_time = calculate_repair_time(state, target_womb)
         
+        logger.info(f"🔧 Repair cost: {repair_cost}, time: {repair_time}s")
+        
         # Check if player can afford repair
         from core.game_logic import can_afford, format_resource_error
         if not can_afford(state.resources, repair_cost):
-            raise RuntimeError(format_resource_error(state.resources, repair_cost, f"Repair Womb {womb_id}"))
+            error_msg = format_resource_error(state.resources, repair_cost, f"Repair Womb {womb_id}")
+            logger.warning(f"🔧 Repair blocked: insufficient resources - {error_msg}")
+            raise RuntimeError(error_msg)
         
         # Create new state
         new_state = state.copy()
@@ -2275,6 +2296,7 @@ async def repair_womb_endpoint(
         spend(new_state.resources, repair_cost)
         
         # Start repair task
+        logger.info(f"🔧 Starting repair task for womb {womb_id}")
         final_state, task_id = start_task(
             new_state,
             "repair_womb",
@@ -2285,6 +2307,8 @@ async def repair_womb_endpoint(
         # Apply womb systems (decay, attacks) after state change
         from game.wombs import check_and_apply_womb_systems
         final_state, attack_message = check_and_apply_womb_systems(final_state)
+        
+        logger.info(f"🔧 Repair task started successfully: task_id={task_id}")
         
         # save_game_state(db, sid, final_state)  # DEPRECATED: State in localStorage
         
@@ -2301,9 +2325,14 @@ async def repair_womb_endpoint(
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
         return response
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is (they're already user-friendly)
+        raise
     except Exception as e:
+        # Log full exception details before sanitization
+        logger.error(f"🔧 Error repairing womb {womb_id} for session {sid[:8]}...: {type(e).__name__}: {str(e)}", exc_info=True)
+        logger.error(f"🔧 Womb state: durability={target_womb.durability:.1f}, max={target_womb.max_durability:.1f}")
         error_msg = sanitize_error_message(e)
-        logger.error(f"Error repairing womb for session {sid[:8]}...: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
 
 

@@ -348,6 +348,7 @@ def calculate_repair_cost(womb: Womb, state: GameState) -> dict:
     3x per durability: 0.9 Tritanium, 0.6 Metal Ore, 0.15 Biomass per point
     
     Charges for actual restore amount (5 points or remaining if less).
+    Works correctly at 0 durability (restores 5 points).
     """
     from core.config import CONFIG
     from core.game_logic import inflate_costs
@@ -356,13 +357,18 @@ def calculate_repair_cost(womb: Womb, state: GameState) -> dict:
     base_build_cost = CONFIG["ASSEMBLER_COST"]  # {"Tritanium": 30, "Metal Ore": 20, "Biomass": 5}
     max_durability = womb.max_durability  # Typically 100.0
     
-    # Calculate missing durability and restore amount (5 points or remaining)
+    # Calculate missing durability and restore amount (5 points or remaining if less)
+    # At 0 durability: missing = 100, restore = min(5, 100) = 5
     missing_durability = max_durability - womb.durability
     restore_amount = min(5.0, missing_durability)  # Restore 5 or remaining if less
     
     if restore_amount <= 0:
         # Already at max, no repair needed
         return {resource: 0 for resource in base_build_cost.keys()}
+    
+    # Ensure restore_amount is positive (should always be > 0 at this point)
+    if restore_amount <= 0 or max_durability <= 0:
+        raise ValueError(f"Invalid repair calculation: durability={womb.durability}, max={max_durability}, restore={restore_amount}")
     
     # Calculate cost per durability point (3x building cost)
     cost_per_durability = {}
@@ -373,6 +379,9 @@ def calculate_repair_cost(womb: Womb, state: GameState) -> dict:
     repair_cost = {}
     for resource, per_point_cost in cost_per_durability.items():
         repair_cost[resource] = int(round(per_point_cost * restore_amount))
+        # Ensure cost is at least 1 if restore_amount > 0 (rounding might make it 0)
+        if repair_cost[resource] == 0 and restore_amount > 0:
+            repair_cost[resource] = 1
     
     # Apply SELF level inflation (same as building)
     level = state.soul_level()
