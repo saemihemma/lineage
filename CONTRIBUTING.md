@@ -1,153 +1,354 @@
 # Contributing to LINEAGE
 
-This document outlines the development workflow and verification process for LINEAGE.
+Thank you for your interest in contributing to LINEAGE! This document provides guidelines and instructions for contributing to the project.
 
-## Development Workflow
+## Table of Contents
 
-### Before Submitting Changes
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Setup](#development-setup)
+- [Making Changes](#making-changes)
+- [Testing](#testing)
+- [Pull Request Process](#pull-request-process)
+- [Code Style](#code-style)
+- [Reporting Bugs](#reporting-bugs)
+- [Suggesting Features](#suggesting-features)
 
-Before submitting any code changes, you should:
+## Code of Conduct
 
-1. **Run Unit Tests**: Verify that all existing tests pass
-2. **Verify Application Launch**: Ensure the application starts without errors
-3. **Test on Target Platforms**: If possible, test on both Windows and Mac
+This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
 
-### Quick Verification
+## Getting Started
 
-The easiest way to verify your changes is to run the verification script:
+1. **Fork the repository** on GitHub
+2. **Clone your fork** locally:
+   ```bash
+   git clone https://github.com/your-username/lineage.git
+   cd lineage
+   ```
+3. **Add the upstream repository**:
+   ```bash
+   git remote add upstream https://github.com/saemihemma/lineage.git
+   ```
+4. **Create a new branch** for your changes:
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or
+   git checkout -b fix/your-bug-fix
+   ```
+
+## Development Setup
+
+### Backend Setup
+
+1. **Install Python dependencies**:
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+
+2. **Set up environment variables** (optional, for local development):
+   ```bash
+   export DATABASE_URL="sqlite:///./lineage.db"
+   export HMAC_SECRET_KEY_V1="dev-secret-key"
+   export CSRF_SECRET_KEY="dev-csrf-secret"
+   ```
+
+3. **Run the backend server**:
+   ```bash
+   python backend/main.py
+   # or
+   uvicorn backend.main:app --reload
+   ```
+
+### Frontend Setup
+
+1. **Install Node.js dependencies**:
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **Set up environment variables** (create `frontend/.env.local`):
+   ```env
+   VITE_API_URL=http://localhost:8000
+   ```
+
+3. **Run the development server**:
+   ```bash
+   npm run dev
+   ```
+
+### Full Stack Development
+
+For full-stack development, run both backend and frontend:
 
 ```bash
-# Quick check: Run tests only (fast)
-python scripts/verify.py --tests-only
-
-# Full verification: Tests + app launch check
-python scripts/verify.py --full
-```
-
-On Windows:
-```cmd
-python scripts\verify.py --tests-only
-python scripts\verify.py --full
-```
-
-### Manual Verification
-
-If you prefer to run tests manually:
-
-**Unix/Mac:**
-```bash
-# Using shell script
-./scripts/run_tests.sh
-
-# Or directly with Python
-python3 -m unittest discover -v
-```
-
-**Windows:**
-```cmd
-REM Using batch file
-scripts\run_tests.bat
-
-REM Or directly with Python
-python -m unittest discover -v
-```
-
-### Running the Application
-
-**Unix/Mac:**
-```bash
-./run_mac_linux.sh
-```
-
-**Windows:**
-```cmd
-run_windows.bat
-```
-
-Or directly:
-```bash
+# Terminal 1: Backend
+cd backend
 python main.py
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
 ```
 
-## Test Structure
+## Making Changes
 
-Tests are located in:
-- `test_*.py` files in the project root
-- `tests/test_*.py` files in the tests/ directory
+### Branch Naming Convention
 
-The test suite includes:
-- `test_frontier.py`: Core game mechanics and logic
-- `test_loading_screen.py`: Loading screen UI tests
-- `tests/test_migrations.py`: State migration tests
+- `feature/` - New features
+- `fix/` - Bug fixes
+- `docs/` - Documentation changes
+- `refactor/` - Code refactoring
+- `test/` - Test additions/changes
 
-## Verification Script Options
+### Commit Message Guidelines
 
-The `scripts/verify.py` script supports the following options:
+Use clear, descriptive commit messages:
 
-- **No arguments**: Runs tests only (default, quick check)
-- `--tests-only`: Explicitly run only tests
-- `--full`: Run tests and verify app launch
-
-## Expected Behavior
-
-### Tests Should Always Pass
-
-Before submitting changes, ensure:
-- All existing unit tests pass
-- New functionality has corresponding tests (when applicable)
-- No regressions are introduced
-
-### Application Should Launch
-
-The application should:
-- Start without import errors
-- Load all required assets
-- Display the briefing screen first
-- Transition correctly between screens
-
-## Platform-Specific Notes
-
-### Mac/Linux
-- Use `python3` command
-- Shell scripts should have execute permissions
-- Tkinter should be available in standard Python installations
-
-### Windows
-- Use `python` command (may be `py` on some systems)
-- Batch files (`.bat`) are used instead of shell scripts
-- Tkinter should be available in standard Python installations
-
-## Troubleshooting
-
-### Tests Fail
-- Check that all dependencies are installed
-- Verify Python version (3.9+ recommended)
-- Check for syntax errors in code
-
-### App Won't Launch
-- Verify Tkinter is installed: `python -c "import tkinter"`
-- Check for missing asset files in `assets/` directory
-- Review console output for import errors
-
-### Verification Script Issues
-- Ensure you're running from the project root directory
-- Check that `scripts/verify.py` has execute permissions (Unix/Mac): `chmod +x scripts/verify.py`
-- Verify Python path is correct
-
-## Continuous Integration
-
-For automated testing, the verification script can be integrated into CI/CD pipelines:
-
-```yaml
-# Example GitHub Actions workflow
-- name: Run Tests
-  run: python scripts/verify.py --tests-only
+```
+feat: Add clone unlock system for MINER and VOLATILE clones
+fix: Resolve attention decay not updating in UI
+docs: Update README with contribution guidelines
+refactor: Simplify session cookie handling
+test: Add smoke tests for clone unlock system
 ```
 
-## Questions?
+**Format:** `<type>: <description>`
 
-If you encounter issues with the verification process or have questions about the workflow, please check:
-1. This CONTRIBUTING.md file
-2. The verification script help: `python scripts/verify.py --help`
-3. Test files for examples of how to write tests
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation
+- `refactor`: Code refactoring
+- `test`: Tests
+- `chore`: Maintenance tasks
 
+## Testing
+
+### Smoke Tests (Required)
+
+**Critical:** All commits must pass smoke tests before merging. These tests validate the complete user journey.
+
+**Run smoke tests:**
+```bash
+python3 -m pytest backend/tests/test_smoke.py -v
+```
+
+**Pre-commit hook:**
+The repository includes a pre-commit hook that automatically runs smoke tests. If tests fail, your commit will be blocked.
+
+**To skip hook (emergency only):**
+```bash
+git commit --no-verify -m "emergency: skip smoke tests"
+```
+
+### Backend Tests
+
+**Run all backend tests:**
+```bash
+python -m pytest backend/tests/ -v
+```
+
+**Run specific test suites:**
+```bash
+# Smoke tests (critical user journey)
+python -m pytest backend/tests/test_smoke.py -v
+
+# Property-based tests
+python -m pytest backend/tests/test_property_timers.py -v
+
+# Security tests
+python -m pytest backend/tests/test_security.py -v
+
+# CSRF tests
+python -m pytest backend/tests/test_csrf.py -v
+```
+
+**Run with coverage:**
+```bash
+python -m pytest backend/tests/ --cov=backend --cov=core --cov-report=term-missing
+```
+
+### Frontend Tests
+
+**Run frontend tests:**
+```bash
+cd frontend
+npm test
+```
+
+## Pull Request Process
+
+### Before Submitting
+
+1. **Ensure tests pass:**
+   - Run smoke tests: `python3 -m pytest backend/tests/test_smoke.py -v`
+   - Run relevant test suites
+   - Ensure no TypeScript errors: `cd frontend && npm run build`
+
+2. **Update documentation:**
+   - Update README.md if needed
+   - Add/update code comments
+   - Update API documentation if backend changes
+
+3. **Check for secrets:**
+   - No hardcoded API keys
+   - No database credentials
+   - No personal tokens
+   - All secrets use environment variables
+
+4. **Follow code style:**
+   - Python: Follow PEP 8
+   - TypeScript: Follow existing patterns
+   - Use meaningful variable names
+   - Add comments for complex logic
+
+### Creating a Pull Request
+
+1. **Push your branch to your fork:**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+2. **Create PR on GitHub:**
+   - Go to https://github.com/saemihemma/lineage
+   - Click "New Pull Request"
+   - Select your branch
+   - Fill out the PR template
+
+3. **PR Requirements:**
+   - ✅ All tests pass (CI will run automatically)
+   - ✅ No merge conflicts
+   - ✅ Clear description of changes
+   - ✅ Related issues referenced (if any)
+   - ✅ Screenshots (if UI changes)
+
+### PR Review Process
+
+1. **Maintainers will review:**
+   - Code quality and style
+   - Test coverage
+   - Security concerns
+   - Documentation updates
+
+2. **Address feedback:**
+   - Make requested changes
+   - Push updates to your branch
+   - PR will automatically update
+
+3. **After approval:**
+   - Maintainer will merge
+   - Branch will be deleted (if enabled)
+
+## Code Style
+
+### Python
+
+- Follow PEP 8 style guide
+- Use type hints where appropriate
+- Maximum line length: 100 characters (flexible)
+- Use meaningful variable and function names
+- Add docstrings for public functions/classes
+
+**Example:**
+```python
+def calculate_clone_cost(state: GameState, clone_kind: str) -> Dict[str, int]:
+    """
+    Calculate resource cost for growing a clone.
+    
+    Args:
+        state: Current game state
+        clone_kind: Type of clone (BASIC, MINER, VOLATILE)
+    
+    Returns:
+        Dictionary of resource costs
+    """
+    # Implementation
+    pass
+```
+
+### TypeScript/React
+
+- Use TypeScript for type safety
+- Use functional components with hooks
+- Follow existing component patterns
+- Use meaningful prop and variable names
+- Add JSDoc comments for complex functions
+
+**Example:**
+```typescript
+/**
+ * Check if a clone type is unlocked based on Construction practice level
+ */
+export function isCloneTypeUnlocked(
+  state: GameState, 
+  cloneKind: string
+): boolean {
+  // Implementation
+}
+```
+
+### General Guidelines
+
+- **Null Safety:** Always use optional chaining (`?.`) and nullish coalescing (`??`) to prevent errors
+- **Error Handling:** Handle errors gracefully with clear error messages
+- **Logging:** Use appropriate log levels (debug, info, warning, error)
+- **Comments:** Explain "why" not "what" - code should be self-documenting
+
+## Reporting Bugs
+
+### Before Reporting
+
+1. Check if the bug has already been reported
+2. Try to reproduce the bug consistently
+3. Check if it's a known issue in closed issues
+
+### Bug Report Template
+
+Use the GitHub issue template or include:
+
+- **Description:** Clear description of the bug
+- **Steps to Reproduce:** Detailed steps to reproduce
+- **Expected Behavior:** What should happen
+- **Actual Behavior:** What actually happens
+- **Screenshots/Logs:** If applicable
+- **Environment:**
+  - OS and version
+  - Python version
+  - Node.js version
+  - Browser (if frontend issue)
+
+## Suggesting Features
+
+### Feature Request Template
+
+- **Description:** Clear description of the feature
+- **Use Case:** Why is this feature needed?
+- **Proposed Solution:** How should it work?
+- **Alternatives:** Other solutions considered
+- **Additional Context:** Screenshots, mockups, etc.
+
+### Before Suggesting
+
+1. Check if the feature has been requested
+2. Consider if it fits the game's design
+3. Think about implementation complexity
+4. Consider backward compatibility
+
+## Getting Help
+
+- **GitHub Discussions:** For questions and discussions
+- **GitHub Issues:** For bugs and feature requests
+- **Pull Requests:** For code contributions
+
+## Additional Resources
+
+- [README.md](README.md) - Project overview
+- [backend/README.md](backend/README.md) - Backend API documentation
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
+
+## Thank You!
+
+Contributions are what make open source great. Thank you for taking the time to contribute to LINEAGE!

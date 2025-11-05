@@ -2,6 +2,7 @@
 
 ![Test Suite](https://github.com/saemihemma/lineage/actions/workflows/tests.yml/badge.svg?branch=web-version)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A strategic simulation game about clone management, expeditions, and SELF evolution in the EVE Frontier universe.
 
@@ -149,12 +150,40 @@ python -m unittest discover -v
 All tests run automatically on push and pull requests via GitHub Actions.
 See [.github/workflows/tests.yml](.github/workflows/tests.yml) for CI configuration.
 
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Setting up your development environment
+- Code style and conventions
+- Testing requirements
+- Pull request process
+- Reporting bugs and suggesting features
+
+**Quick Start for Contributors:**
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes and ensure tests pass
+4. Commit your changes (`git commit -m 'feat: Add amazing feature'`)
+5. Push to your branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
+
 ## Documentation
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow and testing
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Code of Conduct
 - [DEPLOYMENT.md](DEPLOYMENT.md) - Backend API deployment guide
 - [backend/README.md](backend/README.md) - Backend API documentation
 
+## Support
+
+- **GitHub Issues:** [Report bugs or request features](https://github.com/saemihemma/lineage/issues)
+- **GitHub Discussions:** [Ask questions or discuss ideas](https://github.com/saemihemma/lineage/discussions)
+- **Pull Requests:** [Contribute code improvements](https://github.com/saemihemma/lineage/pulls)
+
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
