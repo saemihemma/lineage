@@ -36,8 +36,8 @@ export function createDefaultState(): GameState {
     wombs: [],
     resources: {
       "Tritanium": 0,
-      "Metal Ore": 5,
-      "Biomass": 1,
+      "Metal Ore": 20,
+      "Biomass": 5,
       "Synthetic": 8,
       "Organic": 8,
       "Shilajit": 0

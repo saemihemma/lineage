@@ -10,7 +10,7 @@ interface OnboardingChecklistProps {
 }
 
 interface FTUEState {
-  step_gather_10_tritanium?: boolean;
+  step_gather_30_tritanium?: boolean;
   step_build_womb?: boolean;
   step_grow_clone?: boolean;
   step_first_expedition?: boolean;
@@ -25,12 +25,12 @@ export function OnboardingChecklist({ state }: OnboardingChecklistProps) {
   // Define steps with completion checks
   const steps = [
     {
-      id: 'gather_10_tritanium',
-      label: 'Gather 10 Tritanium',
-      completed: ftue.step_gather_10_tritanium || false,
+      id: 'gather_30_tritanium',
+      label: 'Gather 30 Tritanium',
+      completed: ftue.step_gather_30_tritanium || false,
       check: () => {
         const tritanium = state.resources?.Tritanium || 0;
-        return tritanium >= 10;
+        return tritanium >= 30;
       },
     },
     {

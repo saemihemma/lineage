@@ -8,7 +8,15 @@ A strategic simulation game about clone management, expeditions, and SELF evolut
 
 ## Overview
 
-LINEAGE is a resource management and progression game where you build a Womb to grow clones, deploy them on dangerous expeditions, and evolve your SELF through accumulated experience and memory. Each decision matters—clones can die permanently, but successful expeditions and strategic uploads strengthen your core identity.
+LINEAGE is a strategic simulation about managing clones, expeditions, and SELF evolution in the EVE Frontier universe. You are the SELF—a core consciousness that splits itself into clones to explore a dangerous frontier. Each clone is a fragment of your identity, grown in a Womb and sent on expeditions that can end in permanent death.
+
+The core tension: You must fragment yourself to grow stronger, but every fragment risks complete annihilation. A clone that dies before upload is lost forever—their experience, their growth, their memory. Only successful returns can strengthen the SELF.
+
+The cycle: Gather resources → Build Wombs → Grow clones → Deploy on expeditions → Upload survivors to preserve their memory → Evolve your Practices → Repeat, with higher stakes.
+
+Operations draw attention. The more you do, the more feral drones notice. High attention increases the chance of attacks that damage your infrastructure and risk your clones. Build multiple Wombs for parallel operations, but each one increases the attention you generate—and the danger.
+
+**Practices**: Kinetic, Cognitive, and Constructive disciplines evolve through use. Each uploaded clone carries experience back to the SELF, unlocking capabilities and reducing costs. The more experienced the clone, the greater the benefit—but only if they survive.
 
 ## Core Gameplay
 
@@ -42,42 +50,43 @@ LINEAGE is a resource management and progression game where you build a Womb to 
 
 ## Quick Start
 
-### Running the Game
+LINEAGE is deployed as a web application with a React frontend and FastAPI backend, both hosted on Railway.
 
-**Mac/Linux:**
+### Play Online
+
+The game is available at: [https://wonderful-wisdom-production.up.railway.app](https://wonderful-wisdom-production.up.railway.app)
+
+### Local Development
+
+**Backend:**
 ```bash
-./run_mac_linux.sh
+cd backend
+pip install -r requirements.txt
+python3 -m uvicorn main:app --reload
 ```
 
-**Windows:**
-```cmd
-run_windows.bat
-```
-
-**Direct:**
+**Frontend:**
 ```bash
-python main.py
+cd frontend
+npm install
+npm run dev
 ```
 
 ### Requirements
 
-- Python 3.9+
-- Tkinter (usually included with Python)
-- PIL/Pillow (for image loading)
-
-```bash
-pip install -r requirements.txt
-```
+- **Backend**: Python 3.11+
+- **Frontend**: Node.js 18+ and npm
 
 ## Project Structure
 
 ```
+├── backend/       # FastAPI backend API (Railway deployment)
+├── frontend/      # React + TypeScript web UI (Railway deployment)
 ├── core/          # Core game logic and models
 ├── game/          # Game rules, state, and telemetry
-├── ui/            # User interface (Tkinter screens)
 ├── agents/        # Automated agent logic
-├── backend/       # FastAPI backend for leaderboard/telemetry
 ├── data/          # Game data (JSON files)
+├── config/        # Game configuration (JSON files)
 └── scripts/       # Utility scripts (testing, verification)
 ```
 
@@ -175,8 +184,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow and testing
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Code of Conduct
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Backend API deployment guide
+- [TESTING.md](TESTING.md) - Testing guide and requirements
 - [backend/README.md](backend/README.md) - Backend API documentation
+- [frontend/README.md](frontend/README.md) - Frontend development guide
 
 ## Support
 

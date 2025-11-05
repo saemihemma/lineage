@@ -108,8 +108,8 @@ class PlayerState:
     wombs: List[Womb] = field(default_factory=list)  # Array of wombs (replaces assembler_built)
     resources: Dict[str, int] = field(default_factory=lambda: {
         "Tritanium": 0,
-        "Metal Ore": 5,
-        "Biomass": 1,
+        "Metal Ore": 20,
+        "Biomass": 5,
         "Synthetic": 8,
         "Organic": 8,
         "Shilajit": 0

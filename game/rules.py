@@ -24,25 +24,9 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
         Tuple of (new_state, message)
     """
     from game.wombs import get_unlocked_womb_count, create_womb
-    from core.config import GAMEPLAY_CONFIG
-    from core.game_logic import check_practice_unlock
     
-    # Systems v1: Check multi_womb unlock if trying to build second+ womb
+    # Check unlock conditions (uses get_unlocked_womb_count which handles "any Practice Level 4" for womb 2)
     current_count = len(state.wombs)
-    if current_count >= 1:
-        if not check_practice_unlock(state.practices_xp, "multi_womb", GAMEPLAY_CONFIG):
-            practices_config = GAMEPLAY_CONFIG.get("practices", {})
-            constructive_config = practices_config.get("Constructive", {})
-            unlocks = constructive_config.get("unlocks", {})
-            required_level = unlocks.get("multi_womb", 6)
-            xp_per_level = CONFIG.get("PRACTICE_XP_PER_LEVEL", 100)
-            current_level = state.practices_xp.get("Constructive", 0) // xp_per_level
-            raise RuntimeError(
-                f"Cannot build multiple wombs. "
-                f"Requires Constructive practice level {required_level} (current: {current_level})."
-            )
-    
-    # Check unlock conditions (existing system)
     unlocked_count = get_unlocked_womb_count(state)
     
     if current_count >= unlocked_count:
@@ -64,7 +48,7 @@ def build_womb(state: GameState) -> Tuple[GameState, str]:
         new_state.resources[k] = new_state.resources.get(k, 0) - v
     
     # Award practice XP (modifies practices_xp in place, but on copy)
-    award_practice_xp(new_state, "Constructive", 10)
+    award_practice_xp(new_state, "Constructive", 60)
     
     # Gain attention when building womb (always, even for first womb)
     from game.wombs import gain_attention

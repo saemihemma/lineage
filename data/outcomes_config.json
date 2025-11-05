@@ -163,7 +163,7 @@
         "Metal Ore": [2, 6],
         "Organic": [1, 3]
       },
-      "shilajit_chance": 0.15,
+      "shilajit_chance": 0.30,
       "trait_effects": {
         "PWC": {
           "death_chance": {
