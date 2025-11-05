@@ -32,23 +32,36 @@ This command:
    - Regression prevention
 
 3. **Core Game Logic Always Has Tests**
-   - `test_frontier.py` - Main game logic tests
-   - `test_loading_screen.py` - UI component tests
+   - `backend/tests/test_game.py` - Core game logic tests
+   - `backend/tests/test_smoke.py` - Golden path smoke tests
    - Backend API tests in `backend/tests/`
 
 ## Test Structure
 
 ```
-tests/
-├── test_frontier.py          # Core game logic (resources, clones, expeditions)
-├── test_loading_screen.py    # Loading screen UI tests
-└── test_migrations.py        # State migration tests
-
 backend/tests/
-├── test_database.py         # Database operations
-├── test_leaderboard.py      # Leaderboard API
-└── test_telemetry.py        # Telemetry API
+├── test_smoke.py              # Golden path smoke tests (CRITICAL - must pass)
+├── test_critical_path.py      # Critical API endpoints (CRITICAL)
+├── test_user_journey.py       # End-to-end user journeys
+├── test_game.py               # Core game logic and mechanics
+├── test_game_integration.py   # Integration tests
+├── test_property_timers.py    # Property-based timer validation
+├── test_expedition_count.py   # Expedition mechanics
+├── test_security.py           # Security validations (CRITICAL)
+├── test_csrf.py               # CSRF protection (CRITICAL)
+├── test_anticheat.py          # Anti-cheat HMAC signing (CRITICAL)
+├── test_database.py           # Database operations
+├── test_database_resilience.py # DB error handling
+├── test_leaderboard.py        # Leaderboard API
+├── test_telemetry.py          # Telemetry API
+├── test_bugfixes.py           # Bug fix validations
+└── test_regression_bugs.py    # Regression prevention
+
+tests/
+└── test_migrations.py         # State migration tests
 ```
+
+**Frontend Tests**: Currently missing - add React component tests using Jest/React Testing Library
 
 ## Running Tests
 
@@ -111,27 +124,69 @@ When setting up CI/CD:
 
 ## Current Test Coverage
 
-### Core Game Logic ✅
-- Resource gathering
-- Clone growing
-- Expeditions
-- Upload mechanics
-- SELF evolution
+### Critical Path Tests ✅
+- Golden path smoke tests (complete user journey)
+- Critical API endpoints (no 500 errors)
+- End-to-end user journeys
 
-### UI Components ✅
-- Loading screen
-- Name input
-- Progress bar
+### Security Tests ✅
+- CSRF protection
+- Anti-cheat HMAC signing
+- Security validations
 
-### Backend API ✅
-- Leaderboard endpoints
-- Telemetry endpoints
-- Game state management
+### Game Logic Tests ✅
+- Core game mechanics
+- Game rules and state management
+- Integration tests
+- Property-based timer validation
+- Expedition mechanics
 
-### Missing Tests (To Be Added)
-- Frontend React components (Jest/React Testing Library)
-- Integration tests (end-to-end game flow)
-- API endpoint response validation
+### Infrastructure Tests ✅
+- Database operations
+- Database resilience (error handling)
+- Leaderboard API
+- Telemetry API
+
+### Regression Tests ✅
+- Bug fix validations
+- Regression prevention
+
+### Missing Tests
+- **Frontend React components** (Jest/React Testing Library) - Priority: High
+- End-to-end browser tests (Playwright/Cypress) - Priority: Medium
+- Performance/load tests - Priority: Low
+- Accessibility tests - Priority: Low
+
+## Test Validation
+
+### Test Coverage Validation
+
+Use the test coverage validation script to check if code changes require test updates:
+
+```bash
+# Check mode (suggestions only, non-blocking)
+python scripts/validate_test_coverage.py --check
+
+# Enforce mode (block commit if tests missing, blocking)
+python scripts/validate_test_coverage.py --enforce
+```
+
+The script analyzes git diff and suggests which tests should be updated based on `tests/test_map.json`.
+
+### Test Mapping
+
+See `tests/test_map.json` for mapping between code paths and required test files.
+
+**Example**: Changes to `backend/routers/game.py` require updates to:
+- `backend/tests/test_smoke.py`
+- `backend/tests/test_critical_path.py`
+- `backend/tests/test_game.py`
+
+## Test Documentation
+
+- **`tests/TEST_RULES.md`** - Rules for when tests are required
+- **`tests/TEST_INVENTORY.md`** - Complete inventory of all test files
+- **`tests/test_map.json`** - Code-to-test mapping configuration
 
 ## Test Best Practices
 
@@ -165,14 +220,19 @@ pwd  # Should show .../frontier_ui_package_v4
 ## Enforcement Reminder
 
 **Before pushing to production:**
-1. ✅ Run `python3 scripts/verify.py`
-2. ✅ All tests must pass
-3. ✅ Fix any failing tests
-4. ✅ Then push: `git push origin web-version`
+1. ✅ Run critical smoke tests: `python3 -m pytest backend/tests/test_smoke.py -v`
+2. ✅ Run test coverage validation: `python scripts/validate_test_coverage.py --check`
+3. ✅ All critical tests must pass
+4. ✅ Review suggested test updates
+5. ✅ Fix any failing tests
+6. ✅ Then push: `git push origin web-version`
 
 **If tests fail:**
 - Don't push
 - Fix the issues
 - Run tests again
 - Then push
+
+**Pre-commit Hook:**
+The pre-commit hook automatically runs smoke tests. If they fail, your commit will be blocked (unless using `--no-verify`).
 

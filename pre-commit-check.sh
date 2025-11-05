@@ -95,6 +95,18 @@ else
     exit 1
 fi
 
+# Run test coverage validation (suggestions only, non-blocking)
+echo ""
+echo "5️⃣  Checking if tests need updates based on code changes..."
+if python3 scripts/validate_test_coverage.py --check 2>&1 | grep -q "TESTS THAT MAY NEED UPDATES"; then
+    echo -e "   ${YELLOW}⚠️  Some tests may need updates - review suggestions above${NC}"
+    echo ""
+    echo "   Run: python3 scripts/validate_test_coverage.py --check"
+    echo "   for detailed suggestions"
+else
+    echo -e "   ${GREEN}✅ Test coverage looks good${NC}"
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}✅ ALL PRE-COMMIT CHECKS PASSED!${NC}"

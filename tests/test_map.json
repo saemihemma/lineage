@@ -1,0 +1,202 @@
+{
+  "code_paths": {
+    "backend/routers/game.py": {
+      "required_tests": [
+        "backend/tests/test_smoke.py",
+        "backend/tests/test_critical_path.py",
+        "backend/tests/test_game.py"
+      ],
+      "test_categories": ["critical", "api", "game_logic"],
+      "description": "Main game API endpoints - all actions (gather, build, grow, expedition, upload)"
+    },
+    "backend/engine/outcomes.py": {
+      "required_tests": [
+        "backend/tests/test_game.py",
+        "backend/tests/test_smoke.py"
+      ],
+      "test_categories": ["game_logic", "critical"],
+      "description": "Game outcome resolution (grow, upload, expeditions)"
+    },
+    "backend/routers/leaderboard.py": {
+      "required_tests": [
+        "backend/tests/test_leaderboard.py"
+      ],
+      "test_categories": ["infrastructure"],
+      "description": "Leaderboard API endpoints"
+    },
+    "backend/database.py": {
+      "required_tests": [
+        "backend/tests/test_database.py",
+        "backend/tests/test_database_resilience.py"
+      ],
+      "test_categories": ["infrastructure"],
+      "description": "Database connection and operations"
+    },
+    "backend/middleware/csrf.py": {
+      "required_tests": [
+        "backend/tests/test_csrf.py",
+        "backend/tests/test_security.py"
+      ],
+      "test_categories": ["security"],
+      "description": "CSRF protection middleware"
+    },
+    "core/anticheat.py": {
+      "required_tests": [
+        "backend/tests/test_anticheat.py",
+        "backend/tests/test_security.py"
+      ],
+      "test_categories": ["security"],
+      "description": "Anti-cheat HMAC signing and anomaly detection"
+    },
+    "config/gameplay.json": {
+      "required_tests": [
+        "backend/tests/test_game.py"
+      ],
+      "test_categories": ["game_logic"],
+      "description": "Game balance configuration - test expected values if changed"
+    },
+    "game/rules.py": {
+      "required_tests": [
+        "backend/tests/test_game.py",
+        "backend/tests/test_smoke.py"
+      ],
+      "test_categories": ["game_logic", "critical"],
+      "description": "Core game rules and mechanics"
+    },
+    "game/state.py": {
+      "required_tests": [
+        "backend/tests/test_game.py",
+        "tests/test_migrations.py"
+      ],
+      "test_categories": ["game_logic"],
+      "description": "Game state management and migrations"
+    },
+    "frontend/src/": {
+      "required_tests": [
+        "frontend/tests/"
+      ],
+      "test_categories": ["frontend"],
+      "description": "Frontend React components (tests currently missing)"
+    }
+  },
+  "test_categories": {
+    "critical": {
+      "must_pass": true,
+      "pre_commit": true,
+      "description": "Tests that must pass before commit - smoke tests, golden path"
+    },
+    "security": {
+      "must_pass": true,
+      "pre_commit": true,
+      "description": "Security-related tests - CSRF, anti-cheat, authentication"
+    },
+    "game_logic": {
+      "must_pass": false,
+      "pre_commit": false,
+      "description": "Game logic and mechanics tests"
+    },
+    "api": {
+      "must_pass": false,
+      "pre_commit": false,
+      "description": "API endpoint tests"
+    },
+    "infrastructure": {
+      "must_pass": false,
+      "pre_commit": false,
+      "description": "Infrastructure tests - database, leaderboard, telemetry"
+    },
+    "frontend": {
+      "must_pass": false,
+      "pre_commit": false,
+      "description": "Frontend component tests"
+    }
+  },
+  "test_files": {
+    "backend/tests/test_smoke.py": {
+      "category": "critical",
+      "description": "Golden path smoke tests - complete user journey",
+      "must_pass": true
+    },
+    "backend/tests/test_critical_path.py": {
+      "category": "critical",
+      "description": "Critical API endpoints validation",
+      "must_pass": true
+    },
+    "backend/tests/test_game.py": {
+      "category": "game_logic",
+      "description": "Core game logic and mechanics",
+      "must_pass": false
+    },
+    "backend/tests/test_security.py": {
+      "category": "security",
+      "description": "Security validations",
+      "must_pass": true
+    },
+    "backend/tests/test_csrf.py": {
+      "category": "security",
+      "description": "CSRF protection tests",
+      "must_pass": true
+    },
+    "backend/tests/test_anticheat.py": {
+      "category": "security",
+      "description": "Anti-cheat HMAC signing and anomaly detection",
+      "must_pass": true
+    },
+    "backend/tests/test_property_timers.py": {
+      "category": "game_logic",
+      "description": "Property-based timer validation",
+      "must_pass": false
+    },
+    "backend/tests/test_database.py": {
+      "category": "infrastructure",
+      "description": "Database operations",
+      "must_pass": false
+    },
+    "backend/tests/test_database_resilience.py": {
+      "category": "infrastructure",
+      "description": "Database error handling and resilience",
+      "must_pass": false
+    },
+    "backend/tests/test_leaderboard.py": {
+      "category": "infrastructure",
+      "description": "Leaderboard API tests",
+      "must_pass": false
+    },
+    "backend/tests/test_telemetry.py": {
+      "category": "infrastructure",
+      "description": "Telemetry API tests",
+      "must_pass": false
+    },
+    "backend/tests/test_game_integration.py": {
+      "category": "game_logic",
+      "description": "Integration tests",
+      "must_pass": false
+    },
+    "backend/tests/test_user_journey.py": {
+      "category": "critical",
+      "description": "End-to-end user journey tests",
+      "must_pass": false
+    },
+    "backend/tests/test_expedition_count.py": {
+      "category": "game_logic",
+      "description": "Expedition mechanics tests",
+      "must_pass": false
+    },
+    "backend/tests/test_bugfixes.py": {
+      "category": "regression",
+      "description": "Bug fix validations",
+      "must_pass": false
+    },
+    "backend/tests/test_regression_bugs.py": {
+      "category": "regression",
+      "description": "Regression prevention tests",
+      "must_pass": false
+    },
+    "tests/test_migrations.py": {
+      "category": "game_logic",
+      "description": "State migration tests",
+      "must_pass": false
+    }
+  }
+}
+
