@@ -95,13 +95,38 @@ npm run dev
 
 ## Making Changes
 
-### Branch Naming Convention
+### Branch Workflow (Simple)
 
-- `feature/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation changes
-- `refactor/` - Code refactoring
-- `test/` - Test additions/changes
+LINEAGE uses a simple two-branch workflow:
+
+- **`staging` branch** - Testing environment (auto-deploys to Railway staging)
+- **`web-version` branch** - Production environment (auto-deploys to Railway production)
+
+**Workflow:**
+1. Work directly on `staging` branch
+2. Test changes in staging environment
+3. Merge `staging` → `web-version` when ready for production
+
+**No feature branches needed** - just commit to `staging`, test, then merge to production.
+
+```bash
+# Start from staging
+git checkout staging
+git pull origin staging
+
+# Make your changes
+# ... edit files ...
+
+# Commit and push to staging
+git add .
+git commit -m "feat: Your change description"
+git push origin staging
+
+# Test in staging environment, then merge to production
+git checkout web-version
+git merge staging
+git push origin web-version
+```
 
 ### Commit Message Guidelines
 
