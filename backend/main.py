@@ -169,6 +169,23 @@ def get_allowed_origins() -> list:
         else:
             logger.warning("Production mode but no ALLOWED_ORIGINS set!")
             return []
+    elif env == "staging":
+        # Staging: allow staging frontend URL + localhost for testing
+        origins_str = os.getenv("ALLOWED_ORIGINS", "")
+        origins = []
+        if origins_str:
+            origins.extend([origin.strip() for origin in origins_str.split(",")])
+        # Also allow localhost for local testing
+        origins.extend([
+            "http://localhost:3000",
+            "http://localhost:5173",  # Vite default
+            "http://localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:8080",
+        ])
+        logger.info(f"Staging CORS origins: {origins}")
+        return origins
     else:
         # Development: allow localhost and common dev ports
         logger.info("Development mode: allowing common localhost origins")
