@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/data/loader.py
+# hypothesis_version: 6.144.0
+
+['/app/config', 'briefing_text', 'briefing_text.json', 'clones', 'clones.json', 'config', 'expeditions', 'expeditions.json', 'feral_drone_messages', 'gameplay', 'gameplay.json', 'level_up_messages', 'loading_text', 'loading_text.json', 'outcomes_config', 'outcomes_config.json', 'phrases', 'phrases.json', 'r', 'rate_limit_messages', 'resources', 'resources.json', 'utf-8', 'womb_config', 'womb_config.json']

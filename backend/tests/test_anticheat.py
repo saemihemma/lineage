@@ -282,7 +282,9 @@ class TestActionRateTracking:
 
     def test_action_history_cleanup(self):
         """Test that old actions are cleaned up"""
-        session_id = "test-session"
+        # Use unique session_id to avoid test pollution from global state
+        import uuid
+        session_id = f"test-session-{uuid.uuid4().hex[:8]}"
         action_type = "test_action"
         now = time.time()
 
@@ -292,5 +294,5 @@ class TestActionRateTracking:
         # Record new action (now)
         rate = record_action(session_id, action_type, now)
 
-        # Old action should be cleaned up
-        assert rate == 1, "Old actions should be removed"
+        # Old action should be cleaned up (only new action remains)
+        assert rate == 1, f"Old actions should be removed, got rate={rate}"

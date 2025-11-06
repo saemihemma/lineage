@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/game/state.py
+# hypothesis_version: 6.144.0
+
+[0.0, 'GameState', '_rng_instance', '_seed', 'ftue', 'global_attention', 'last_pray_effect', 'wombs']

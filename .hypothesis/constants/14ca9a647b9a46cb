@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/game/rules.py
+# hypothesis_version: 6.144.0
+
+[0.0, 0.25, 0.75, 1.0, 20.0, 100.0, 100, 'ASSEMBLER_COST', 'COMBAT', 'Clone not found.', 'Clone unavailable.', 'Cognitive', 'Constructive', 'EXPLORATION', 'GATHER_AMOUNT', 'GATHER_TIME', 'Kinetic', 'MINING', 'SOUL_LEVEL_STEP', 'Shilajit', 'Womb', 'alive', 'attention', 'attention_delta', 'build_womb', 'constructive', 'created_at', 'death', 'expedition', 'failure', 'feral_attack', 'gain', 'global_attention', 'grow', 'heat_crosslink_add', 'id', 'kind', 'last_pray_effect', 'outcome', 'practice_xp', 'practices', 'retain', 'self_name', 'soul_xp', 'survived_runs', 'time_seconds', 'timestamp', 'traits', 'type', 'unlocks', 'upload', 'uploaded', 'womb_id', 'wombs', 'xp']

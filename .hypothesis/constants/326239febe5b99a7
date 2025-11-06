@@ -1,0 +1,4 @@
+# file: /Users/goodfella/Downloads/frontier_ui_package_v4/core/game_logic.py
+# hypothesis_version: 6.144.0
+
+[b'trait_generation_seed', 0.01, 0.03, 0.05, 0.1, 0.85, 1.0, 1.1, 100, 'BASIC', 'Cognitive', 'Constructive', 'Kinetic', 'MINER', 'SOUL_SPLIT_BASE', 'SOUL_SPLIT_VARIANCE', 'VOLATILE', 'practices', 'tier2', 'tier3', 'unlocks', 'utf-8']
