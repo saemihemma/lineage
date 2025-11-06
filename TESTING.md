@@ -72,15 +72,17 @@ python3 scripts/verify.py
 
 ### Run Specific Test File
 ```bash
-python3 -m unittest test_frontier.py -v
-python3 -m unittest test_loading_screen.py -v
+python3 -m pytest backend/tests/test_smoke.py -v
+python3 -m pytest backend/tests/test_game.py -v
 ```
 
 ### Run Backend Tests
 ```bash
+# Using pytest (recommended)
+python3 -m pytest backend/tests/ -v
+
+# Or run from backend directory
 cd backend && python3 -m pytest tests/ -v
-# Or with unittest:
-python3 -m unittest discover -v backend/tests/
 ```
 
 ## Writing New Tests

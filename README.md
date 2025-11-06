@@ -54,11 +54,11 @@ LINEAGE is deployed as a web application with a React frontend and FastAPI backe
 
 ### Play Online
 
-**Production:** [https://wonderful-wisdom-production.up.railway.app](https://wonderful-wisdom-production.up.railway.app)
+Play LINEAGE at: **[https://wonderful-wisdom-production.up.railway.app](https://wonderful-wisdom-production.up.railway.app)**
 
 **Staging:** Available for testing (see [CONTRIBUTING.md](CONTRIBUTING.md) for staging workflow)
 
-### Local Development
+### Running Locally (Development)
 
 **Backend:**
 ```bash

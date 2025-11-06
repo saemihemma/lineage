@@ -8,10 +8,6 @@ React + TypeScript frontend for LINEAGE game.
 # Install dependencies
 npm install
 
-# Sync data files (briefing text, etc.) from project root
-npm run sync-data
-# Or manually: ./scripts/sync_data_to_frontend.sh
-
 # Start development server
 npm run dev
 
@@ -30,20 +26,9 @@ Create `.env` file:
 VITE_API_URL=http://localhost:8000
 ```
 
-## Updating Text Content
+## Data Files
 
-When you update text files in `data/` directory:
-
-```bash
-# Run sync script to copy to frontend
-npm run sync-data
-
-# Or manually:
-./scripts/sync_data_to_frontend.sh    # Mac/Linux
-scripts\sync_data_to_frontend.bat     # Windows
-```
-
-Changes will be visible immediately on browser refresh (no rebuild needed).
+Game data files (JSON configuration, messages, etc.) are loaded directly from the backend API or served via the backend's static file serving. No manual syncing is required for web deployment.
 
 ## Project Structure
 

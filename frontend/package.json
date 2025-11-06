@@ -8,7 +8,6 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "sync-data": "node ../scripts/sync-data.js || bash ../scripts/sync_data_to_frontend.sh",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run"
