@@ -54,7 +54,9 @@ LINEAGE is deployed as a web application with a React frontend and FastAPI backe
 
 ### Play Online
 
-The game is available at: [https://wonderful-wisdom-production.up.railway.app](https://wonderful-wisdom-production.up.railway.app)
+**Production:** [https://wonderful-wisdom-production.up.railway.app](https://wonderful-wisdom-production.up.railway.app)
+
+**Staging:** Available for testing (see [CONTRIBUTING.md](CONTRIBUTING.md) for staging workflow)
 
 ### Local Development
 
@@ -172,13 +174,13 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 **Quick Start for Contributors:**
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+2. Clone your fork and work on the `staging` branch
 3. Make your changes and ensure tests pass
-4. Commit your changes (`git commit -m 'feat: Add amazing feature'`)
-5. Push to your branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+4. Commit and push to `staging` (`git push origin staging`)
+5. Test changes in the staging environment
+6. When ready, merge to `web-version` for production
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions on the staging workflow.
 
 ## Documentation
 
