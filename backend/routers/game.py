@@ -325,10 +325,6 @@ IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 # Rate limiting storage - session-based (more accurate than IP)
 _rate_limit_store: Dict[str, Dict[str, list[float]]] = {}
 
-# Action locks - prevent duplicate concurrent actions (per session, per action type)
-# Format: session_id -> action_type -> lock_until_timestamp
-_action_locks: Dict[str, Dict[str, float]] = {}
-
 
 def set_session_cookie(response: JSONResponse, session_id: str, cookie_name: str = "session_id"):
     """
@@ -371,9 +367,8 @@ RATE_LIMITS = {
     "build_womb": 5,
     "grow_clone": 10,
     "apply_clone": 10,
-    "run_expedition": 20,  # Increased from 10 to allow faster gameplay
+    "run_expedition": 10,
     "upload_clone": 10,
-    "repair_womb": 30,  # Higher limit for maintenance action
 }
 
 # Valid input values
@@ -415,46 +410,6 @@ def check_rate_limit(session_id: str, endpoint: str, limit: int) -> tuple[bool, 
     # Record request
     _rate_limit_store[session_id][endpoint].append(now)
     return True, None
-
-
-def check_action_lock(session_id: str, action_type: str, lock_duration: float = 3.0) -> tuple[bool, Optional[float]]:
-    """
-    Check if action is locked (prevent duplicate concurrent actions).
-    
-    Args:
-        session_id: Session identifier
-        action_type: Type of action (e.g., 'run_expedition', 'grow_clone', 'upload_clone')
-        lock_duration: How long to lock action (default 3 seconds)
-    
-    Returns:
-        (is_locked, lock_until_timestamp) - is_locked=True if action should be blocked
-    """
-    now = time.time()
-    
-    # Initialize session storage
-    if session_id not in _action_locks:
-        _action_locks[session_id] = {}
-    
-    # Check if lock exists and is still valid
-    if action_type in _action_locks[session_id]:
-        lock_until = _action_locks[session_id][action_type]
-        if lock_until > now:
-            # Lock is still active
-            return True, lock_until
-        else:
-            # Lock expired, remove it
-            del _action_locks[session_id][action_type]
-    
-    # No lock or expired - create new lock
-    lock_until = now + lock_duration
-    _action_locks[session_id][action_type] = lock_until
-    return False, None
-
-
-def clear_action_lock(session_id: str, action_type: str):
-    """Clear action lock (call after action completes)."""
-    if session_id in _action_locks and action_type in _action_locks[session_id]:
-        del _action_locks[session_id][action_type]
 
 
 def enforce_rate_limit(session_id: str, endpoint: str):
@@ -1831,22 +1786,11 @@ async def grow_clone_endpoint(
     """
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "grow_clone")
-    
-    # Check action lock (prevent duplicate concurrent grow actions)
-    is_locked, lock_until = check_action_lock(sid, "grow_clone", lock_duration=3.0)
-    if is_locked:
-        retry_after = int(lock_until - time.time()) + 1
-        raise HTTPException(
-            status_code=429,
-            detail=f"Clone growth already in progress. Please wait {retry_after} second(s).",
-            headers={"Retry-After": str(retry_after)}
-        )
 
     # Validate input
     try:
         kind = validate_clone_kind(kind)
     except ValueError as e:
-        clear_action_lock(sid, "grow_clone")  # Clear lock on validation error
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
     # Get state from request body (frontend localStorage) or fallback to default
@@ -1943,10 +1887,8 @@ async def grow_clone_endpoint(
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
-        clear_action_lock(sid, "grow_clone")  # Clear lock on success
         return response
     except Exception as e:
-        clear_action_lock(sid, "grow_clone")  # Clear lock on error
         error_msg = sanitize_error_message(e)
         logger.error(f"Error growing clone for session {sid[:8]}...: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
@@ -2022,27 +1964,15 @@ async def run_expedition_endpoint(
     """
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "run_expedition")
-    
-    # Check action lock (prevent duplicate concurrent expeditions)
-    is_locked, lock_until = check_action_lock(sid, "run_expedition", lock_duration=3.0)
-    if is_locked:
-        retry_after = int(lock_until - time.time()) + 1
-        raise HTTPException(
-            status_code=429,
-            detail=f"Expedition already in progress. Please wait {retry_after} second(s).",
-            headers={"Retry-After": str(retry_after)}
-        )
 
     # Validate input
     try:
         kind = validate_expedition_kind(kind)
     except ValueError as e:
-        clear_action_lock(sid, "run_expedition")  # Clear lock on validation error
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
     # Get state from request body (frontend localStorage)
     if not state_data:
-        clear_action_lock(sid, "run_expedition")  # Clear lock on missing state
         raise HTTPException(
             status_code=400, 
             detail="Game state required in request body. Please refresh the page."
@@ -2051,7 +1981,6 @@ async def run_expedition_endpoint(
     try:
         state = dict_to_game_state(state_data)
     except Exception as e:
-        clear_action_lock(sid, "run_expedition")  # Clear lock on parse error
         logger.error(f"Failed to parse state from request body: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
 
@@ -2202,10 +2131,8 @@ async def run_expedition_endpoint(
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
-        clear_action_lock(sid, "run_expedition")  # Clear lock on success
         return response
     except Exception as e:
-        clear_action_lock(sid, "run_expedition")  # Clear lock on error
         error_msg = sanitize_error_message(e)
         logger.error(f"Error running expedition for session {sid[:8]}...: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
@@ -2227,27 +2154,15 @@ async def upload_clone_endpoint(
     """
     sid = get_session_id(session_id)
     enforce_rate_limit(sid, "upload_clone")
-    
-    # Check action lock (prevent duplicate concurrent upload actions)
-    is_locked, lock_until = check_action_lock(sid, "upload_clone", lock_duration=3.0)
-    if is_locked:
-        retry_after = int(lock_until - time.time()) + 1
-        raise HTTPException(
-            status_code=429,
-            detail=f"Clone upload already in progress. Please wait {retry_after} second(s).",
-            headers={"Retry-After": str(retry_after)}
-        )
 
     # Validate input
     try:
         clone_id = validate_clone_id(clone_id)
     except ValueError as e:
-        clear_action_lock(sid, "upload_clone")  # Clear lock on validation error
         raise HTTPException(status_code=400, detail=sanitize_error_message(e))
 
     # Get state from request body (frontend localStorage)
     if not state_data:
-        clear_action_lock(sid, "upload_clone")  # Clear lock on missing state
         raise HTTPException(
             status_code=400, 
             detail="Game state required in request body. Please refresh the page."
@@ -2256,7 +2171,6 @@ async def upload_clone_endpoint(
     try:
         state = dict_to_game_state(state_data)
     except Exception as e:
-        clear_action_lock(sid, "upload_clone")  # Clear lock on parse error
         logger.error(f"Failed to parse state from request body: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid state data: {str(e)}")
 
@@ -2320,10 +2234,8 @@ async def upload_clone_endpoint(
         
         response = JSONResponse(content=response_data)
         set_session_cookie(response, sid, "session_id")
-        clear_action_lock(sid, "upload_clone")  # Clear lock on success
         return response
     except Exception as e:
-        clear_action_lock(sid, "upload_clone")  # Clear lock on error
         error_msg = sanitize_error_message(e)
         logger.error(f"Error uploading clone for session {sid[:8]}...: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
@@ -2367,11 +2279,6 @@ async def repair_womb_endpoint(
     target_womb = next((w for w in state.wombs if w.id == womb_id), None)
     if target_womb is None:
         raise HTTPException(status_code=400, detail=f"Womb {womb_id} not found.")
-    
-    # Normalize durability (ensure non-negative)
-    if target_womb.durability < 0:
-        logger.warning(f"🔧 Normalizing negative durability for Womb {womb_id}: {target_womb.durability} -> 0.0")
-        target_womb.durability = 0.0
     
     if target_womb.durability >= target_womb.max_durability:
         raise HTTPException(status_code=400, detail="Womb is already at full durability.")

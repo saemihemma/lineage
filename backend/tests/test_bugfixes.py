@@ -31,9 +31,8 @@ from backend.routers.game import (
     load_game_state,
 )
 from game.state import GameState
-from core.models import Clone, PlayerState, Womb
+from core.models import Clone, PlayerState
 from core.config import CONFIG
-from game.wombs import calculate_repair_cost
 
 
 class TestSoulLevelSync:
@@ -367,76 +366,6 @@ class TestVersionManagement:
         state_dict = game_state_to_dict(state)
         assert "version" in state_dict
         assert state_dict["version"] >= 1
-
-
-class TestWombRepair:
-    """Test womb repair reliability, especially edge cases"""
-
-    def test_repair_womb_at_zero_durability(self):
-        """Test that repair works correctly when womb has 0 durability"""
-        state = GameState()
-        state.resources = {
-            "Tritanium": 100,
-            "Metal Ore": 100,
-            "Biomass": 100
-        }
-        
-        # Create womb with 0 durability
-        womb = Womb(id=0, durability=0.0, max_durability=100.0)
-        state.wombs = [womb]
-        
-        # Calculate repair cost (should work at 0 durability)
-        repair_cost = calculate_repair_cost(womb, state)
-        
-        # Should calculate cost for 5 points (restore amount)
-        # Cost per point: 0.9 Tritanium, 0.6 Metal Ore, 0.15 Biomass
-        # For 5 points: 4.5 Tritanium, 3.0 Metal Ore, 0.75 Biomass (rounded)
-        assert repair_cost["Tritanium"] > 0
-        assert repair_cost["Metal Ore"] > 0
-        assert repair_cost.get("Biomass", 0) >= 0  # May round to 0 or 1
-        
-        # Verify restore amount calculation
-        missing_durability = womb.max_durability - womb.durability
-        restore_amount = min(5.0, missing_durability)
-        assert restore_amount == 5.0, f"At 0 durability, restore_amount should be 5.0, got {restore_amount}"
-
-    def test_repair_womb_negative_durability_normalized(self):
-        """Test that negative durability is normalized to 0"""
-        state = GameState()
-        state.resources = {
-            "Tritanium": 100,
-            "Metal Ore": 100,
-            "Biomass": 100
-        }
-        
-        # Create womb with negative durability (edge case)
-        womb = Womb(id=0, durability=-10.0, max_durability=100.0)
-        state.wombs = [womb]
-        
-        # Calculate repair cost (should normalize negative to 0)
-        repair_cost = calculate_repair_cost(womb, state)
-        
-        # Should treat as 0 durability (restore 5 points)
-        assert repair_cost["Tritanium"] > 0
-        missing_durability = womb.max_durability - max(0.0, womb.durability)
-        restore_amount = min(5.0, missing_durability)
-        assert restore_amount == 5.0, f"Negative durability should normalize to 0, restore_amount should be 5.0"
-
-    def test_repair_womb_at_full_durability(self):
-        """Test that repair returns 0 cost when womb is at full durability"""
-        state = GameState()
-        
-        # Create womb at full durability
-        womb = Womb(id=0, durability=100.0, max_durability=100.0)
-        state.wombs = [womb]
-        
-        # Calculate repair cost
-        repair_cost = calculate_repair_cost(womb, state)
-        
-        # Should return 0 cost for all resources
-        assert repair_cost["Tritanium"] == 0
-        assert repair_cost["Metal Ore"] == 0
-        assert repair_cost.get("Biomass", 0) == 0
 
 
 if __name__ == "__main__":

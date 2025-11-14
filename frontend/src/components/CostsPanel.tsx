@@ -1,10 +1,8 @@
 /**
  * Costs Panel - displays costs for current actions
- * Uses backend-equivalent cost calculations
  */
 import type { GameState } from '../types/game';
 import { hasWomb, getWombCount, getUnlockedWombCount } from '../utils/wombs';
-import { calculateCloneCosts, calculateWombCost } from '../utils/costs';
 import './CostsPanel.css';
 
 interface CostsPanelProps {
@@ -12,16 +10,18 @@ interface CostsPanelProps {
 }
 
 export function CostsPanel({ state }: CostsPanelProps) {
-  // Use backend-equivalent cost calculations
-  const wombCost = calculateWombCost(state);
-  const cloneCosts = calculateCloneCosts(state);
+  // Use soul_level from backend (single source of truth)
+  const soulLevel = state.soul_level;
+
+  const wombCost = calculateWombCost(soulLevel);
+  const cloneCosts = calculateCloneCosts(soulLevel);
   const wombCount = getWombCount(state);
   const unlockedCount = getUnlockedWombCount(state);
   const canBuildMore = wombCount < unlockedCount;
 
   return (
     <div className="panel costs-panel">
-      <div className="panel-header">Costs (Level {state.soul_level})</div>
+      <div className="panel-header">Costs (Level {soulLevel})</div>
       <div className="panel-content">
         <div className="cost-section">
           <div className={`cost-title ${!canBuildMore ? 'disabled' : ''}`}>
@@ -56,6 +56,34 @@ export function CostsPanel({ state }: CostsPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function calculateWombCost(level: number): Record<string, number> {
+  const baseCost = { Tritanium: 30, 'Metal Ore': 20, Biomass: 5 };
+  if (level <= 1) return baseCost;
+  const mult = Math.pow(1.05, level - 1);
+  return Object.fromEntries(
+    Object.entries(baseCost).map(([k, v]) => [k, Math.max(1, Math.round(v * mult))])
+  );
+}
+
+function calculateCloneCosts(level: number): Record<string, Record<string, number>> {
+  const baseCosts = {
+    BASIC: { Synthetic: 6, Organic: 4, Shilajit: 1 },
+    MINER: { Synthetic: 8, 'Metal Ore': 8, Organic: 5, Shilajit: 1 },
+    VOLATILE: { Synthetic: 10, Biomass: 8, Organic: 6, Shilajit: 3 },
+  };
+  
+  const mult = level <= 1 ? 1 : Math.pow(1.05, level - 1);
+  
+  return Object.fromEntries(
+    Object.entries(baseCosts).map(([kind, costs]) => [
+      kind,
+      Object.fromEntries(
+        Object.entries(costs).map(([k, v]) => [k, Math.max(1, Math.round(v * mult))])
+      ),
+    ])
   );
 }
 

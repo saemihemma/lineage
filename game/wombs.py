@@ -6,14 +6,11 @@ from typing import List, Optional, Tuple
 import time
 import random
 import json
-import logging
 from pathlib import Path
 from core.models import Womb
 from core.config import CONFIG
 from data.loader import load_data
 from game.state import GameState
-
-logger = logging.getLogger(__name__)
 
 # Load feral drone messages
 _feral_messages_data = load_data().get("feral_drone_messages", {})
@@ -184,15 +181,11 @@ def gain_attention(state: GameState, attention_delta: Optional[float] = None, wo
         gain = attention_delta * mult
     
     # Increase global attention (cap at max)
-    old_attention = new_state.global_attention
     max_attention = CONFIG.get("WOMB_GLOBAL_ATTENTION_MAX", 100.0)
     new_state.global_attention = min(
         max_attention,
         new_state.global_attention + gain
     )
-    
-    # Debug logging
-    logger.debug(f"📈 Attention gain: {old_attention:.1f} -> {new_state.global_attention:.1f} (+{gain:.1f}, delta={attention_delta}, mult={mult:.3f})")
     
     return new_state
 
@@ -225,12 +218,7 @@ def decay_attention(state: GameState) -> GameState:
     actual_decay = total_decay * decay_mult
     
     # Apply decay to global attention
-    old_attention = new_state.global_attention
     new_state.global_attention = max(0.0, new_state.global_attention - actual_decay)
-    
-    # Debug logging
-    if actual_decay > 0.01:  # Only log if significant decay occurred
-        logger.debug(f"📉 Attention decay: {old_attention:.1f} -> {new_state.global_attention:.1f} (-{actual_decay:.1f}, minutes={minutes_elapsed:.2f}, mult={mult:.3f})")
     
     return new_state
 
@@ -327,14 +315,10 @@ def attack_womb(state: GameState) -> Tuple[GameState, Optional[int], Optional[st
             splash_damages.append((other_womb.id, splash_damage))
     
     # Reduce global attention after attack (10% ± variance)
-    old_attention = new_state.global_attention
     reduction_base = CONFIG.get("WOMB_ATTACK_ATTENTION_REDUCTION_BASE", 10.0)
     reduction_variance = CONFIG.get("WOMB_ATTACK_ATTENTION_REDUCTION_VARIANCE", 2.0)
     reduction = reduction_base + new_state.rng.uniform(-reduction_variance, reduction_variance)
     new_state.global_attention = max(0.0, new_state.global_attention - reduction)
-    
-    # Debug logging
-    logger.info(f"⚔️ Feral attack: attention {old_attention:.1f} -> {new_state.global_attention:.1f} (-{reduction:.1f}), band={attention_band}, prob={attack_prob:.3f}, chance={attack_chance:.3f}, womb={attacked_womb.id}")
     
     # Select random thematic message
     if _FERAL_DRONE_MESSAGES:
@@ -373,12 +357,9 @@ def calculate_repair_cost(womb: Womb, state: GameState) -> dict:
     base_build_cost = CONFIG["ASSEMBLER_COST"]  # {"Tritanium": 30, "Metal Ore": 20, "Biomass": 5}
     max_durability = womb.max_durability  # Typically 100.0
     
-    # Normalize durability (ensure non-negative)
-    normalized_durability = max(0.0, womb.durability)
-    
     # Calculate missing durability and restore amount (5 points or remaining if less)
     # At 0 durability: missing = 100, restore = min(5, 100) = 5
-    missing_durability = max_durability - normalized_durability
+    missing_durability = max_durability - womb.durability
     restore_amount = min(5.0, missing_durability)  # Restore 5 or remaining if less
     
     if restore_amount <= 0:

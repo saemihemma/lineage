@@ -43,10 +43,6 @@ export function SimulationScreen() {
   const prevClonesRef = useRef<Record<string, any>>({});
   const [cooldownTick, setCooldownTick] = useState(0); // Force re-render for cooldown timer
   const [isPraying, setIsPraying] = useState(false); // Prevent stacking of prayer requests
-  // Per-action loading states (prevent duplicate concurrent requests)
-  const [isLoadingExpedition, setIsLoadingExpedition] = useState(false);
-  const [isLoadingGrow, setIsLoadingGrow] = useState(false);
-  const [isLoadingUpload, setIsLoadingUpload] = useState(false);
 
   // Create stable version string for active_tasks to avoid object reference dependencies
   // Only recalculate when active_tasks actually changes, not when any part of state changes
@@ -453,12 +449,7 @@ export function SimulationScreen() {
     }
   }, [state, addTerminalMessage, updateState, isPraying]);
 
-  const handleAction = async (
-    action: () => Promise<any>, 
-    actionName: string, 
-    allowDuringTasks: boolean = false,
-    loadingSetter?: (loading: boolean) => void
-  ) => {
+  const handleAction = async (action: () => Promise<any>, actionName: string, allowDuringTasks: boolean = false) => {
     // Expeditions and immediate actions can run during gathering tasks
     // But still prevent duplicate requests for the same action type
     if (!state) {
@@ -466,20 +457,8 @@ export function SimulationScreen() {
       return;
     }
     
-    // Check if this action is already loading (prevent duplicate requests)
-    if (loadingSetter) {
-      // Note: We can't check the state here since it's async, but the button will be disabled
-      // The backend action lock will catch any race conditions
-    }
-    
-    // Set loading state
-    if (loadingSetter) {
-      loadingSetter(true);
-    }
-    
-    try {
-      // Check for blocking tasks only if this action requires exclusive access
-      if (!allowDuringTasks && isBusy) {
+    // Check for blocking tasks only if this action requires exclusive access
+    if (!allowDuringTasks && isBusy) {
       // Generate helpful feedback about what's blocking
       const activeTasks = state.active_tasks || {};
       const taskEntries = Object.entries(activeTasks);
@@ -522,9 +501,6 @@ export function SimulationScreen() {
         addTerminalMessage(`⏳ Cannot ${actionName}: A task is already in progress.`);
       }
       console.warn(`Action blocked: ${actionName} (exclusive task in progress)`);
-      if (loadingSetter) {
-        loadingSetter(false);
-      }
       return;
     }
 
@@ -586,11 +562,6 @@ export function SimulationScreen() {
         }
         
         updateState(mergedState);
-        
-        // Clear loading state on success
-        if (loadingSetter) {
-          loadingSetter(false);
-        }
 
         // For timed actions (build womb, gather, grow clone), don't show message immediately
         // Store it to show when progress bar completes
@@ -655,10 +626,6 @@ export function SimulationScreen() {
 
       // Reset busy state on error
       setIsBusy(false);
-      // Clear loading state on error
-      if (loadingSetter) {
-        loadingSetter(false);
-      }
       // Don't clear progress on error - let it remain to show what was happening
     }
     // Note: Don't set isBusy to false on success - let the polling effect handle it when task completes
@@ -669,7 +636,7 @@ export function SimulationScreen() {
   };
 
   const handleGrowClone = (kind: string) => {
-    handleAction(() => gameAPI.growClone(kind), `grow ${kind} clone`, false, setIsLoadingGrow);
+    handleAction(() => gameAPI.growClone(kind), `grow ${kind} clone`);
   };
 
   const handleGrowCloneClick = () => {
@@ -690,11 +657,11 @@ export function SimulationScreen() {
 
   const handleRunExpedition = (kind: string) => {
     // Expeditions can run during gathering (drones continue gathering while on expedition)
-    handleAction(() => gameAPI.runExpedition(kind), `run ${kind} expedition`, true, setIsLoadingExpedition);
+    handleAction(() => gameAPI.runExpedition(kind), `run ${kind} expedition`, true);
   };
 
   const handleUploadClone = (cloneId: string) => {
-    handleAction(() => gameAPI.uploadClone(cloneId), 'upload clone', false, setIsLoadingUpload);
+    handleAction(() => gameAPI.uploadClone(cloneId), 'upload clone');
   };
 
   const handleRepairWomb = (wombId: number) => {
@@ -795,10 +762,7 @@ export function SimulationScreen() {
         </div>
         <div className="topbar-center">
           <FuelBar />
-          <div 
-            className="attention-bar"
-            title="Global Attention: Operations draw feral drone attention. Higher attention increases attack risk. Green (<25%): Safe | Yellow (25-54%): 12% attack chance | Red (≥55%): 25% attack chance. Decays 3.0 per minute when idle. Gain: Gather +6, Grow +6, Expedition +9, Build Womb +20"
-          >
+          <div className="attention-bar">
             <span className="attention-label">Global Attention</span>
             <div className="attention-progress">
               <div 
@@ -837,7 +801,7 @@ export function SimulationScreen() {
           <button 
             className="action-btn" 
             onClick={handleGrowCloneClick}
-            disabled={isBusy || !hasWomb(state) || isLoadingGrow}
+            disabled={isBusy || !hasWomb(state)}
           >
             Grow Clone
           </button>
@@ -846,7 +810,7 @@ export function SimulationScreen() {
               <button 
                 className="action-btn expedition-top-btn"
                 onClick={() => handleRunExpedition('MINING')}
-                disabled={isLoadingExpedition}
+                disabled={false}
                 title="Mining expeditions earn Tritanium and Metal Ore. Can run while gathering resources."
               >
                 Mining Expedition
@@ -854,7 +818,7 @@ export function SimulationScreen() {
               <button 
                 className="action-btn expedition-top-btn"
                 onClick={() => handleRunExpedition('COMBAT')}
-                disabled={isLoadingExpedition}
+                disabled={false}
                 title="Combat expeditions earn Biomass and Synthetic materials. Can run while gathering resources."
               >
                 Combat Expedition
@@ -862,7 +826,7 @@ export function SimulationScreen() {
               <button 
                 className="action-btn expedition-top-btn"
                 onClick={() => handleRunExpedition('EXPLORATION')}
-                disabled={isLoadingExpedition}
+                disabled={false}
                 title="Exploration expeditions earn mixed resources. Can run while gathering resources."
               >
                 Exploration Expedition
@@ -946,7 +910,7 @@ export function SimulationScreen() {
               appliedCloneId={state.applied_clone_id || null}
               onApply={() => selectedCloneId && handleApplyClone(selectedCloneId)}
               onUpload={() => selectedCloneId && handleUploadClone(selectedCloneId)}
-              disabled={isBusy || isLoadingUpload}
+              disabled={isBusy}
             />
           </CollapsiblePanel>
 
